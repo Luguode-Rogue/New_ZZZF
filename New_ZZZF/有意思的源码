@@ -1,0 +1,197 @@
+// public class MissionMainAgentInteractionComponent
+//核心功能：通过射线检测处理玩家焦点对象的交互逻辑
+public void FocusTick()
+{
+    IFocusable focusable = null;
+    UsableMachine usableMachine = null;
+    bool isInteractable = true;    // 标记当前焦点是否可直接交互
+    bool canInteractWithAgent = true; // 标记与Agent的交互条件是否满足
+
+    // 情景模式过滤：对话/过场动画下禁用焦点交互
+    if (Mission.Current.Mode == MissionMode.Conversation || Mission.Current.Mode == MissionMode.CutScene)
+    {
+        if (this.CurrentFocusedObject != null && Mission.Current.Mode != MissionMode.Conversation)
+        {
+            this.ClearFocus();
+        }
+        return;
+    }
+
+    Agent main = Agent.Main; // 获取玩家控制的主Agent
+    if (!this.CurrentMissionScreen.SceneLayer.Input.IsGameKeyDown(25) && 
+        main != null && 
+        main.IsOnLand())
+    {
+        /* ------------------- 基础射线参数初始化 ------------------- */
+        float rayLength = 10f; // 初始射线长度
+        Vec3 cameraDir = this.CurrentMissionScreen.CombatCamera.Direction; // 摄像机方向
+        Vec3 rayStart = this.CurrentMissionScreen.CombatCamera.Position; // 射线起点（摄像机位置）
+        Vec3 agentPos = main.Position; // 玩家角色位置
+        
+        // 计算水平面投影距离（忽略Z轴）
+        float horizontalDistance = new Vec3(rayStart.x, rayStart.y, 0f).Distance(
+            new Vec3(agentPos.x, agentPos.y, 0f));
+        
+        // 混合摄像机位置和方向计算射线终点
+        Vec3 rayEndBase = rayStart * (1f - horizontalDistance) + 
+                         (rayStart + cameraDir) * horizontalDistance;
+
+        /* ------------------- 地形/实体射线检测 ------------------- */
+        float terrainHitDistance;
+        // 检测最近地形或实体，限制最大射线长度
+        if (this.CurrentMissionScene.RayCastForClosestEntityOrTerrain(
+            rayEndBase, 
+            rayEndBase + cameraDir * rayLength, 
+            out terrainHitDistance, 
+            0.01f, 
+            BodyFlags.CommonFlagsThatDoNotBlocksRay))
+        {
+            rayLength = terrainHitDistance; // 更新有效射线长度
+        }
+
+        /* ------------------- 角色射线检测 ------------------- */
+        float agentHitDistance = float.MaxValue;
+        // 检测射线路径上的最近Agent（过滤玩家自身，半径0.3米）
+        Agent hitAgent = this.CurrentMission.RayCastForClosestAgent(
+            rayEndBase, 
+            rayEndBase + cameraDir * (rayLength + 0.01f), 
+            out agentHitDistance, 
+            main.Index, 
+            0.3f);
+        
+        // 处理命中的Agent（非坐骑，或可骑乘的无人坐骑）
+        if (hitAgent != null && 
+            (!hitAgent.IsMount || 
+             (hitAgent.RiderAgent == null && 
+              main.MountAgent == null && 
+              main.CanReachAgent(hitAgent))))
+        {
+            agentHitDistance = agentHitDistance; // 记录命中距离
+            focusable = hitAgent; // 设为焦点对象
+            if (!main.CanInteractWithAgent(hitAgent, this.CurrentMissionScreen.CameraElevation))
+            {
+                canInteractWithAgent = false; // 标记不可直接交互
+            }
+        }
+
+        /* ------------------- 可交互物体检测 ------------------- */
+        float objectDetectionRadius = 3f; // 物体检测半径扩展
+        rayLength += 0.1f; // 增加射线长度容差
+        GameEntity hitEntity;
+        float entityHitDistance;
+        
+        // 第一轮精确检测（0.2米半径）
+        bool hitEntityFound = this.CurrentMissionScene.RayCastForClosestEntityOrTerrain(
+            rayEndBase, 
+            rayEndBase + cameraDir * rayLength, 
+            out entityHitDistance, 
+            out hitEntity, 
+            0.2f, 
+            BodyFlags.CommonFocusRayCastExcludeFlags);
+        
+        // 若未命中或距离不如Agent近，进行第二轮宽松检测
+        if (!hitEntityFound || hitEntity == null || entityHitDistance >= agentHitDistance)
+        {
+            hitEntityFound = this.CurrentMissionScene.RayCastForClosestEntityOrTerrain(
+                rayEndBase, 
+                rayEndBase + cameraDir * rayLength, 
+                out entityHitDistance, 
+                out hitEntity, 
+                0.2f * objectDetectionRadius, 
+                BodyFlags.CommonFocusRayCastExcludeFlags);
+        }
+
+        // 处理命中的实体
+        if (hitEntityFound && hitEntity != null && entityHitDistance < agentHitDistance)
+        {
+            // 沿父级实体链向上查找可聚焦组件
+            while (hitEntity != null)
+            {
+                if (hitEntity.GetScriptComponents().Any(sc => sc is IFocusable) || 
+                    hitEntity.Parent == null)
+                {
+                    break;
+                }
+                hitEntity = hitEntity.Parent;
+            }
+
+            // 检查可交互机器
+            usableMachine = hitEntity.GetFirstScriptOfType<UsableMachine>();
+            if (usableMachine != null && !usableMachine.IsDisabled)
+            {
+                // 获取有效站位点
+                GameEntity validStandingPoint = usableMachine.GetValidStandingPointForAgent(main);
+                if (validStandingPoint != null)
+                {
+                    hitEntity = validStandingPoint; // 优先使用站位点实体
+                }
+            }
+
+            isInteractable = false; // 默认物体不可直接交互
+            UsableMissionObject usableObject = hitEntity.GetFirstScriptOfType<UsableMissionObject>();
+            
+            // 处理可拾取物品
+            if (usableObject is SpawnedItemEntity)
+            {
+                if (this.CurrentMission.IsMainAgentItemInteractionEnabled && 
+                    main.CanReachObject(usableObject, 
+                        MissionMainAgentInteractionComponent.GetCollisionDistanceSquaredOfIntersectionFromMainAgentEye(
+                            rayEndBase, cameraDir, entityHitDistance)))
+                {
+                    focusable = usableObject;
+                    if (main.CanUseObject(usableObject))
+                    {
+                        isInteractable = true; // 满足直接交互条件
+                    }
+                }
+            }
+            // 处理其他可交互物体（如门、机关）
+            else if (usableObject != null)
+            {
+                focusable = usableObject;
+                if (this.CurrentMission.IsMainAgentObjectInteractionEnabled && 
+                    !main.IsUsingGameObject && 
+                    main.IsOnLand() && 
+                    main.ObjectHasVacantPosition(usableObject))
+                {
+                    isInteractable = true;
+                }
+            }
+            // 处理可交互机器（如工作台）
+            else if (usableMachine != null)
+            {
+                focusable = usableMachine;
+            }
+            // 处理自定义可聚焦组件
+            else
+            {
+                IFocusable customFocusable = hitEntity.GetScriptComponents()
+                    .FirstOrDefault(sc => sc is IFocusable) as IFocusable;
+                if (customFocusable != null)
+                {
+                    focusable = customFocusable;
+                }
+            }
+        }
+
+        // 备选焦点：玩家当前坐骑
+        if ((focusable == null || !isInteractable) && 
+            main.MountAgent != null && 
+            main.CanInteractWithAgent(main.MountAgent, this.CurrentMissionScreen.CameraElevation))
+        {
+            focusable = main.MountAgent;
+            isInteractable = true;
+        }
+    }
+
+    // 最终焦点处理
+    if (focusable == null)
+    {
+        this.ClearFocus(); // 无有效焦点时清除状态
+        return;
+    }
+    
+    // 合并交互条件标记：Agent类使用canInteractWithAgent，物体类使用isInteractable
+    bool finalInteractable = (focusable is Agent) ? canInteractWithAgent : isInteractable;
+    this.SetCurrentFocusedObject(focusable, usableMachine, finalInteractable);
+}

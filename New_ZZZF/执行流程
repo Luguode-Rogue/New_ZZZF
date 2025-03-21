@@ -1,0 +1,188 @@
+以下是 技能生效的完整流程，从游戏启动到技能触发，按执行顺序分步说明：
+
+1. 游戏启动阶段
+步骤 1.1 - Mod 初始化
+文件: SubModule.cs
+
+行为:
+
+加载 troop_skills.xml 配置文件。
+
+通过 SkillConfigManager 解析并缓存所有兵种技能配置。
+
+关键输出:
+SkillConfigManager.Instance.LoadFromXml("Modules/YourMod/ModuleData/troop_skills.xml");
+
+2. 战场任务初始化
+步骤 2.1 - 注册技能系统
+文件: SubModule.cs → OnMissionBehaviorInitialize
+
+行为:
+
+向当前任务（Mission）添加 SkillSystemBehavior。
+
+关键代码:
+
+mission.AddMissionBehavior(new SkillSystemBehavior());
+
+3. Agent 创建阶段
+步骤 3.1 - Agent 生成监听
+文件: SkillSystemBehavior.cs → OnAgentCreated
+
+行为:
+
+当人类Agent（非坐骑）创建时，绑定 AgentSkillComponent。
+
+关键代码:
+agent.AddComponent(new AgentSkillComponent(agent));
+
+步骤 3.2 - 技能配置初始化
+文件: AgentSkillComponent.cs → InitializeFromTroop
+
+行为:
+
+根据Agent的兵种ID（如 imperial_legionary）从 SkillConfigManager 获取 SkillSet。
+
+将技能分配到对应槽位（主主动、被动、法术栏等）。
+
+关键逻辑:
+
+SkillSet skillSet = SkillConfigManager.Instance.GetSkillSetForTroop(troopId);
+PassiveSkill = skillSet.Passive; // 被动技能唯一
+步骤 3.3 - 被动技能生效
+文件: AgentSkillComponent.cs → InitializeFromTroop
+
+行为:
+
+调用被动技能的 OnEquip 方法，立即生效。
+
+示例（IronWillPassive.cs）:
+
+csharp
+复制
+public override void OnEquip(Agent agent) 
+{
+    agent.BaseHealthLimit *= 1.1f; // 永久提升血量上限
+}
+4. 技能触发阶段
+步骤 4.1 - 输入检测（玩家）
+文件: AgentSkillComponent.cs → HandlePlayerInput
+
+行为:
+
+监听按键事件（E、左Alt、鼠标右键等）。
+
+通过 TryActivateSkill 触发对应技能。
+
+输入映射:
+
+按键	技能槽位
+E	主主动技能
+左Alt	副主动技能
+鼠标滚轮 + 右键	当前法术槽技能
+长按攻击键松开	战技
+步骤 4.2 - AI 自动触发
+文件: AgentSkillComponent.cs → HandleAIBehavior
+
+行为:
+
+AI 按预设概率（如0.5%每帧）触发主主动技能。
+
+if (MBRandom.RandomFloat < 0.005f) TryActivateSkill(MainActiveSkill);
+5. 技能执行阶段
+步骤 5.1 - 条件验证
+文件: AgentSkillComponent.cs → CanActivateSkill
+
+验证项:
+
+资源检查: 法力（法术/战技）或耐力（主动技能）是否足够。
+
+冷却检查: 技能独立冷却和法术公共冷却（GCD）。
+
+角色状态: 是否正在执行其他动作（如攻击、移动）。
+
+步骤 5.2 - 扣除资源 & 进入冷却
+行为:
+
+扣除法力或耐力。
+
+记录技能冷却时间。
+
+csharp
+复制
+_mana -= skill.ResourceCost;
+_cooldowns[skill] = skill.Cooldown;
+步骤 5.3 - 触发技能效果
+文件: 具体技能类（如 FireballSkill.cs）→ Activate
+
+示例逻辑:
+
+csharp
+复制
+public override void Activate(Agent agent)
+{
+    // 生成火球实体
+    GameEntity fireball = CreateFireballEntity();
+    // 赋予物理速度和伤害逻辑
+    fireball.SetPhysicsState(velocity, angularVelocity);
+}
+6. 效果持续与结束
+步骤 6.1 - 持续型技能
+实现方式:
+
+在 Activate 方法中启动协程或计时器。
+
+csharp
+复制
+public override void Activate(Agent agent)
+{
+    agent.StartCoroutine(SpinAttack());
+}
+
+private IEnumerator SpinAttack()
+{
+    float duration = 5f;
+    while (duration > 0)
+    {
+        DealAoeDamage();
+        duration -= Time.DeltaTime;
+        yield return null;
+    }
+}
+步骤 6.2 - 冷却倒计时
+文件: AgentSkillComponent.cs → UpdateCooldowns
+
+行为:
+
+每帧减少所有技能的剩余冷却时间。
+
+csharp
+复制
+_cooldowns[skill] -= dt;
+流程图总结
+复制
+[游戏启动] → 加载配置 → [战场初始化] → 注册监听器
+                             ↓
+                    [Agent创建] → 挂载组件 → 初始化技能槽
+                             ↓
+[玩家输入/AI决策] → 验证资源/冷却 → 触发技能 → 执行效果
+                             ↓
+                      [冷却/资源恢复] → 等待下次触发
+常见问题排查
+技能未触发:
+
+检查 SubModule.xml 是否正确声明依赖。
+
+验证 troop_skills.xml 中兵种ID与游戏内一致。
+
+在 SkillFactory 中确认技能ID已注册。
+
+被动技能未生效:
+
+确保 PassiveSkill.OnEquip 被调用。
+
+检查XML中是否配置了多个 <Passive> 标签（应仅一个）。
+
+法术公共CD异常:
+
+检查 _isGlobalCooldown 是否在法术触发时设为 true，并在1秒后重置。

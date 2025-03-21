@@ -1,0 +1,128 @@
+以下是 新增技能的标准工作流程，涵盖从设计到集成的完整步骤：
+
+一、技能设计阶段
+1. 定义技能类型与规则
+要素	说明
+技能类型	主主动、副主动、被动、法术（可含低级被动）、战技
+触发条件	按键、自动触发、受击触发等
+资源消耗	耐力（主动技能） / 法力（法术/战技）
+冷却时间	独立冷却或公共CD
+效果范围	自身、单体、群体、方向性范围等
+2. 参数固化
+所有数值（伤害、持续时间等）硬编码在技能类中，不开放外部配置。
+
+二、代码实现阶段
+1. 创建技能类
+在 Skills 目录下新建类文件（如 FireballSkill.cs）：
+
+csharp
+复制
+using TaleWorlds.Core;
+using TaleWorlds.MountAndBlade;
+
+namespace YourMod.SkillSystem.Skills
+{
+    public class FireballSkill : SkillBase
+    {
+        public FireballSkill()
+        {
+            SkillID = "Fireball";      // 必须唯一
+            Type = SkillType.Spell;    // 类型必须明确
+            Cooldown = 8f;             // 冷却时间（秒）
+            ResourceCost = 25f;        // 法力消耗
+        }
+
+        public override void Activate(Agent agent)
+        {
+            // 核心逻辑：生成火球、计算弹道、造成伤害
+            Vec3 spawnPos = agent.Position + new Vec3(0, 0, 2);
+            GameEntity fireball = CreateFireballEntity(spawnPos);
+            LaunchProjectile(fireball, agent.LookDirection);
+        }
+
+        private GameEntity CreateFireballEntity(Vec3 position)
+        {
+            // 创建火球实体并附加粒子特效
+            GameEntity entity = GameEntity.CreateEmpty(Mission.Current.Scene);
+            entity.AddParticleSystem("psys_fireball"); // 假设已定义特效
+            return entity;
+        }
+    }
+}
+2. 注册到技能工厂
+在 SkillFactory.cs 的 _skillRegistry 中添加条目：
+
+csharp
+复制
+private static readonly Dictionary<string, SkillBase> _skillRegistry = new Dictionary<string, SkillBase>(StringComparer.OrdinalIgnoreCase)
+{
+    // ...其他技能...
+    { "Fireball", new FireballSkill() }, // 新增条目
+};
+三、配置关联阶段
+1. 编辑兵种XML配置
+在 ModuleData/troop_skills.xml 中将技能分配到对应槽位：
+
+xml
+复制
+<Troop id="imperial_mage">
+    <MainActive>MeteorShower</MainActive>
+    <Spells>
+        <Slot1>Fireball</Slot1> <!-- 分配到法术栏1 -->
+        <Slot2>IceShield</Slot2>
+    </Spells>
+</Troop>
+运行 HTML
+2. 特殊槽位规则
+槽位类型	允许技能类型	数量限制
+被动栏	仅被动技能	1
+法术栏	法术、低级被动	4
+战技栏	战技（需武器拔出）	1
+四、测试验证阶段
+1. 基础验证
+日志检查：控制台应输出 [技能系统] Agent XXX 已绑定技能组件
+
+资源扣除：触发技能后法力/耐力值正确减少
+
+冷却生效：技能释放后进入CD，无法重复触发
+
+2. 进阶验证
+测试场景	预期结果
+法力不足时触发法术	技能无法激活，无效果
+同时触发多个主动技能	根据冲突规则允许/禁止（如全局CD生效时禁止法术）
+被动技能装备后	永久生效（如血量上限提升）
+3. 调试命令（可选）
+csharp
+复制
+// 在AgentSkillComponent中添加临时调试方法
+public void DebugResetCooldowns() => _cooldowns.Clear();
+五、扩展与优化（可选）
+1. 技能效果增强
+粒子特效：通过 entity.AddParticleSystem 添加视觉特效
+
+音效集成：使用 SoundEvent.PlaySound 播放技能音效
+
+物理效果：调用 agent.ApplyImpulse 实现击飞效果
+
+2. 高级功能
+条件触发：在 CanActivateSkill 中添加血量/状态判断
+
+技能升级：通过 SkillLevel 字段动态调整伤害值
+
+联机同步：通过 NetworkComponent 同步技能状态
+
+六、版本管理与发布
+维护更新日志
+
+markdown
+复制
+## v1.1.0 - 2023-10-20
+- 新增技能: 火球术（法术栏）
+- 修复: 盾击技能伤害计算错误
+打包Mod
+
+确保 bin/ 目录包含所有编译后的DLL
+
+验证 SubModule.xml 依赖项正确
+
+通过此流程，你可以系统化地扩展技能系统，确保每个新技能的添加符合整体架构规范。

@@ -1,0 +1,129 @@
+新建 DOT/Buff 类型并在技能中应用的完整流程
+步骤 1：创建新的状态类（如 BleedingState）
+csharp
+复制
+// 文件名：BleedingState.cs
+using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade;
+
+namespace New_ZZZF
+{
+    public class BleedingState : AgentBuff
+    {
+        private float _damagePerSecond;
+        private float _timeSinceLastTick;
+
+        public BleedingState(float duration, float dps, Agent source)
+        {
+            StateId = "bleeding"; // 唯一标识符
+            Duration = duration;
+            _damagePerSecond = dps;
+            SourceAgent = source;
+            _timeSinceLastTick = 0;
+        }
+
+        public override void OnApply(Agent agent)
+        {
+            // 触发流血特效（例如红色粒子）
+            agent.PlayParticleEffect("blood_spray");
+        }
+
+        public override void OnUpdate(Agent agent, float dt)
+        {
+            _timeSinceLastTick += dt;
+
+            // 每秒触发一次伤害
+            if (_timeSinceLastTick >= 1f)
+            {
+                Script.CalculateFinalMagicDamage(
+                    SourceAgent,
+                    agent,
+                    _damagePerSecond,
+                    "Bleeding", // 伤害类型
+                    0, 0
+                );
+                _timeSinceLastTick -= 1f;
+            }
+        }
+
+        public override void OnRemove(Agent agent)
+        {
+            // 移除特效
+            agent.StopParticleEffect("blood_spray");
+        }
+    }
+}
+步骤 2：在技能命中逻辑中附加状态
+以 JianQi（剑气）技能为例，修改其伤害方法 JianQiDamage：
+
+csharp
+复制
+public static void JianQiDamage(GameEntity missileEntity)
+{
+    if (!SkillSystemBehavior.WoW_ProjectileDB.TryGetValue(missileEntity, out ProjectileData data))
+        return;
+
+    float BaseDamage = 50;
+    // 原有伤害计算逻辑...
+    foreach (Agent agent in FoeAgent)
+    {
+        Script.CalculateFinalMagicDamage(data.CasterAgent, agent, BaseDamage, "mofa");
+
+        // 附加流血状态（持续8秒，每秒5点伤害）
+        var bleeding = new BleedingState(
+            duration: 8f,
+            dps: 5f,
+            source: data.CasterAgent
+        );
+        agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(bleeding);
+    }
+}
+步骤 3：验证流程
+施放剑气技能：
+
+投射物命中后对范围内敌人造成直接伤害。
+
+目标身上出现红色粒子特效（blood_spray）。
+
+持续伤害：
+
+每秒扣除 5 点生命值，持续 8 秒。
+
+游戏内显示 造成了5点Bleeding伤害 消息。
+
+状态移除：
+
+8 秒后特效消失，伤害停止。
+
+关键注意事项
+状态实例化：
+必须在命中时创建新实例（如 new BleedingState(...)），避免多个目标共享同一实例导致计时器冲突。
+
+特效资源匹配：
+
+粒子效果名称（如 blood_spray）需与游戏资源实际路径一致。
+
+在 OnRemove 中确保移除特效。
+
+线程安全：
+若在 MissionTick 中更新状态，需通过 副本遍历 避免 InvalidOperationException：
+
+csharp
+复制
+List<AgentSkillComponent> componentsToProcess = _activeComponents.ToList();
+foreach (var comp in componentsToProcess)
+{
+    // 处理逻辑...
+}
+扩展性：
+
+可在 CalculateFinalMagicDamage 中实现抗性计算（如物理/魔法抗性）。
+
+通过 XML 配置状态参数（如持续时间、伤害值）。
+
+最终效果
+技能命中时：触发直接伤害并附加流血状态。
+
+持续伤害：每秒生效，独立计时。
+
+状态管理：到期后自动移除特效和伤害逻辑。
