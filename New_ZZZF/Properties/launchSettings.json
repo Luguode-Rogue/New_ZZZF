@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "Bannerlord": {
+      "commandName": "Executable",
+      "executablePath": "D:\\SteamLibrary\\steamapps\\common\\Mount & Blade II Bannerlord\\bin\\Win64_Shipping_Client\\Bannerlord.exe",
+      "commandLineArgs": "/singleplayer _MODULES_*Bannerlord.Harmony*Native*SandBoxCore*CustomBattle*Bannerlord.UsefullUIDebugEx*Sandbox*StoryMode*New_ZZZF*_MODULES_",
+      "workingDirectory": "D:\\SteamLibrary\\steamapps\\common\\Mount & Blade II Bannerlord\\bin\\Win64_Shipping_Client\\"
+    },
+    "BLSE Bannerlord": {
+      "commandName": "Executable",
+      "executablePath": "$(GameFolder)\\bin\\$(GameBinariesFolder)\\Bannerlord.BLSE.Standalone.exe",
+      "commandLineArgs": "/singleplayer _MODULES_*Bannerlord.Harmony*Native*SandBoxCore*CustomBattle*Sandbox*StoryMode*$(ModuleName)*_MODULES_",
+      "workingDirectory": "$(GameFolder)\\bin\\$(GameBinariesFolder)"
+    }
+  }
+}

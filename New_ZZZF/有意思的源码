@@ -1,0 +1,972 @@
+// public class MissionMainAgentInteractionComponent
+//核心功能：通过射线检测处理玩家焦点对象的交互逻辑
+public void FocusTick()
+{
+    IFocusable focusable = null;
+    UsableMachine usableMachine = null;
+    bool isInteractable = true;    // 标记当前焦点是否可直接交互
+    bool canInteractWithAgent = true; // 标记与Agent的交互条件是否满足
+
+    // 情景模式过滤：对话/过场动画下禁用焦点交互
+    if (Mission.Current.Mode == MissionMode.Conversation || Mission.Current.Mode == MissionMode.CutScene)
+    {
+        if (this.CurrentFocusedObject != null && Mission.Current.Mode != MissionMode.Conversation)
+        {
+            this.ClearFocus();
+        }
+        return;
+    }
+
+    Agent main = Agent.Main; // 获取玩家控制的主Agent
+    if (!this.CurrentMissionScreen.SceneLayer.Input.IsGameKeyDown(25) && 
+        main != null && 
+        main.IsOnLand())
+    {
+        /* ------------------- 基础射线参数初始化 ------------------- */
+        float rayLength = 10f; // 初始射线长度
+        Vec3 cameraDir = this.CurrentMissionScreen.CombatCamera.Direction; // 摄像机方向
+        Vec3 rayStart = this.CurrentMissionScreen.CombatCamera.Position; // 射线起点（摄像机位置）
+        Vec3 agentPos = main.Position; // 玩家角色位置
+        
+        // 计算水平面投影距离（忽略Z轴）
+        float horizontalDistance = new Vec3(rayStart.x, rayStart.y, 0f).Distance(
+            new Vec3(agentPos.x, agentPos.y, 0f));
+        
+        // 混合摄像机位置和方向计算射线终点
+        Vec3 rayEndBase = rayStart * (1f - horizontalDistance) + 
+                         (rayStart + cameraDir) * horizontalDistance;
+
+        /* ------------------- 地形/实体射线检测 ------------------- */
+        float terrainHitDistance;
+        // 检测最近地形或实体，限制最大射线长度
+        if (this.CurrentMissionScene.RayCastForClosestEntityOrTerrain(
+            rayEndBase, 
+            rayEndBase + cameraDir * rayLength, 
+            out terrainHitDistance, 
+            0.01f, 
+            BodyFlags.CommonFlagsThatDoNotBlocksRay))
+        {
+            rayLength = terrainHitDistance; // 更新有效射线长度
+        }
+
+        /* ------------------- 角色射线检测 ------------------- */
+        float agentHitDistance = float.MaxValue;
+        // 检测射线路径上的最近Agent（过滤玩家自身，半径0.3米）
+        Agent hitAgent = this.CurrentMission.RayCastForClosestAgent(
+            rayEndBase, 
+            rayEndBase + cameraDir * (rayLength + 0.01f), 
+            out agentHitDistance, 
+            main.Index, 
+            0.3f);
+        
+        // 处理命中的Agent（非坐骑，或可骑乘的无人坐骑）
+        if (hitAgent != null && 
+            (!hitAgent.IsMount || 
+             (hitAgent.RiderAgent == null && 
+              main.MountAgent == null && 
+              main.CanReachAgent(hitAgent))))
+        {
+            agentHitDistance = agentHitDistance; // 记录命中距离
+            focusable = hitAgent; // 设为焦点对象
+            if (!main.CanInteractWithAgent(hitAgent, this.CurrentMissionScreen.CameraElevation))
+            {
+                canInteractWithAgent = false; // 标记不可直接交互
+            }
+        }
+
+        /* ------------------- 可交互物体检测 ------------------- */
+        float objectDetectionRadius = 3f; // 物体检测半径扩展
+        rayLength += 0.1f; // 增加射线长度容差
+        GameEntity hitEntity;
+        float entityHitDistance;
+        
+        // 第一轮精确检测（0.2米半径）
+        bool hitEntityFound = this.CurrentMissionScene.RayCastForClosestEntityOrTerrain(
+            rayEndBase, 
+            rayEndBase + cameraDir * rayLength, 
+            out entityHitDistance, 
+            out hitEntity, 
+            0.2f, 
+            BodyFlags.CommonFocusRayCastExcludeFlags);
+        
+        // 若未命中或距离不如Agent近，进行第二轮宽松检测
+        if (!hitEntityFound || hitEntity == null || entityHitDistance >= agentHitDistance)
+        {
+            hitEntityFound = this.CurrentMissionScene.RayCastForClosestEntityOrTerrain(
+                rayEndBase, 
+                rayEndBase + cameraDir * rayLength, 
+                out entityHitDistance, 
+                out hitEntity, 
+                0.2f * objectDetectionRadius, 
+                BodyFlags.CommonFocusRayCastExcludeFlags);
+        }
+
+        // 处理命中的实体
+        if (hitEntityFound && hitEntity != null && entityHitDistance < agentHitDistance)
+        {
+            // 沿父级实体链向上查找可聚焦组件
+            while (hitEntity != null)
+            {
+                if (hitEntity.GetScriptComponents().Any(sc => sc is IFocusable) || 
+                    hitEntity.Parent == null)
+                {
+                    break;
+                }
+                hitEntity = hitEntity.Parent;
+            }
+
+            // 检查可交互机器
+            usableMachine = hitEntity.GetFirstScriptOfType<UsableMachine>();
+            if (usableMachine != null && !usableMachine.IsDisabled)
+            {
+                // 获取有效站位点
+                GameEntity validStandingPoint = usableMachine.GetValidStandingPointForAgent(main);
+                if (validStandingPoint != null)
+                {
+                    hitEntity = validStandingPoint; // 优先使用站位点实体
+                }
+            }
+
+            isInteractable = false; // 默认物体不可直接交互
+            UsableMissionObject usableObject = hitEntity.GetFirstScriptOfType<UsableMissionObject>();
+            
+            // 处理可拾取物品
+            if (usableObject is SpawnedItemEntity)
+            {
+                if (this.CurrentMission.IsMainAgentItemInteractionEnabled && 
+                    main.CanReachObject(usableObject, 
+                        MissionMainAgentInteractionComponent.GetCollisionDistanceSquaredOfIntersectionFromMainAgentEye(
+                            rayEndBase, cameraDir, entityHitDistance)))
+                {
+                    focusable = usableObject;
+                    if (main.CanUseObject(usableObject))
+                    {
+                        isInteractable = true; // 满足直接交互条件
+                    }
+                }
+            }
+            // 处理其他可交互物体（如门、机关）
+            else if (usableObject != null)
+            {
+                focusable = usableObject;
+                if (this.CurrentMission.IsMainAgentObjectInteractionEnabled && 
+                    !main.IsUsingGameObject && 
+                    main.IsOnLand() && 
+                    main.ObjectHasVacantPosition(usableObject))
+                {
+                    isInteractable = true;
+                }
+            }
+            // 处理可交互机器（如工作台）
+            else if (usableMachine != null)
+            {
+                focusable = usableMachine;
+            }
+            // 处理自定义可聚焦组件
+            else
+            {
+                IFocusable customFocusable = hitEntity.GetScriptComponents()
+                    .FirstOrDefault(sc => sc is IFocusable) as IFocusable;
+                if (customFocusable != null)
+                {
+                    focusable = customFocusable;
+                }
+            }
+        }
+
+        // 备选焦点：玩家当前坐骑
+        if ((focusable == null || !isInteractable) && 
+            main.MountAgent != null && 
+            main.CanInteractWithAgent(main.MountAgent, this.CurrentMissionScreen.CameraElevation))
+        {
+            focusable = main.MountAgent;
+            isInteractable = true;
+        }
+    }
+
+    // 最终焦点处理
+    if (focusable == null)
+    {
+        this.ClearFocus(); // 无有效焦点时清除状态
+        return;
+    }
+    
+    // 合并交互条件标记：Agent类使用canInteractWithAgent，物体类使用isInteractable
+    bool finalInteractable = (focusable is Agent) ? canInteractWithAgent : isInteractable;
+    this.SetCurrentFocusedObject(focusable, usableMachine, finalInteractable);
+}
+
+		public bool CanSeeAgent(Agent otherAgent)//视线检测能否看到目标
+		{
+			if ((this.OwnerAgent.Position - otherAgent.Position).Length < 30f)
+			{
+				Vec3 eyeGlobalPosition = otherAgent.GetEyeGlobalPosition();
+				Vec3 eyeGlobalPosition2 = this.OwnerAgent.GetEyeGlobalPosition();
+				if (MathF.Abs(Vec3.AngleBetweenTwoVectors(otherAgent.Position - this.OwnerAgent.Position, this.OwnerAgent.LookDirection)) < 1.5f)
+				{
+					float num;
+					return !Mission.Current.Scene.RayCastForClosestEntityOrTerrain(eyeGlobalPosition2, eyeGlobalPosition, out num, 0.01f, BodyFlags.CommonFocusRayCastExcludeFlags);
+				}
+			}
+			return false;
+		}
+		public override Agent.UsageDirection GetBlockDirection(Mission mission)//获取自动格挡方向
+		{
+			Agent mainAgent = mission.MainAgent;
+			float num = float.MinValue;
+			Agent.UsageDirection usageDirection = Agent.UsageDirection.AttackDown;
+			foreach (Agent agent in mission.Agents)
+			{
+				if (agent.IsHuman)
+				{
+					Agent.ActionStage currentActionStage = agent.GetCurrentActionStage(1);
+					if ((currentActionStage == Agent.ActionStage.AttackReady || currentActionStage == Agent.ActionStage.AttackQuickReady || currentActionStage == Agent.ActionStage.AttackRelease) && agent.IsEnemyOf(mainAgent))
+					{
+						Vec3 v = agent.Position - mainAgent.Position;
+						float num2 = v.Normalize();
+						float num3 = MBMath.ClampFloat(Vec3.DotProduct(v, mainAgent.LookDirection) + 0.8f, 0f, 1f);
+						float num4 = MBMath.ClampFloat(1f / (num2 + 0.5f), 0f, 1f);
+						float num5 = MBMath.ClampFloat(-Vec3.DotProduct(v, agent.LookDirection) + 0.5f, 0f, 1f);
+						float num6 = num3 * num4 * num5;
+						if (num6 > num)
+						{
+							num = num6;
+							usageDirection = agent.GetCurrentActionDirection(1);
+							if (usageDirection == Agent.UsageDirection.None)
+							{
+								usageDirection = Agent.UsageDirection.AttackDown;
+							}
+						}
+					}
+				}
+			}
+			return usageDirection;
+		}
+
+
+public void HandleDropWeapon(bool isDefendPressed, EquipmentIndex forcedSlotIndexToDropWeaponFrom)//处理角色（Agent）丢弃武器的逻辑
+{
+    // 获取当前角色正在执行的动作类型
+    Agent.ActionCodeType currentActionType = this.GetCurrentActionType(1);
+    // 如果角色处于活动状态并且没有执行以下动作，则可以进行丢弃武器的操作
+    if (this.State == AgentState.Active && currentActionType != Agent.ActionCodeType.ReleaseMelee && currentActionType != Agent.ActionCodeType.ReleaseRanged && currentActionType != Agent.ActionCodeType.ReleaseThrowing && currentActionType != Agent.ActionCodeType.WeaponBash)
+    {
+        // 获取指定要丢弃的装备槽位索引
+        EquipmentIndex equipmentIndex = forcedSlotIndexToDropWeaponFrom;
+        // 如果没有强制指定丢弃的槽位，则进行自动选择
+        if (equipmentIndex == EquipmentIndex.None)
+        {
+            // 获取主手和副手当前持有的武器槽位索引
+            EquipmentIndex wieldedItemIndex = this.GetWieldedItemIndex(Agent.HandIndex.MainHand);
+            EquipmentIndex wieldedItemIndex2 = this.GetWieldedItemIndex(Agent.HandIndex.OffHand);
+            // 如果副手有武器并且防御键被按下，则选择副手的武器
+            if (wieldedItemIndex2 >= EquipmentIndex.WeaponItemBeginSlot && isDefendPressed)
+            {
+                equipmentIndex = wieldedItemIndex2;
+            }
+            // 否则，如果主手有武器，则选择主手的武器
+            else if (wieldedItemIndex >= EquipmentIndex.WeaponItemBeginSlot)
+            {
+                equipmentIndex = wieldedItemIndex;
+            }
+            // 否则，如果副手有武器，则选择副手的武器
+            else if (wieldedItemIndex2 >= EquipmentIndex.WeaponItemBeginSlot)
+            {
+                equipmentIndex = wieldedItemIndex2;
+            }
+            // 如果手中没有武器，遍历装备槽位，寻找可消耗的武器（如箭矢）
+            else
+            {
+                for (EquipmentIndex equipmentIndex2 = EquipmentIndex.WeaponItemBeginSlot; equipmentIndex2 < EquipmentIndex.ExtraWeaponSlot; equipmentIndex2++)
+                {
+                    if (!this.Equipment[equipmentIndex2].IsEmpty && this.Equipment[equipmentIndex2].Item.PrimaryWeapon.IsConsumable)
+                    {
+                        // 如果是远程武器并且数量为0，则选择该槽位
+                        if (this.Equipment[equipmentIndex2].Item.PrimaryWeapon.IsRangedWeapon)
+                        {
+                            if (this.Equipment[equipmentIndex2].Amount == 0)
+                            {
+                                equipmentIndex = equipmentIndex2;
+                                break;
+                            }
+                        }
+                        // 如果是消耗品但不是远程武器，检查是否有匹配的弹药类型
+                        else
+                        {
+                            bool flag = false;
+                            for (EquipmentIndex equipmentIndex3 = EquipmentIndex.WeaponItemBeginSlot; equipmentIndex3 < EquipmentIndex.ExtraWeaponSlot; equipmentIndex3++)
+                            {
+                                if (!this.Equipment[equipmentIndex3].IsEmpty && this.Equipment[equipmentIndex3].HasAnyUsageWithAmmoClass(this.Equipment[equipmentIndex2].Item.PrimaryWeapon.WeaponClass) && this.Equipment[equipmentIndex2].Amount > 0)
+                                {
+                                    flag = true;
+                                    break;
+                                }
+                            }
+                            // 如果没有匹配的弹药类型，则选择该槽位
+                            if (!flag)
+                            {
+                                equipmentIndex = equipmentIndex2;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // 如果最终确定了要丢弃的装备槽位，并且该槽位不为空
+        if (equipmentIndex != EquipmentIndex.None && !this.Equipment[equipmentIndex].IsEmpty)
+        {
+            // 执行丢弃武器的操作
+            this.DropItem(equipmentIndex, WeaponClass.Undefined);
+            // 更新角色属性
+            this.UpdateAgentProperties();
+        }
+    }
+}
+
+		//一个人类agent调用这个方法，输入一个坐骑agent
+		public void Mount(Agent mountAgent)//agent上下马的操作。参考一下可以写一个灵马哨笛
+		{
+            //获取现在的动作，不是惊马状态
+			bool flag = mountAgent.GetCurrentActionType(0) == Agent.ActionCodeType.Rear;
+            //人类的坐骑是空，并且输入的坐骑agent没有骑手
+            //所以想做灵马哨笛，需要先创建一个坐骑agent
+			if (this.MountAgent == null && mountAgent.RiderAgent == null)
+			{
+                //检测人类agent的骑术够不够骑这个坐骑，并且坐骑没有处于惊马状态，并且人类没有处于特殊动作（做灵马哨笛的时候，这个条件改成处于跳跃动作中）
+				if (this.CheckSkillForMounting(mountAgent) && !flag && this.GetCurrentActionValue(0) == ActionIndexValueCache.act_none)
+				{
+                    |=或等符号，类似于+=，下面是this.EventControlFlags赋值this.EventControlFlags或Agent.EventControlFlag.Mount，两个条件那个为真赋值那个
+					this.EventControlFlags |= Agent.EventControlFlag.Mount;
+					this.SetInteractionAgent(mountAgent);
+					return;
+				}
+			}
+			else if (this.MountAgent == mountAgent && !flag)
+			{
+				this.EventControlFlags |= Agent.EventControlFlag.Dismount;
+			}
+		}
+	//生成agent的代码，里面有骑兵的生成，里面有骑兵马的生成
+	TaleWorlds.MountAndBlade.Mission.SpawnAgent(AgentBuildData, bool) : Agent @06001939
+	//坐骑加速度计算？输出的值为最高速度达到持续时间。骑术越高输出越高，应该越大加速度越大。但是被限制到0.7的最大值（像超过0.7在原版的这个数据里还挺难，300骑术70坐骑难度70坐骑操控性，结果是0.7出头）
+	public class DefaultRidingModel : RidingModel
+	{
+		// Token: 0x0600060D RID: 1549 RVA: 0x00015FBC File Offset: 0x000141BC
+		public override float CalculateAcceleration(in EquipmentElement mountElement, in EquipmentElement harnessElement, int ridingSkill)
+		{
+			EquipmentElement equipmentElement = mountElement;
+			float num = (float)equipmentElement.GetModifiedMountManeuver(harnessElement) * 0.008f;
+			if (ridingSkill >= 0)
+			{
+				float num2 = num;
+				float num3 = 0.7f;
+				float num4 = 0.003f;
+				float num5 = (float)ridingSkill;
+				float num6 = 1.5f;
+				equipmentElement = mountElement;
+				num = num2 * (num3 + num4 * (num5 - num6 * (float)equipmentElement.Item.Difficulty));
+			}
+			return MathF.Clamp(num, 0.15f, 0.7f);
+		}
+	}
+	//里面有人物的加速度属性的设置
+		private void FillAgentStatsFromData(ref AgentDrivenProperties agentDrivenProperties, Agent agent, MultiplayerClassDivisions.MPHeroClass heroClass, MissionPeer missionPeer, MissionPeer owningMissionPeer)
+		{
+			MissionPeer missionPeer2 = missionPeer ?? owningMissionPeer;
+			if (missionPeer2 != null)
+			{
+				MPPerkObject.MPOnSpawnPerkHandler onSpawnPerkHandler = MPPerkObject.GetOnSpawnPerkHandler(missionPeer2);
+				bool isPlayer = missionPeer != null;
+				for (int i = 0; i < 55; i++)
+				{
+					DrivenProperty drivenProperty = (DrivenProperty)i;
+					float stat = agentDrivenProperties.GetStat(drivenProperty);
+					if (drivenProperty == DrivenProperty.ArmorHead || drivenProperty == DrivenProperty.ArmorTorso || drivenProperty == DrivenProperty.ArmorLegs || drivenProperty == DrivenProperty.ArmorArms)
+					{
+						agentDrivenProperties.SetStat(drivenProperty, stat + (float)heroClass.ArmorValue + onSpawnPerkHandler.GetDrivenPropertyBonusOnSpawn(isPlayer, drivenProperty, stat));
+					}
+					else
+					{
+						agentDrivenProperties.SetStat(drivenProperty, stat + onSpawnPerkHandler.GetDrivenPropertyBonusOnSpawn(isPlayer, drivenProperty, stat));
+					}
+				}
+			}
+			float topSpeedReachDuration = (heroClass.IsTroopCharacter(agent.Character) ? heroClass.TroopTopSpeedReachDuration : heroClass.HeroTopSpeedReachDuration);
+			agentDrivenProperties.TopSpeedReachDuration = topSpeedReachDuration;
+			float managedParameter = ManagedParameters.Instance.GetManagedParameter(ManagedParametersEnum.BipedalCombatSpeedMinMultiplier);
+			float managedParameter2 = ManagedParameters.Instance.GetManagedParameter(ManagedParametersEnum.BipedalCombatSpeedMaxMultiplier);
+			float num = (heroClass.IsTroopCharacter(agent.Character) ? heroClass.TroopCombatMovementSpeedMultiplier : heroClass.HeroCombatMovementSpeedMultiplier);
+			agentDrivenProperties.CombatMaxSpeedMultiplier = managedParameter + (managedParameter2 - managedParameter) * num;
+		}
+		//更新坐骑状态，骑术技能影响坐骑操控性 的代码
+        private void UpdateHorseStats(Agent agent, AgentDrivenProperties agentDrivenProperties)
+		{
+			Equipment spawnEquipment = agent.SpawnEquipment;
+			EquipmentElement equipmentElement = spawnEquipment[EquipmentIndex.ArmorItemEndSlot];
+			ItemObject item = equipmentElement.Item;
+			EquipmentElement equipmentElement2 = spawnEquipment[EquipmentIndex.HorseHarness];
+			agentDrivenProperties.AiSpeciesIndex = (int)item.Id.InternalValue;
+			agentDrivenProperties.AttributeRiding = 0.8f + ((equipmentElement2.Item != null) ? 0.2f : 0f);
+			float num = 0f;
+			for (int i = 1; i < 12; i++)
+			{
+				if (spawnEquipment[i].Item != null)
+				{
+					num += (float)spawnEquipment[i].GetModifiedMountBodyArmor();
+				}
+			}
+			agentDrivenProperties.ArmorTorso = num;
+			int modifiedMountManeuver = equipmentElement.GetModifiedMountManeuver(equipmentElement2);
+			int num2 = equipmentElement.GetModifiedMountSpeed(equipmentElement2) + 1;
+			int num3 = 0;
+			float environmentSpeedFactor = this.GetEnvironmentSpeedFactor(agent);
+			bool flag = Campaign.Current.Models.MapWeatherModel.GetWeatherEffectOnTerrainForPosition(MobileParty.MainParty.Position2D) == MapWeatherModel.WeatherEventEffectOnTerrain.Wet;
+			Agent riderAgent = agent.RiderAgent;
+			if (riderAgent != null)
+			{
+				CharacterObject characterObject = riderAgent.Character as CharacterObject;
+				Formation formation = riderAgent.Formation;
+				Agent agent2 = ((formation != null) ? formation.Captain : null);
+				if (agent2 == riderAgent)
+				{
+					agent2 = null;
+				}
+				CharacterObject captainCharacter = ((agent2 != null) ? agent2.Character : null) as CharacterObject;
+				BannerComponent activeBanner = MissionGameModels.Current.BattleBannerBearersModel.GetActiveBanner(formation);
+				ExplainedNumber explainedNumber = new ExplainedNumber((float)modifiedMountManeuver, false, null);
+				ExplainedNumber explainedNumber2 = new ExplainedNumber((float)num2, false, null);
+				num3 = this.GetEffectiveSkill(agent.RiderAgent, DefaultSkills.Riding);
+				SkillHelper.AddSkillBonusForCharacter(DefaultSkills.Riding, DefaultSkillEffects.HorseManeuver, agent.RiderAgent.Character as CharacterObject, ref explainedNumber, num3, true, 0);
+				SkillHelper.AddSkillBonusForCharacter(DefaultSkills.Riding, DefaultSkillEffects.HorseSpeed, agent.RiderAgent.Character as CharacterObject, ref explainedNumber2, num3, true, 0);
+				if (activeBanner != null)
+				{
+					BannerHelper.AddBannerBonusForBanner(DefaultBannerEffects.IncreasedMountMovementSpeed, activeBanner, ref explainedNumber2);
+				}
+				PerkHelper.AddPerkBonusForCharacter(DefaultPerks.Riding.NimbleSteed, characterObject, true, ref explainedNumber);
+				PerkHelper.AddPerkBonusForCharacter(DefaultPerks.Riding.SweepingWind, characterObject, true, ref explainedNumber2);
+				ExplainedNumber explainedNumber3 = new ExplainedNumber(agentDrivenProperties.ArmorTorso, false, null);
+				PerkHelper.AddPerkBonusFromCaptain(DefaultPerks.Riding.ToughSteed, captainCharacter, ref explainedNumber3);
+				PerkHelper.AddPerkBonusForCharacter(DefaultPerks.Riding.ToughSteed, characterObject, true, ref explainedNumber3);
+				if (characterObject.GetPerkValue(DefaultPerks.Riding.TheWayOfTheSaddle))
+				{
+					float value = (float)MathF.Max(num3 - Campaign.Current.Models.CharacterDevelopmentModel.MaxSkillRequiredForEpicPerkBonus, 0) * DefaultPerks.Riding.TheWayOfTheSaddle.PrimaryBonus;
+					explainedNumber.Add(value, null, null);
+				}
+				if (equipmentElement2.Item == null)
+				{
+					explainedNumber.AddFactor(-0.1f, null);
+					explainedNumber2.AddFactor(-0.1f, null);
+				}
+				if (flag)
+				{
+					explainedNumber2.AddFactor(-0.25f, null);
+				}
+				agentDrivenProperties.ArmorTorso = explainedNumber3.ResultNumber;
+				agentDrivenProperties.MountManeuver = explainedNumber.ResultNumber;
+				agentDrivenProperties.MountSpeed = environmentSpeedFactor * 0.22f * (1f + explainedNumber2.ResultNumber);
+			}
+			else
+			{
+				agentDrivenProperties.MountManeuver = (float)modifiedMountManeuver;
+				agentDrivenProperties.MountSpeed = environmentSpeedFactor * 0.22f * (float)(1 + num2);
+			}
+			float num4 = equipmentElement.Weight / 2f + (equipmentElement2.IsEmpty ? 0f : equipmentElement2.Weight);
+			agentDrivenProperties.MountDashAccelerationMultiplier = ((num4 > 200f) ? ((num4 < 300f) ? (1f - (num4 - 200f) / 111f) : 0.1f) : 1f);
+			if (flag)
+			{
+				agentDrivenProperties.MountDashAccelerationMultiplier *= 0.75f;
+			}
+			agentDrivenProperties.TopSpeedReachDuration = Game.Current.BasicModels.RidingModel.CalculateAcceleration(equipmentElement, equipmentElement2, num3);
+			agentDrivenProperties.MountChargeDamage = (float)equipmentElement.GetModifiedMountCharge(equipmentElement2) * 0.004f;
+			agentDrivenProperties.MountDifficulty = (float)equipmentElement.Item.Difficulty;
+		}
+
+
+
+                //玩家显示的准星的精度，生成多重箭时候的角度可以考虑参考下这个精度的设置
+				Agent mainAgent = base.Mission.MainAgent;
+				double num = (double)(base.MissionScreen.CameraViewAngle * 0.017453292f);
+				double accuracy = 2.0 * Math.Tan((double)(mainAgent.CurrentAimingError + mainAgent.CurrentAimingTurbulance) * (0.5 / Math.Tan(num * 0.5)));
+
+
+            //可以通过这个语句，来获取到武器吃的技能加成
+                        // 获取Agent主手中武器的Index索引
+                        EquipmentIndex mainHandIndex = agent.GetWieldedItemIndex(Agent.HandIndex.MainHand);
+                        if (mainHandIndex == EquipmentIndex.None)
+                        {
+                            return native;
+                        }
+
+                        // EquipmentIndex转MissionWeapon转ItemObject
+                        MissionWeapon mainHandEquipmentElement = agent.Equipment[mainHandIndex];
+                        ItemObject weapon = mainHandEquipmentElement.Item;
+                        SkillObject skillObject = ((weapon != null) ? weapon.RelevantSkill : null);
+
+                        if (characterObject != null && skillObject != null)
+                        {
+                            if (skillObject == DefaultSkills.OneHanded)
+                            {
+                                //读取agent对应troop的skill专精等级以及skill对应的属性数值
+                            }
+                            if (skillObject == DefaultSkills.TwoHanded)
+                            {
+                                //读取agent对应troop的skill专精等级以及skill对应的属性数值
+                            }
+                            if (skillObject == DefaultSkills.Polearm)
+                            {
+                                //读取agent对应troop的skill专精等级以及skill对应的属性数值
+                            }
+                            if (skillObject == DefaultSkills.Bow)
+                            {
+                                //读取agent对应troop的skill专精等级以及skill对应的属性数值
+                            }
+                            if (skillObject == DefaultSkills.Crossbow)
+                            {
+                                //读取agent对应troop的skill专精等级以及skill对应的属性数值
+                            }
+                            if (skillObject == DefaultSkills.Throwing)
+                            {
+                                //读取agent对应troop的skill专精等级以及skill对应的属性数值
+                            }
+                        }
+
+
+		public void CheckLoadedAmmos()//遍历装备槽位，获取弹药。调用：agent.Equipment.CheckLoadedAmmos();
+		{
+			for (EquipmentIndex equipmentIndex = EquipmentIndex.WeaponItemBeginSlot; equipmentIndex < EquipmentIndex.NumAllWeaponSlots; equipmentIndex++)
+			{
+				if (!this[equipmentIndex].IsEmpty && this[equipmentIndex].Item.PrimaryWeapon.WeaponClass == WeaponClass.Crossbow)
+				{
+					int num;
+					EquipmentIndex equipmentIndex2;
+					this.GetAmmoCountAndIndexOfType(this[equipmentIndex].Item.Type, out num, out equipmentIndex2, EquipmentIndex.None);
+					if (equipmentIndex2 != EquipmentIndex.None)
+					{
+						MissionWeapon ammoWeapon = this._weaponSlots[(int)equipmentIndex2].Consume(MathF.Min(this[equipmentIndex].MaxAmmo, this._weaponSlots[(int)equipmentIndex2].Amount));
+						this._weaponSlots[(int)equipmentIndex].ReloadAmmo(ammoWeapon, this._weaponSlots[(int)equipmentIndex].ReloadPhaseCount);
+					}
+				}
+			}
+			this._cache.InvalidateOnWeaponAmmoUpdated();
+		}
+
+        //给agent添加一个描边效果。可以用来表示魔法/aoe效果预估可以影响的单位。或者用来表示现在正在锁定的单位。
+                MBAgentVisuals agentVisuals = Agent.Main.AgentVisuals;
+                if (agentVisuals != null)
+                {
+                    agentVisuals.SetContourColor(new uint?(new Color(0.85f, 0.85f, 0.85f, 1f).ToUnsignedInteger()), true);
+                }
+                //去掉描边效果
+                agentVisuals.SetContourColor(null, true);
+
+//盾牌耐久条的显示，改一下做成体力魔法条
+					//TaleWorlds.MountAndBlade.ViewModelCollection.MissionAgentStatusVM.Tick(float) : void @06000019
+		public void OnMainAgentWeaponChange()
+		{
+			if (this._mission.MainAgent == null)
+			{
+				return;
+			}
+			MissionWeapon missionWeapon = MissionWeapon.Invalid;
+			MissionWeapon missionWeapon2 = MissionWeapon.Invalid;
+			EquipmentIndex wieldedItemIndex = this._mission.MainAgent.GetWieldedItemIndex(Agent.HandIndex.OffHand);
+			if (wieldedItemIndex > EquipmentIndex.None && wieldedItemIndex < EquipmentIndex.NumAllWeaponSlots)
+			{
+				missionWeapon = this._mission.MainAgent.Equipment[wieldedItemIndex];
+			}
+			wieldedItemIndex = this._mission.MainAgent.GetWieldedItemIndex(Agent.HandIndex.MainHand);
+			if (wieldedItemIndex > EquipmentIndex.None && wieldedItemIndex < EquipmentIndex.NumAllWeaponSlots)
+			{
+				missionWeapon2 = this._mission.MainAgent.Equipment[wieldedItemIndex];
+			}
+			WeaponComponentData currentUsageItem = missionWeapon.CurrentUsageItem;
+			this.ShowShieldHealthBar = currentUsageItem != null && currentUsageItem.IsShield;
+			this.PrimaryWeapon = (missionWeapon2.IsEmpty ? new ImageIdentifierVM(ImageIdentifierType.Null) : new ImageIdentifierVM(missionWeapon2.Item, ""));
+			this.OffhandWeapon = (missionWeapon.IsEmpty ? new ImageIdentifierVM(ImageIdentifierType.Null) : new ImageIdentifierVM(missionWeapon.Item, ""));
+		}
+
+MissionGauntletCrosshair 类里的OnMissionScreenTick方法里，有不少好东西
+ // 计算相机视角的弧度值。
+    double num = base.MissionScreen.CameraViewAngle * (System.MathF.PI / 180f);
+   // 计算主代理的视线方向与移动方向之间的角度差异。
+    float numberToCheck = MBMath.WrapAngle(mainAgent.LookDirection.AsVec2.RotationInRadians - mainAgent.GetMovementDirection().RotationInRadians);
+           // 获取主代理身体旋转的约束。
+            Vec2 bodyRotationConstraint = mainAgent.GetBodyRotationConstraint();
+            // 判断目标是否无效，例如，主代理是否骑乘并且视线方向与移动方向的角度差异不在旋转约束范围内。
+            isTargetInvalid = base.Mission.MainAgent.MountAgent != null && !MBMath.IsBetween(numberToCheck, bodyRotationConstraint.x, bodyRotationConstraint.y) && (bodyRotationConstraint.x < -0.1f || bodyRotationConstraint.y > 0.1f);
+     // 如果当前武器有多个装填阶段，并且正在装填，并且当前行动类型是装填，则执行以下操作。
+        if (wieldedWeapon.ReloadPhaseCount > 1 && wieldedWeapon.IsReloading && currentActionType == Agent.ActionCodeType.Reload)
+        {
+            // 创建一个包含装填阶段信息的数组结构。
+            StackArray.StackArray10FloatFloatTuple reloadPhases = default(StackArray.StackArray10FloatFloatTuple);
+
+            // 获取当前使用的武器相关的装填动作代码。
+            ActionIndexValueCache itemUsageReloadActionCode = MBItem.GetItemUsageReloadActionCode(wieldedWeapon.CurrentUsageItem.ItemUsage, 9, mainAgent.HasMount, -1, mainAgent.GetIsLeftStance());
+
+            // 填充装填阶段的持续时间信息。
+            FillReloadDurationsFromActions(ref reloadPhases, wieldedWeapon.ReloadPhaseCount, mainAgent, itemUsageReloadActionCode);
+
+            // 获取主代理当前行动的进度。
+            float num2 = mainAgent.GetCurrentActionProgress(1);
+
+            // 获取当前行动的动作值。
+            ActionIndexValueCache currentActionValue = mainAgent.GetCurrentActionValue(1);
+
+            // 如果当前行动不是无动作，则计算动作的混合结束开始的进度，并加到当前行动进度上。
+            if (currentActionValue != ActionIndexValueCache.act_none)
+            {
+                float num3 = 1f - MBActionSet.GetActionBlendOutStartProgress(mainAgent.ActionSet, currentActionValue);
+                num2 += num3;
+            }
+
+            // 获取当前动画通道的动画参数。
+            float animationParameter = MBAnimation.GetAnimationParameter2(mainAgent.AgentVisuals.GetSkeleton().GetAnimationAtChannel(1));
+
+            // 判断当前行动进度是否大于动画参数，即是否完成了装填动作。
+            bool flag2 = num2 > animationParameter;
+
+            // 计算装填阶段完成的百分比。
+            float item = (flag2 ? 1f : (num2 / animationParameter));
+
+            // 获取当前的装填阶段。
+            short reloadPhase = wieldedWeapon.ReloadPhase;
+
+            // 将已完成的装填阶段的不透明度设置为1（完全不透明）。
+            for (int j = 0; j < reloadPhase; j++)
+            {
+                reloadPhases[j] = (1f, reloadPhases[j].Item2);
+            }
+
+            // 如果装填动作尚未完成，则设置当前装填阶段的进度。
+            if (!flag2)
+            {
+                reloadPhases[reloadPhase] = (item, reloadPhases[reloadPhase].Item2);
+
+                // 更新数据源的装填属性，显示装填进度。
+                _dataSource.SetReloadProperties(in reloadPhases, wieldedWeapon.ReloadPhaseCount);
+            }
+
+            // 设置标志变量，表示不需要再次设置重新加载属性。
+            flag = false;
+        }
+
+
+        //原来都没注意到，mission里有一个计算一个list里，agent平均位置的函数
+		public Vec2 GetAveragePositionOfAgents(List<Agent> agents)
+		{
+			int num = 0;
+			Vec2 vec = Vec2.Zero;
+			foreach (Agent agent in agents)
+			{
+				num++;
+				vec += agent.Position.AsVec2;
+			}
+			if (num == 0)
+			{
+				return Vec2.Invalid;
+			}
+			return vec * (1f / (float)num);
+		}
+
+
+
+        CharacterObject characterObject = ((attackerAgent != null) ? attackerAgent.Character : null) as CharacterObject;//agent转troop
+		//获取相机，不过改动相机现在感觉不好做
+                MissionScreen missionScreen;
+                if ((missionScreen = ScreenManager.TopScreen as MissionScreen) != null)
+                {
+                    Camera camera = missionScreen.CombatCamera;
+
+                }
+
+		//原版锁定目标 的代码，把锁定距离改一改用来干别的
+		private Agent FindTargetedLockableAgent(Agent player)
+		{
+			Vec3 direction = base.MissionScreen.CombatCamera.Direction;
+			Vec3 vec = direction;
+			Vec3 position = base.MissionScreen.CombatCamera.Position;
+			Vec3 visualPosition = player.VisualPosition;
+			float num = new Vec3(position.x, position.y, 0f, -1f).Distance(new Vec3(visualPosition.x, visualPosition.y, 0f, -1f));
+			Vec3 v = position * (1f - num) + (position + direction) * num;
+			float num2 = 0f;
+			Agent agent = null;
+			foreach (Agent agent2 in base.Mission.Agents)
+			{
+				if ((agent2.IsMount && agent2.RiderAgent != null && agent2.RiderAgent.IsEnemyOf(player)) || (!agent2.IsMount && agent2.IsEnemyOf(player)))
+				{
+					Vec3 vec2 = agent2.GetChestGlobalPosition() - v;
+					float num3 = vec2.Normalize();
+					if (num3 < 20f)//这个应该是锁定的距离
+					{
+						float num4 = Vec2.DotProduct(vec.AsVec2.Normalized(), vec2.AsVec2.Normalized());
+						float num5 = Vec2.DotProduct(new Vec2(vec.AsVec2.Length, vec.z), new Vec2(vec2.AsVec2.Length, vec2.z));
+						if (num4 > 0.95f && num5 > 0.95f)//这个数也可以放宽点，0.95降低
+						{
+							float num6 = num4 * num4 * num4 / MathF.Pow(num3, 0.15f);
+							if (num6 > num2)
+							{
+								num2 = num6;
+								agent = agent2;
+							}
+						}
+					}
+				}
+			}
+			if (agent != null && agent.IsMount && agent.RiderAgent != null)
+			{
+				return agent.RiderAgent;
+			}
+			return agent;
+		}
+
+
+		//修改agent属性的位置。复写这个方法，自动输入进来agent和对应的属性增幅配置。//此时AgentDrivenProperties还是空的，顶多有个盔甲负担属性
+			SandBox.GameComponents.SandboxAgentStatCalculateModel.UpdateAgentStats(Agent, AgentDrivenProperties) : void @060005B5
+		public override void UpdateAgentStats(Agent agent, AgentDrivenProperties agentDrivenProperties)
+		{
+			if (agent.IsHuman)
+			{
+				this.UpdateHumanStats(agent, agentDrivenProperties);
+				return;
+			}
+			this.UpdateHorseStats(agent, agentDrivenProperties);
+		}
+//完成agentDrivenProperties的配置
+private void UpdateHumanStats(Agent agent, AgentDrivenProperties agentDrivenProperties)
+//从agent获取配置
+Agent.GetAgentDrivenPropertyValue	
+
+
+
+部队移速
+需要创建派生自 DefaultPartySpeedCalculatingModel 的自定义参与方速度计算模型。这样的东西应该有效。
+
+C#:
+using TaleWorlds.Localization;
+using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.SandBox.GameComponents.Map;
+
+public class CustomPartySpeedCalculatingModel : DefaultPartySpeedCalculatingModel
+    {
+        public override ExplainedNumber CalculateFinalSpeed(MobileParty mobileParty, ExplainedNumber finalSpeed)
+        {
+            if (mobileParty.IsBandit)
+            {
+                finalSpeed.Add(3f, new TextObject("{=*}Increased Bandit Speed"));
+            }
+
+
+            return finalSpeed;
+        }
+    }
+
+然后将此模型添加到 MBSubModuleBase 上的 CampaignGameStarter 对象。
+
+C#:
+protected override void OnGameStart(Game game, IGameStarter gameStarter)
+        {
+            if (game.GameType is Campaign campaign)
+            {
+                CampaignGameStarter campaignStarter = (CampaignGameStarter)gameStarter;
+                campaignStarter.AddModel(new CustomPartySpeedCalculatingModel());
+            }
+        }
+
+
+		//传送后通过设置移动方向来完成目标agent的转向
+				foreach (HideoutCinematicController.HideoutCinematicAgentInfo hideoutCinematicAgentInfo2 in this._hideoutAgentsInfo)
+				{
+					Agent agent2 = hideoutCinematicAgentInfo2.Agent;
+					if (!hideoutCinematicAgentInfo2.HasReachedTarget(0.5f))
+					{
+						MatrixFrame targetFrame = hideoutCinematicAgentInfo2.TargetFrame;
+						WorldPosition worldPosition = new WorldPosition(base.Mission.Scene, targetFrame.origin);
+						agent2.TeleportToPosition(worldPosition.GetGroundVec3());
+						Agent agent3 = agent2;
+						Vec2 vec = targetFrame.rotation.f.AsVec2;
+						vec = vec.Normalized();
+						agent3.SetMovementDirection(vec);
+					}
+					agent2.Formation = this._cachedAgentFormations[num];
+					num++;
+				}
+
+//虽然不知道干什么的怎么用的,但是计算动画位移+设置移动位置,拿来做翻滚(主要是计算动画位移)
+		private static void SimulateAnimalAnimations(Agent agent)
+		{
+			int num = 10 + MBRandom.RandomInt(90);
+			for (int i = 0; i < num; i++)
+			{
+				agent.TickActionChannels(0.1f);
+				Vec3 v = agent.ComputeAnimationDisplacement(0.1f);
+				if (v.LengthSquared > 0f)
+				{
+					agent.TeleportToPosition(agent.Position + v);
+				}
+				agent.AgentVisuals.GetSkeleton().TickAnimations(0.1f, agent.AgentVisuals.GetGlobalFrame(), true);
+			}
+		}
+
+		Mission.GetRandomPositionAroundPoint(worldFrame.Origin.GetNavMeshVec3(), 0.5f, 2f, false).AsVec2);获取点周围的随机位置
+
+
+		//一个调用SpawnAgent生成agent的实例
+		private Agent SpawnWanderingAgentWithInitialFrame(LocationCharacter locationCharacter, MatrixFrame spawnPointFrame, bool noHorses = true)
+		{
+			Team team = Team.Invalid;
+			switch (locationCharacter.CharacterRelation)
+			{
+			case LocationCharacter.CharacterRelations.Neutral:
+				team = Team.Invalid;
+				break;
+			case LocationCharacter.CharacterRelations.Friendly:
+				team = base.Mission.PlayerAllyTeam;
+				break;
+			case LocationCharacter.CharacterRelations.Enemy:
+				team = base.Mission.PlayerEnemyTeam;
+				break;
+			}
+			spawnPointFrame.origin.z = base.Mission.Scene.GetGroundHeightAtPosition(spawnPointFrame.origin, BodyFlags.CommonCollisionExcludeFlags);
+			ValueTuple<uint, uint> agentSettlementColors = MissionAgentHandler.GetAgentSettlementColors(locationCharacter);
+			AgentBuildData agentBuildData = locationCharacter.GetAgentBuildData().Team(team).InitialPosition(spawnPointFrame.origin);
+			Vec2 vec = spawnPointFrame.rotation.f.AsVec2;
+			vec = vec.Normalized();
+			AgentBuildData agentBuildData2 = agentBuildData.InitialDirection(vec).ClothingColor1(agentSettlementColors.Item1).ClothingColor2(agentSettlementColors.Item2)
+				.CivilianEquipment(locationCharacter.UseCivilianEquipment)
+				.NoHorses(noHorses);
+			CharacterObject character = locationCharacter.Character;
+			Banner banner;
+			if (character == null)
+			{
+				banner = null;
+			}
+			else
+			{
+				Hero heroObject = character.HeroObject;
+				if (heroObject == null)
+				{
+					banner = null;
+				}
+				else
+				{
+					Clan clan = heroObject.Clan;
+					banner = ((clan != null) ? clan.Banner : null);
+				}
+			}
+			AgentBuildData agentBuildData3 = agentBuildData2.Banner(banner);
+			Agent agent = base.Mission.SpawnAgent(agentBuildData3, false);
+			MissionAgentHandler.SetAgentExcludeFaceGroupIdAux(agent, MissionAgentHandler._disabledFaceId);
+			AnimationSystemData animationSystemData = agentBuildData3.AgentMonster.FillAnimationSystemData(MBGlobals.GetActionSet(locationCharacter.ActionSetCode), locationCharacter.Character.GetStepSize(), false);
+			agent.SetActionSet(ref animationSystemData);
+			agent.GetComponent<CampaignAgentComponent>().CreateAgentNavigator(locationCharacter);
+			locationCharacter.AddBehaviors(agent);
+			return agent;
+		}
+
+		将目标代理传送到参考代理附近		public void TeleportTargetAgentNearReferenceAgent(Agent referenceAgent, Agent teleportAgent, bool teleportFollowers, bool teleportOpposite)
+		{
+			Vec3 vec = referenceAgent.Position + referenceAgent.LookDirection.NormalizedCopy() * 4f;
+			Vec3 position;
+			if (teleportOpposite)
+			{
+				position = vec;
+				position.z = base.Mission.Scene.GetGroundHeightAtPosition(position, BodyFlags.CommonCollisionExcludeFlags);//保证z轴坐标在地面上
+			}
+			else
+			{
+				position = Mission.Current.GetRandomPositionAroundPoint(referenceAgent.Position, 2f, 4f, true);
+				position.z = base.Mission.Scene.GetGroundHeightAtPosition(position, BodyFlags.CommonCollisionExcludeFlags);
+			}
+			WorldFrame worldFrame = new WorldFrame(referenceAgent.Frame.rotation, new WorldPosition(base.Mission.Scene, referenceAgent.Frame.origin));
+			Vec3 vec2 = new Vec3(worldFrame.Origin.AsVec2 - position.AsVec2, 0f, -1f);
+			teleportAgent.LookDirection = vec2.NormalizedCopy();
+			teleportAgent.TeleportToPosition(position);
+			if (teleportFollowers && teleportAgent.Controller == Agent.ControllerType.Player)
+			{
+				foreach (Agent agent in base.Mission.Agents)
+				{
+					LocationCharacter locationCharacter = CampaignMission.Current.Location.GetLocationCharacter(agent.Origin);
+					AccompanyingCharacter accompanyingCharacter = PlayerEncounter.LocationEncounter.GetAccompanyingCharacter(locationCharacter);
+					if (agent.GetComponent<CampaignAgentComponent>().AgentNavigator != null && accompanyingCharacter != null && accompanyingCharacter.IsFollowingPlayerAtMissionStart)
+					{
+						MatrixFrame matrixFrame;
+						this.GetFrameForFollowingAgent(teleportAgent, out matrixFrame);
+						agent.TeleportToPosition(matrixFrame.origin);
+					}
+				}
+			}
+		}
+
+		
+                foreach (TroopRosterElement item in MemberRoster.GetTroopRoster())获取部队名单
+                {
+                    if (item.Character.IsHero && item.Character.HeroObject.GetPerkValue(perk))
+                    {
+                        return true;
+                    }
+                }
+		TaleWorlds.MountAndBlade.ViewModelCollection.Order.MissionOrderTroopControllerVM.IntervalUpdate() : void @0600020B//获取队伍 的弹药数量和剩余弹药数量
+		internal void IntervalUpdate()
+		{
+			for (int i = this.TroopList.Count - 1; i >= 0; i--)
+			{
+				OrderTroopItemVM orderTroopItemVM = this.TroopList[i];
+				Formation formation = this.Team.GetFormation(orderTroopItemVM.InitialFormationClass);
+				if (formation != null && formation.CountOfUnits > 0)
+				{
+					orderTroopItemVM.UnderAttackOfType = (int)formation.GetUnderAttackTypeOfUnits(3f);
+					orderTroopItemVM.BehaviorType = (int)formation.GetMovementTypeOfUnits();
+					if (!this._isDeployment)
+					{
+						orderTroopItemVM.Morale = (int)MissionGameModels.Current.BattleMoraleModel.GetAverageMorale(formation);
+						if (orderTroopItemVM.SetFormationClassFromFormation(formation))
+						{
+							this.UpdateTroops();
+						}
+						orderTroopItemVM.IsAmmoAvailable = (formation.QuerySystem.RangedUnitRatio > 0f || formation.QuerySystem.RangedCavalryUnitRatio > 0f);
+						if (orderTroopItemVM.IsAmmoAvailable)
+						{
+							int totalCurrentAmmo = 0;
+							int totalMaxAmmo = 0;
+							orderTroopItemVM.Formation.ApplyActionOnEachUnit(delegate(Agent agent)//对每个单元应用操作/动作。
+							{
+								if (!agent.IsMainAgent)
+								{
+									int num;
+									int num2;
+									this.GetMaxAndCurrentAmmoOfAgent(agent, out num, out num2);
+									totalCurrentAmmo += num;
+									totalMaxAmmo += num2;
+								}
+							}, null);
+							orderTroopItemVM.AmmoPercentage = (float)totalCurrentAmmo / (float)totalMaxAmmo;
+						}
+					}
+				}
+				else if (formation != null && formation.CountOfUnits == 0)
+				{
+					orderTroopItemVM.Morale = 0;
+					orderTroopItemVM.SetFormationClassFromFormation(formation);
+				}
+			}
+		}
+		private void GetMaxAndCurrentAmmoOfAgent(Agent agent, out int currentAmmo, out int maxAmmo)//获取agent的当前弹药和最大弹药
+		{
+			currentAmmo = 0;
+			maxAmmo = 0;
+			for (EquipmentIndex equipmentIndex = EquipmentIndex.WeaponItemBeginSlot; equipmentIndex < EquipmentIndex.ExtraWeaponSlot; equipmentIndex++)
+			{
+				if (!agent.Equipment[equipmentIndex].IsEmpty && agent.Equipment[equipmentIndex].CurrentUsageItem.IsRangedWeapon)
+				{
+					currentAmmo = agent.Equipment.GetAmmoAmount(equipmentIndex);
+					maxAmmo = agent.Equipment.GetMaxAmmo(equipmentIndex);
+					return;
+				}
+			}
+		}
+
+
+
+                shooterAgent.Equipment.SetAmountOfSlot(equipmentIndex, (short)(shooterAgent.Equipment[equipmentIndex].MaxAmmo));这个是没用的，只改面板数值
+                shooterAgent.SetWeaponAmountInSlot(equipmentIndex, (short)(shooterAgent.Equipment[equipmentIndex].MaxAmmo), false);		修改子弹数量用这个，但是暂时用着感觉有卡死的风险
