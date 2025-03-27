@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using TaleWorlds.CampaignSystem.Extensions;
+using TaleWorlds.CampaignSystem.ViewModelCollection.CharacterDeveloper;
 using TaleWorlds.Core;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
@@ -17,6 +18,8 @@ namespace New_ZZZF
     {
         // 添加公共属性以访问基类的Agent
         public Agent AgentInstance => base.Agent;
+        public Agent BaseAgent=> base.Agent;//淦，记不住上面哪个名字
+        public float MaxHP { get; private set; }
         // 新增状态容器
         public AgentBuffContainer StateContainer { get; } = new AgentBuffContainer();
         //------------------------ 技能槽配置 ------------------------
@@ -58,7 +61,8 @@ namespace New_ZZZF
 
         public AgentSkillComponent(Agent agent) : base(agent)
         {
-            Speed=new AgentSpeed(agent);
+            MaxHP = agent.Health;
+            Speed =new AgentSpeed(agent);
         }
 
         public bool HasSkill(string skill)
@@ -214,12 +218,18 @@ namespace New_ZZZF
                 Console.WriteLine($"[技能触发] {skill.SkillID} 剩余法力: {_currentMana}, 耐力: {_currentStamina}");
             }
 
-
-
-
         }
 
-
+        public void ChangeStamina(float value)
+        {
+            this._currentStamina += value;
+            _currentStamina = TaleWorlds.Library.MathF.Clamp(_currentStamina, 0, 100);
+        }
+        public void ChangeMana(float value)
+        {
+            this._currentMana += value;
+            _currentMana = TaleWorlds.Library.MathF.Clamp(_currentMana, 0, 100);
+        }
         /// <summary>
         /// 检查技能是否可激活
         /// </summary>

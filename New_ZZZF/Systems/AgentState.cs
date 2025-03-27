@@ -1,4 +1,5 @@
-﻿using System;
+﻿using New_ZZZF.Systems;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,12 +17,25 @@ namespace New_ZZZF
     public abstract class AgentBuff
     {
         public string StateId { get; protected set; }
-        public float Duration { get; set; }  // 剩余时间（秒）
-        public Agent SourceAgent { get; set; } // 状态来源（可选）
-        public Agent TargetAgent { get; set; } // 状态目标（可选）
+        /// <summary>
+        /// 剩余时间（秒）
+        /// </summary>
+        public float Duration { get; set; }  
+        /// <summary>
+        /// 状态来源agent（可选）
+        /// </summary>
+        public Agent SourceAgent { get; set; } 
+        /// <summary>
+        /// 状态目标agent（可选）
+        /// </summary>
+        public Agent TargetAgent { get; set; } 
 
         public abstract void OnApply(Agent agent);    // 状态生效时触发
         public abstract void OnUpdate(Agent agent, float dt); // 每帧更新
+        /// <summary>
+        /// 先自动进行移除buff，再触发此方法
+        /// </summary>
+        /// <param name="agent"></param>
         public abstract void OnRemove(Agent agent);   // 状态移除时触发
     }
 
@@ -63,13 +77,26 @@ namespace New_ZZZF
                 }
             }
         }
-
-        public void RemoveState(string stateId)
+        public AgentBuff GetState(string stateId)
         {
             AgentBuff state = _activeStates.Find(s => s.StateId == stateId);
             if (state != null)
             {
-                state.OnRemove(state.SourceAgent);
+                return state;
+            }
+            return null;
+        }
+        /// <summary>
+        /// 移除某个状态。
+        /// </summary>
+        /// <param name="stateId"></param>
+        /// <param name="用于OnRemove函数的agent"></param>
+        public void RemoveState(string stateId,Agent agent)
+        {
+            AgentBuff state = _activeStates.Find(s => s.StateId == stateId);
+            if (state != null)
+            {
+                state.OnRemove(agent);
                 _activeStates.Remove(state);
             }
         }

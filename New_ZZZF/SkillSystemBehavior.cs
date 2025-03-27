@@ -13,6 +13,8 @@ using TaleWorlds.Engine;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
+using TaleWorlds.MountAndBlade.View.Screens;
+using TaleWorlds.ScreenSystem;
 using static New_ZZZF.AgentSkillComponent;
 using static TaleWorlds.PlayerServices.Avatar.AvatarData;
 
@@ -95,7 +97,7 @@ namespace New_ZZZF
                 skillComponent.InitializeFromTroop(troopId);
                 _activeComponents.Add(skillComponent);
                 ActiveComponents.Add(agent.Index, skillComponent);
-
+                
 
                 InformationManager.DisplayMessage(new InformationMessage("[技能系统] Agent"+ agent.Name+" 已绑定技能组件"));
             }
@@ -162,6 +164,8 @@ namespace New_ZZZF
                     Script.SysOut(Agent.Main.GetCurrentAction(i).Name, Agent.Main);
                 }
             }
+
+
             //测试区↑
             // 更新计时器
             _tickTimer05 += dt;
@@ -373,8 +377,8 @@ namespace New_ZZZF
                     {
 
                         WoW_AgentRushAgent.Remove(agent.AgentInstance.Index); // 停止冲刺
-                        agent.StateContainer.RemoveState("RushToAgentBuff");
-                    }
+                        agent.StateContainer.RemoveState("RushToAgentBuff",agent.BaseAgent);
+            }
                     else
                     {
                         // 否则，向目标位置移动指定的距离
@@ -382,7 +386,7 @@ namespace New_ZZZF
                         Vec3 newPosition = agent.AgentInstance.Position + Script.MultiplyVectorByScalar(directionToTarget.NormalizedCopy(), distanceToMove);
                         agent.AgentInstance.TeleportToPosition(newPosition);
 
-                    }
+        }
                 }
                 Vec3 vec3;
                 if (WoW_AgentRushPos.TryGetValue(agent.AgentInstance.Index, out vec3))
@@ -395,7 +399,7 @@ namespace New_ZZZF
                     {
 
                         WoW_AgentRushPos.Remove(agent.AgentInstance.Index); // 停止冲刺
-                        agent.StateContainer.RemoveState("RushToPosBuff");
+                        agent.StateContainer.RemoveState("RushToPosBuff",agent.AgentInstance);
                         if (agent.AgentInstance.GetCurrentAction(0).Name == "act_horse_fall_roll")
                         {
                             agent.AgentInstance.GetCurrentActionProgress(0);
@@ -460,9 +464,40 @@ namespace New_ZZZF
             WoW_AgentMissileSpeedData.Clear();
             ActiveComponents.Clear();
         }
+        private void ExecuteHitEvents(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
+        {
+            if (attacker != null)
+            {
+                ActiveComponents.TryGetValue(attacker.Index, out var agentSkillComponent);
+                //击杀事件处理
+                if (agentSkillComponent != null)
+                {
+                    if (victim==null||victim.Health <= 0)
+                    {
+                        agentSkillComponent.ChangeStamina(5);
+                        if (agentSkillComponent.StateContainer.HasState("JueXingBuff"))
+                        {
+                            agentSkillComponent.StateContainer.UpdateStates(attacker,0f);
+                            agentSkillComponent.ChangeStamina(5);
+                        }
+                    }
+
+                }
+            }
+            
+        }
+        public override void OnMeleeHit(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
+        {
+            base.OnMeleeHit(attacker, victim, isCanceled, collisionData);
+            ExecuteHitEvents(attacker, victim, isCanceled, collisionData);
+        }
+
+
+
         public override void OnMissileHit(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
         {
             base.OnMissileHit(attacker, victim, isCanceled, collisionData);
+            ExecuteHitEvents(attacker, victim, isCanceled, collisionData);
             if (WoW_MissileIndex.Contains(collisionData.AffectorWeaponSlotOrMissileIndex))
             {
                 WoW_MissileIndex.Remove(collisionData.AffectorWeaponSlotOrMissileIndex);
@@ -470,6 +505,31 @@ namespace New_ZZZF
 
             }
 
+        }
+        /// <summary>
+        /// 完成了agent的伤害扣血流程后，进入这里
+        /// </summary>
+        /// <param name="受击"></param>
+        /// <param name="攻击"></param>
+        /// <param name="affectorWeapon"></param>
+        /// <param name="blow"></param>
+        /// <param name="attackCollisionData"></param>
+        public override void OnAgentHit(Agent affectedAgent, Agent affectorAgent, in MissionWeapon affectorWeapon, in Blow blow, in AttackCollisionData attackCollisionData)
+        {
+            base.OnAgentHit(affectedAgent, affectorAgent, affectorWeapon,blow, attackCollisionData);
+            ActiveComponents.TryGetValue(affectedAgent.Index, out var affectedComponent);
+            if (affectedComponent != null)
+            {
+                if (affectedComponent.StateContainer.HasState("TianQiBuff"))
+                {
+                    affectedAgent.Health += blow.InflictedDamage;
+                }
+                if (affectedComponent.StateContainer.HasState("ZhanYiBuff"))
+                {
+                    
+                    affectedAgent.Health += (affectedComponent.MaxHP- affectedAgent.Health)*0.5f;
+                }
+            }
         }
         public override void OnAgentShootMissile(Agent shooterAgent, EquipmentIndex weaponIndex, Vec3 position, Vec3 velocity, Mat3 orientation, bool hasRigidBody, int forcedMissileIndex)
         {
@@ -553,6 +613,9 @@ namespace New_ZZZF
                 }
             }
         }
+
+
+
     }
 }
 //代码说明

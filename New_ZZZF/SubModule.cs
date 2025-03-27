@@ -12,6 +12,12 @@ using SandBox.Issues;
 using HarmonyLib;
 using System.Reflection;
 using TaleWorlds.MountAndBlade.View.Screens;
+using New_ZZZF.Systems;
+using MountedSlashCamera;
+using TaleWorlds.CampaignSystem.ComponentInterfaces;
+using StoryMode.GameComponents.CampaignBehaviors;
+using TaleWorlds.Localization;
+using SandBox.GauntletUI.Missions;
 
 
 namespace New_ZZZF
@@ -24,23 +30,28 @@ namespace New_ZZZF
             base.OnSubModuleLoad();
 
         }
-        public override void BeginGameStart(Game game)
+        public override void OnNewGameCreated(Game game, object initializerObject)
         {
-            base.BeginGameStart(game);
+            base.OnNewGameCreated(game,initializerObject);
             SkillFactory.SkillToItemObject();
-            try
+            SkillConfigManager.Instance._troopSkillMap.Clear();
+            if (!(SkillConfigManager.Instance._troopSkillMap!=null&& SkillConfigManager.Instance._troopSkillMap.Count>1))
             {
-                // 初始化技能配置管理器并加载XML
-                string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
-                SkillConfigManager.Instance.LoadFromXml(xmlPath);
+                try
+                {
+                    // 初始化技能配置管理器并加载XML
+                    string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
+                    SkillConfigManager.Instance.LoadFromXml(xmlPath);
 
-                // 调试日志
-                Debug.Print("[New_ZZZF] 技能配置加载完成！");
+                    // 调试日志
+                    Debug.Print("[New_ZZZF] 技能配置加载完成！");
+                }
+                catch (Exception ex)
+                {
+                    Debug.Print($"[New_ZZZF] 配置加载失败: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                Debug.Print($"[New_ZZZF] 配置加载失败: {ex.Message}");
-            }
+
         }
         public override void OnGameLoaded(Game game, object gameStarterObject)
         {
@@ -59,11 +70,11 @@ namespace New_ZZZF
 
                 // 调试日志
                 Debug.Print("[New_ZZZF] 技能配置加载完成！");
-            }
+        }
             catch (Exception ex)
-            {
+        {
                 Debug.Print($"[New_ZZZF] 配置加载失败: {ex.Message}");
-            }
+        }
         }
         public override void OnMissionBehaviorInitialize(Mission mission)
         {
@@ -71,7 +82,7 @@ namespace New_ZZZF
 
             // 添加自定义的 MissionBehavior 到当前任务
             mission.AddMissionBehavior(new SkillSystemBehavior());
-
+            mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
             // 调试日志
             Debug.Print("[New_ZZZF] 技能系统已激活！");
 
@@ -108,6 +119,7 @@ namespace New_ZZZF
                 gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
                 gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
                 gameStarterObject.AddModel(new WOW_SandboxAgentStatCalculateModel());
+                gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());
 
             }
         }

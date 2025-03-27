@@ -1,12 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
+using TaleWorlds.MountAndBlade.View.MissionViews;
+using TaleWorlds.MountAndBlade.View.Screens;
+using TaleWorlds.ScreenSystem;
 
-namespace New_ZZZF.Skills
+namespace New_ZZZF
 {
     internal class Rush : SkillBase
     {
@@ -105,7 +110,35 @@ namespace New_ZZZF.Skills
 
         public override void OnRemove(Agent agent)
         {
+            SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var result);
+            if (result != null)
+            {
+                if (result.StateContainer.HasState("暗影步增伤"))
+                {
+                    agent.TeleportToPosition(this.TargetAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(this.TargetAgent.LookDirection, -2f));
+                    MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+                    MissionMainAgentController missionMainAgentController = missionScreen.Mission.GetMissionBehavior<MissionMainAgentController>();
 
+                    // 获取 LockedAgent 属性的信息
+                    PropertyInfo lockedAgentProperty = typeof(MissionMainAgentController).GetProperty("LockedAgent", BindingFlags.Public | BindingFlags.Instance);
+                    if (lockedAgentProperty == null)
+                    {
+                        throw new Exception("LockedAgent 属性未找到");
+                    }
+
+                    // 获取 LockedAgent 属性的私有 setter 方法
+                    MethodInfo setMethod = lockedAgentProperty.GetSetMethod(nonPublic: true);
+                    if (setMethod == null)
+                    {
+                        throw new Exception("LockedAgent 的私有 setter 方法未找到");
+                    }
+
+                    // 调用私有 setter 方法
+                    setMethod.Invoke(missionMainAgentController, new object[] { TargetAgent });
+
+                }
+            }
         }
     }
-}
+    }
+

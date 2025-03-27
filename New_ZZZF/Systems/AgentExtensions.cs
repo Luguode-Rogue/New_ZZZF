@@ -13,6 +13,7 @@ namespace New_ZZZF
     //统一存放各种需要自己实现的扩展方法
     public static class AgentExtensions
     {
+
         private static readonly Dictionary<string, GameEntity> _activeParticles = new Dictionary<string, GameEntity>();
         public static bool IsPerformingAction(this Agent agent)
         {

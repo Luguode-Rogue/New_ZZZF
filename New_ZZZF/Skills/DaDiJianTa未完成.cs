@@ -18,7 +18,7 @@ namespace New_ZZZF
             Type = SkillType.MainActive;    // 类型必须明确
             Cooldown = 2;             // 冷却时间（秒）
             ResourceCost = 3f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0010}DaDiJianTa");
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0012}DaDiJianTa");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
         }
         public override bool Activate(Agent agent)

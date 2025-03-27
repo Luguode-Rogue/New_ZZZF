@@ -17,6 +17,7 @@ using TaleWorlds.ScreenSystem;
 using TaleWorlds.ObjectSystem;
 using New_ZZZF.Skills;
 using static TaleWorlds.MountAndBlade.Agent;
+using System.Reflection;
 
 namespace New_ZZZF
 {
@@ -948,6 +949,14 @@ namespace New_ZZZF
         /// <param name="DamageType"></param>
         public static void CalculateFinalMagicDamage(Agent Caster, Agent Victim, float BaseDamage, String DamageType)
         {
+            SkillSystemBehavior.ActiveComponents.TryGetValue(Victim.Index, out var affectedComponent);
+            if (affectedComponent != null)
+            {
+                if (affectedComponent.StateContainer.HasState("TianQiBuff"))
+                {
+                    return;
+                }
+            }
             float DifHP = Victim.Health;
             DifHP -= BaseDamage;
             Victim.Health = DifHP;
@@ -962,6 +971,12 @@ namespace New_ZZZF
             }
         }
 
+        public static AgentSkillComponent GetActiveComponents(Agent agent )
+        {
+            AgentSkillComponent agentSkillComponent;
+            SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out agentSkillComponent);
+            return agentSkillComponent;
+        }
         public static bool AgentShootConeOfArrows(Agent casterAgent, int v)
         {
             if (ConeOfArrows(casterAgent, v))

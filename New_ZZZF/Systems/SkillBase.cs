@@ -12,14 +12,38 @@ namespace New_ZZZF
     /// </summary>
     public enum SkillType
     {
-        MainActive,    // 主主动技能（E键）
-        SubActive,     // 副主动技能（左Alt）
-        Passive,       // 被动技能
-        Spell,         // 法术栏技能
-        CombatArt,      // 战技栏技能
-        Passive_Spell,//可放在法术栏的被动
-        CombatArt_Spell,//可放在法术栏的战技
-        Spell_CombatArt//可放在战技的法术栏
+        /// <summary>
+        /// 主主动技能
+        /// </summary>
+        MainActive,
+        /// <summary>
+        /// 副主动技能
+        /// </summary>
+        SubActive,
+        /// <summary>
+        /// 被动技能
+        /// </summary>
+        Passive,
+        /// <summary>
+        /// 法术栏技能
+        /// </summary>
+        Spell,
+        /// <summary>
+        /// 战技栏技能
+        /// </summary>
+        CombatArt,
+        /// <summary>
+        /// 可放在法术栏的被动
+        /// </summary>
+        Passive_Spell,//
+        /// <summary>
+        /// 可放在法术栏的战技
+        /// </summary>
+        CombatArt_Spell,//
+        /// <summary>
+        /// 可放在战技的法术栏
+        /// </summary>
+        Spell_CombatArt//
     }
 
     /// <summary>
@@ -27,16 +51,40 @@ namespace New_ZZZF
     /// </summary>
     public abstract class SkillBase
     {
-        // 新增：技能可附加的状态（通过XML配置）
-        public List<AgentBuff> LinkedStates { get; protected set; } = new List<AgentBuff>();
+
         // ========== 基础属性 ==========
-        public string SkillID { get; protected set; } // 技能唯一标识符
-        public SkillType Type { get; protected set; } // 技能类型
-        public float Cooldown { get; protected set; } // 冷却时间（秒）
-        public float ResourceCost { get; protected set; } // 资源消耗（法力/耐力）
-        public List<SkillDifficulty> Difficulty { get; protected set; } //使用难度，影响角色是否可以装备该技能。可以为空，可以有多个（任意满足一个即可装备）
-        public ItemObject Item { get;  set; } //技能对应的显示物品
-        public TextObject Text { get;  set; }
+        /// <summary>
+        /// 技能唯一标识符
+        /// </summary>
+        public string SkillID { get; protected set; } // 
+        /// <summary>
+        /// 技能类型
+        /// </summary>
+        public SkillType Type { get; protected set; } // 
+        /// <summary>
+        /// 冷却时间（秒）
+        /// </summary>
+        public float Cooldown { get; protected set; } // 
+        /// <summary>
+        /// 资源消耗（法力/耐力）
+        /// </summary>
+        public float ResourceCost { get; protected set; } // 
+        /// <summary>
+        /// 使用难度，影响角色是否可以装备该技能。可以为空，可以有多个（任意满足一个即可装备）
+        /// </summary>
+        public List<SkillDifficulty> Difficulty { get; protected set; } //
+        /// <summary>
+        /// 技能对应的显示物品
+        /// </summary>
+        public ItemObject Item { get;  set; } //
+        /// <summary>
+        /// 技能对应的物品名称，用于创建物品
+        /// </summary>
+        public TextObject Text { get;  set; } //
+        /// <summary>
+        /// 物品说明
+        /// </summary>
+        public TextObject Description { get; set; } 
         // ========== 核心方法 ==========
         /// <summary>
         /// 激活技能的主逻辑（必须由子类实现）

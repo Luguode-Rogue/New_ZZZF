@@ -16,9 +16,31 @@ namespace New_ZZZF
 
     public class StrikeMagnitudeScript
     {
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="agent"></param>
+        /// <param name="原版游戏传入的伤害倍率"></param>
+        /// <returns></returns>
         public static float WOW_Script_AgentStatCalculateModel(Agent agent, float native)
         {
-            return 1f;
+            SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var result);
+            if (result != null)
+            {
+                if (result.StateContainer.HasState("ZhanYiBuff"))
+                {
+                    native = native * (1 + result._currentStamina / 100 * 2);
+                }
+                if (result.StateContainer.HasState("JueXingBuff"))
+                {
+                    native = native * (1 + result._currentStamina / 100 / 2);
+                }
+                if (result.StateContainer.HasState("TianQiBuff"))
+                {
+                    native = native * (1 + 1);
+                }
+            }
+            return native;
             ////AgentStatCalculateModel输入agent后，根据agent的状态，附加额外的增伤数值
             //if (WoW_MissionSetting.WoW_Agents.TryGetValue(agent.Index, out var WOW_agent))
             //{

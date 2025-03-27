@@ -163,7 +163,7 @@ namespace New_ZZZF
         public override void RefreshValues()
         {
             base.RefreshValues();
-            this.RightInventoryOwnerName = "{12345674}技能 界面";//PartyBase.MainParty.Name.ToString();
+            this.RightInventoryOwnerName =PartyBase.MainParty.Name.ToString();
             this.DoneLbl = GameTexts.FindText("str_done", null).ToString();
             this.CancelLbl = GameTexts.FindText("str_cancel", null).ToString();
             this.ResetLbl = GameTexts.FindText("str_reset", null).ToString();
@@ -1073,7 +1073,6 @@ namespace New_ZZZF
         /// <returns></returns>
         public bool IsItemEquipmentPossible(SPSkillItemVM itemVM)
         {
-
             if (itemVM == null)
             {
                 return false;
@@ -1111,7 +1110,7 @@ namespace New_ZZZF
                     { CanUseFlag2 = true; }
                     break;
                 case EquipmentIndex.Body:
-                    if (skill.Type == SkillType.Passive|| skill.Type == SkillType.Passive_Spell)
+                    if (skill.Type == SkillType.Passive || skill.Type == SkillType.Passive_Spell)
                     { CanUseFlag2 = true; }
                     break;
                 case EquipmentIndex.Weapon0:
@@ -1122,10 +1121,9 @@ namespace New_ZZZF
                     { CanUseFlag2 = true; }
                     break;
                 case EquipmentIndex.Gloves:
-                    if (skill.Type == SkillType.CombatArt|| skill.Type == SkillType.Spell_CombatArt)
+                    if (skill.Type == SkillType.CombatArt || skill.Type == SkillType.Spell_CombatArt)
                     { CanUseFlag2 = true; }
                     break;
-
                 default: break;
             }
             return CanUseFlag1 && CanUseFlag2;
@@ -1326,7 +1324,7 @@ namespace New_ZZZF
             SkillSet skillSet = SkillConfigManager.Instance.GetSkillSetForTroop(this._currentCharacter.StringId);
             if (skillSet == null)
             {
-                SkillConfigManager.Instance.SetSkillSetForTroop(_currentCharacter.StringId, new SkillSet()); 
+                SkillConfigManager.Instance.SetSkillSetForTroop(_currentCharacter.StringId, new SkillSet());
                 skillSet = SkillConfigManager.Instance.GetSkillSetForTroop(this._currentCharacter.StringId);
             }
             SkillFactory._skillRegistry.TryGetValue("NullSkill", out SkillBase skillBase);
@@ -2387,10 +2385,10 @@ namespace New_ZZZF
             /**/
             //bool flag = !this._filters[this._activeFilterIndex].Contains(item.TypeId);
             SkillFactory._skillRegistry.TryGetValue(item.StringId, out SkillBase val);
-            flag = !(val.Type == searchTarget)|| 
-                (searchTarget== SkillType.Passive&& val.Type ==SkillType.Passive_Spell)|| 
-                (searchTarget == SkillType.CombatArt && val.Type == SkillType.CombatArt_Spell) ||
-                (searchTarget == SkillType.Spell && val.Type == SkillType.Spell_CombatArt);
+            flag = !(val.Type == searchTarget) ||
+            (searchTarget == SkillType.Passive && val.Type == SkillType.Passive_Spell) ||
+            (searchTarget == SkillType.CombatArt && val.Type == SkillType.CombatArt_Spell) ||
+            (searchTarget == SkillType.Spell && val.Type == SkillType.Spell_CombatArt);
 
             item.IsFiltered = (flag);
         }

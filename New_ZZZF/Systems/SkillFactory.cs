@@ -25,8 +25,12 @@ namespace New_ZZZF
             { "JianQi", new JianQi() }  ,          // 剑气斩
             { "ConeOfArrows", new ConeOfArrows() }   ,         // 多重射击
             { "DaoShan", new DaoShan() }   ,         // 刀扇
-            {"暗影步",new 暗影步未完成() },//暗影步
+            {"ShadowStep",new ShadowStep() },//暗影步
             {"DaDiJianTa",new DaDiJianTa() },
+            {"ZhanYi",new ZhanYi() },
+            {"JueXing",new JueXing() },
+            {"TianQi",new TianQi() },
+            {"GuWu",new GuWu() },
             //{ "ShieldCharge", new ShieldChargeSkill() },       // 盾牌冲锋
             //{ "BladeStorm", new BladeStormSkill() },           // 剑刃风暴
             
@@ -65,14 +69,7 @@ namespace New_ZZZF
                     ItemObject.InitializeTradeGood(io, kvp.Value.Text, "lib_book_open_a", DefaultItemCategories.Unassigned, 60, 1f, ItemObject.ItemTypeEnum.Book);
                     kvp.Value.Item = io;
 
-                    //// 使用反射设置 Difficulty 属性（核心部分）
-                    //PropertyInfo difficultyProp = typeof(ItemObject).GetProperty(
-                    //    "Difficulty",
-                    //    BindingFlags.Public | BindingFlags.Instance
-                    //);
 
-                    //// 设置新值（这里示例设置为100，可替换为实际需要的值）
-                    //difficultyProp.SetValue(io, 20);
                 }
             }
         }
@@ -115,6 +112,8 @@ namespace New_ZZZF
             }
             return null;
         }
+
+
 
         /// <summary>
         /// 空技能占位类（防止因配置错误导致崩溃）
