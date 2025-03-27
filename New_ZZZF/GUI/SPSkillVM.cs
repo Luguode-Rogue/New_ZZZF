@@ -28,7 +28,7 @@ namespace New_ZZZF
 {
     public class SPSkillVM : ViewModel, IInventoryStateHandler
     {
-
+        
         public SPSkillVM(InventoryLogic inventoryLogic, bool isInCivilianModeByDefault, Func<WeaponComponentData, ItemObject.ItemUsageSetFlags> getItemUsageSetFlags, string fiveStackShortcutkeyText, string entireStackShortcutkeyText)
         {
             this._usageType = SkillInventoryManager.Instance.CurrentMode;
@@ -142,7 +142,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void AddApplicableCharactersToListFromRoster(MBList<TroopRosterElement> roster)
         {
             for (int i = 0; i < roster.Count; i++)
@@ -159,7 +159,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         public override void RefreshValues()
         {
             base.RefreshValues();
@@ -249,7 +249,7 @@ namespace New_ZZZF
             otherInventorySortController.RefreshValues();
         }
 
-
+        
         public override void OnFinalize()
         {
             //退出时，按照当前的物品/技能设置，映射到对应的char身上
@@ -292,7 +292,7 @@ namespace New_ZZZF
             base.OnFinalize();
         }
 
-
+        
         public void RefreshCallbacks()
         {
             ItemVM.ProcessEquipItem = new Action<ItemVM>(this.ProcessEquipItem);
@@ -308,13 +308,13 @@ namespace New_ZZZF
             SPSkillItemVM.OnFocus = new Action<SPSkillItemVM>(this.OnItemFocus);
         }
 
-
+        
         private bool CanSelectHero(Hero hero)
         {
             return hero.IsAlive && hero.CanHeroEquipmentBeChanged() && hero.Clan == Clan.PlayerClan && hero.HeroState != Hero.CharacterStates.Disabled && !hero.IsChild;
         }
 
-
+        
         private void SetPreviousCharacterHint()
         {
             this.PreviousCharacterHint = new BasicTooltipViewModel(delegate ()
@@ -325,7 +325,7 @@ namespace New_ZZZF
             });
         }
 
-
+        
         private void SetNextCharacterHint()
         {
             this.NextCharacterHint = new BasicTooltipViewModel(delegate ()
@@ -336,7 +336,7 @@ namespace New_ZZZF
             });
         }
 
-
+        
         private void SetBuyAllHint()
         {
             TextObject buyAllHintText;
@@ -356,7 +356,7 @@ namespace New_ZZZF
             });
         }
 
-
+        
         private void SetSellAllHint()
         {
             TextObject sellAllHintText;
@@ -380,7 +380,7 @@ namespace New_ZZZF
             });
         }
 
-
+        
         private void OnCharacterSelected(SelectorVM<InventoryCharacterSelectorItemVM> selector)
         {
             if (this._inventoryLogic == null || selector.SelectedItem == null)
@@ -408,8 +408,8 @@ namespace New_ZZZF
             }
         }
 
-
-
+        
+        
         private Equipment ActiveEquipment
         {
             get
@@ -422,7 +422,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         public void ExecuteShowRecap()
         {
             InformationManager.ShowTooltip(typeof(InventoryLogic), new object[]
@@ -431,13 +431,13 @@ namespace New_ZZZF
             });
         }
 
-
+        
         public void ExecuteCancelRecap()
         {
             MBInformationManager.HideInformations();
         }
 
-
+        
         public void ExecuteRemoveZeroCounts()
         {
             List<SPSkillItemVM> list = this.LeftItemListVM.ToList<SPSkillItemVM>();
@@ -458,26 +458,26 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void ProcessPreviewItem(ItemVM item)
         {
             this._inventoryLogic.IsPreviewingItem = true;
             this.ItemPreview.Open(item.ItemRosterElement.EquipmentElement);
         }
 
-
+        
         public void ClosePreview()
         {
             this.ItemPreview.Close();
         }
 
-
+        
         private void OnPreviewClosed()
         {
             this._inventoryLogic.IsPreviewingItem = false;
         }
 
-
+        
         private void ProcessEquipItem(ItemVM draggedItem)
         {
             SPSkillItemVM SPSkillItemVM = draggedItem as SPSkillItemVM;
@@ -492,7 +492,7 @@ namespace New_ZZZF
             this.IsRefreshed = true;
         }
 
-
+        
         private void ProcessUnequipItem(ItemVM draggedItem)
         {
             this.IsRefreshed = false;
@@ -501,7 +501,7 @@ namespace New_ZZZF
             this.IsRefreshed = true;
         }
 
-
+        
         private void ProcessBuyItem(ItemVM itemBase, bool cameFromTradeData)
         {
             IsRefreshed = false;
@@ -532,7 +532,7 @@ namespace New_ZZZF
         }
 
 
-
+        
         private void ProcessSellItem(SPSkillItemVM item, bool cameFromTradeData)
         {
             return;
@@ -561,7 +561,7 @@ namespace New_ZZZF
             this.IsRefreshed = true;
         }
 
-
+        
         private void ProcessLockItem(SPSkillItemVM item, bool isLocked)
         {
             if (isLocked && item.InventorySide == InventoryLogic.InventorySide.PlayerInventory && !this._lockedItemIDs.Contains(item.StringId))
@@ -575,7 +575,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private ItemVM ProcessCompareItem(ItemVM item, int alternativeUsageIndex = 0)
         {
             this._selectedEquipmentIndex = 0;
@@ -635,14 +635,14 @@ namespace New_ZZZF
             return SPSkillItemVM;
         }
 
-
+        
         private void ResetComparedItems(ItemVM item, int alternativeUsageIndex)
         {
             ItemVM comparedItem = this.ProcessCompareItem(item, alternativeUsageIndex);
             this.ItemMenu.SetItem(this._selectedItem, comparedItem, this._currentCharacter, alternativeUsageIndex);
         }
 
-
+        
         private void SortComparedItems(ItemVM selectedItem)
         {
             List<ItemVM> list = new List<ItemVM>();
@@ -682,7 +682,7 @@ namespace New_ZZZF
             this._comparedItemList = list;
         }
 
-
+        
         public void ProcessItemTooltip(ItemVM item)
         {
             if (item == null || string.IsNullOrEmpty(item.StringId))
@@ -696,13 +696,13 @@ namespace New_ZZZF
             this._selectedItem.UpdateCanBeSlaughtered();
         }
 
-
+        
         public void ResetSelectedItem()
         {
             this._selectedItem = null;
         }
 
-
+        
         private void ProcessItemSlaughter(SPSkillItemVM item)
         {
             this.IsRefreshed = false;
@@ -719,7 +719,7 @@ namespace New_ZZZF
             this.IsRefreshed = true;
         }
 
-
+        
         private void ProcessItemDonate(SPSkillItemVM item)
         {
             this.IsRefreshed = false;
@@ -736,19 +736,19 @@ namespace New_ZZZF
             this.IsRefreshed = true;
         }
 
-
+        
         private void OnItemFocus(SPSkillItemVM item)
         {
             this.CurrentFocusedItem = item;
         }
 
-
+        
         private void ProcessItemSelect(ItemVM item)
         {
             this.ExecuteRemoveZeroCounts();
         }
 
-
+        
         private void RefreshTransactionCost(int transactionCount = 1)
         {
             if (this._selectedItem != null && this.IsTrading)
@@ -759,7 +759,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         public void RefreshComparedItem()
         {
             this._lastComparedItemIndex++;
@@ -773,7 +773,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void AfterReset(InventoryLogic itemRoster, bool fromCancel)
         {
             this._inventoryLogic = itemRoster;
@@ -821,7 +821,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void OnTotalAmountChange(int newTotalAmount)
         {
             MBTextManager.SetTextVariable("PAY_OR_GET", (this._inventoryLogic.TotalAmount < 0) ? 1 : 0);
@@ -833,7 +833,7 @@ namespace New_ZZZF
             this.LeftInventoryOwnerGold = ((((inventoryListener != null) ? new int?(inventoryListener.GetGold()) : null) + this._inventoryLogic.TotalAmount) ?? 0);
         }
 
-
+        
         private void OnDonationXpChange()
         {
             int num = (int)this._inventoryLogic.XpGainFromDonations;
@@ -849,7 +849,7 @@ namespace New_ZZZF
             this.ExperienceLbl = ((num == 0) ? "" : GameTexts.FindText("str_inventory_donation_label", null).ToString());
         }
 
-
+        
         private void AfterTransfer(InventoryLogic inventoryLogic, List<TransferCommandResult> results)
         {
             this._isCharacterEquipmentDirty = false;
@@ -941,7 +941,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void UpdateCostOfItemsInCategory(HashSet<ItemCategory> categories)
         {
             foreach (SPSkillItemVM SPSkillItemVM in this.LeftItemListVM)
@@ -960,7 +960,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void CheckEquipAfterTransferStack()
         {
             while (this._equipAfterTransferStack.Count > 0)
@@ -1081,7 +1081,7 @@ namespace New_ZZZF
             SkillFactory._skillRegistry.TryGetValue(itemVM.ItemRosterElement.EquipmentElement.Item.StringId, out var skill);
             if (skill == null)
             {
-                return true;
+                return true; 
             }
             bool CanUseFlag1 = false;
             bool CanUseFlag2 = false;
@@ -1212,20 +1212,20 @@ namespace New_ZZZF
             return true;
         }
 
-
+        
         private bool CanCharacterUserItemBasedOnUsability(ItemRosterElement itemRosterElement)
         {
             return !itemRosterElement.EquipmentElement.Item.HasHorseComponent || itemRosterElement.EquipmentElement.Item.HorseComponent.IsRideable;
         }
 
-
+        
         private bool CanCharacterUseItemBasedOnSkills(String item)
         {
             SkillFactory._skillRegistry.TryGetValue(item, out var skill);
-            if (skill == null)
+            if (skill == null) 
                 return true;
             bool CanUse = false;
-            if (skill.Difficulty == null)
+            if (skill.Difficulty == null) 
                 return true;
             foreach (var difficulty in skill.Difficulty)
             {
@@ -1310,10 +1310,12 @@ namespace New_ZZZF
 
         private void EquipEquipment(SPSkillItemVM itemVM)
         {
+            // 防御性检查：如果物品视图模型为空或物品ID无效，则直接返回
             if (itemVM == null || string.IsNullOrEmpty(itemVM.StringId))
             {
                 return;
             }
+
             // 创建一个新的 SPSkillItemVM 实例，并刷新其数据（标记为装备栏物品）
             SPSkillItemVM SPSkillItemVM = new SPSkillItemVM();
             SPSkillItemVM.RefreshWith(itemVM, InventoryLogic.InventorySide.Equipment);
@@ -1381,26 +1383,34 @@ namespace New_ZZZF
                     break;
             }
             SkillConfigManager.Instance.SetSkillSetForTroop(_currentCharacter.StringId, skillSet);
-            return;
-        }
+                return;
+            }
 
+            // 判断是否需要处理装备替换逻辑：
+            // flag = true 表示：
+            // 1. 目标槽位已有物品
+            // 2. 原物品类型有效
+            // 3. 当前物品来自装备栏
+            bool flag = itemFromIndex != null
+                && itemFromIndex.ItemType != EquipmentIndex.None
+                && itemVM.InventorySide == InventoryLogic.InventorySide.Equipment;
 
         private void UnequipEquipment(SPSkillItemVM itemVM)
-        {
+            {
             if (itemVM == null || string.IsNullOrEmpty(itemVM.StringId)) return;
             // 创建一个新的 SPSkillItemVM 实例，并刷新其数据（标记为装备栏物品）
             SPSkillItemVM SPSkillItemVM = new SPSkillItemVM();
             SPSkillItemVM.RefreshWith(itemVM, InventoryLogic.InventorySide.Equipment);
             SkillSet skillSet = SkillConfigManager.Instance.GetSkillSetForTroop(this._currentCharacter.StringId);
             if (skillSet == null)
-            {
+                {
                 SkillConfigManager.Instance.SetSkillSetForTroop(_currentCharacter.StringId, new SkillSet());
-            }
+                        }
             SkillFactory._skillRegistry.TryGetValue("NullSkill", out SkillBase skillBase);
             ItemRosterElement itemRosterElement = new ItemRosterElement(new ItemObject(skillBase.Item));
             SkillFactory._skillRegistry.TryGetValue(itemVM.ItemRosterElement.EquipmentElement.Item.StringId, out SkillBase value);
             switch (itemVM.ItemType)
-            {
+                        {
                 case EquipmentIndex.None:
                     break;
                 case EquipmentIndex.WeaponItemBeginSlot:
@@ -1445,12 +1455,21 @@ namespace New_ZZZF
                 case EquipmentIndex.HorseHarness:
                     break;
                 default:
-                    break;
-            }
+                            break;
+                        }
             SkillConfigManager.Instance.SetSkillSetForTroop(_currentCharacter.StringId, skillSet);
             return;
 
+                // 如果当前物品是盾牌且找到了可用的装备槽位，则更新目标装备类型
+                if (itemVM.ItemRosterElement.EquipmentElement.Item.Type == ItemObject.ItemTypeEnum.Shield
+                    && equipmentIndex != EquipmentIndex.None)
+                {
+                    this.TargetEquipmentType = equipmentIndex;
+                }
+            }
 
+            // 创建转移命令列表
+            List<TransferCommand> list = new List<TransferCommand>();
 
             // 1. 获取目标装备槽索引
             EquipmentIndex equipmentIndex = (EquipmentIndex)itemVM.ItemType;
@@ -1483,7 +1502,7 @@ namespace New_ZZZF
             this._currentCharacter.Equipment[equipmentIndex] = originalEquipment;
         }
 
-
+        
         private void UpdateEquipment(Equipment equipment, SPSkillItemVM itemVM, EquipmentIndex itemType)
         {
             if (this.ActiveEquipment == equipment)
@@ -1493,7 +1512,7 @@ namespace New_ZZZF
             equipment[itemType] = ((itemVM == null) ? default(EquipmentElement) : itemVM.ItemRosterElement.EquipmentElement);
         }
 
-
+        
         private void UnequipEquipmentWithEquipmentIndex(EquipmentIndex slotType)
         {
             switch (slotType)
@@ -1545,7 +1564,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         protected void RefreshEquipment(SPSkillItemVM itemVM, EquipmentIndex itemType)
         {
             switch (itemType)
@@ -1593,7 +1612,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private bool UpdateCurrentCharacterIfPossible(int characterIndex, bool isFromRightSide)
         {
             CharacterObject character = (isFromRightSide ? this._rightTroopRoster : this._leftTroopRoster).GetElementCopyAtIndex(characterIndex).Character;
@@ -1638,7 +1657,7 @@ namespace New_ZZZF
             return false;
         }
 
-
+        
         private bool DoesCompanionExist()
         {
             for (int i = 1; i < this._rightTroopRoster.Count; i++)
@@ -1652,7 +1671,7 @@ namespace New_ZZZF
             return false;
         }
 
-
+        
         private void UpdateLeftCharacter()
         {
             this.IsTradingWithSettlement = false;
@@ -1697,7 +1716,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void UpdateRightCharacter()
         {
             this.UpdateCharacterEquipment();
@@ -1708,7 +1727,7 @@ namespace New_ZZZF
             this.RightInventoryOwnerGold = Hero.MainHero.Gold - this._inventoryLogic.TotalAmount;
         }
 
-
+        
         private SPSkillItemVM InitializeCharacterEquipmentSlot(ItemRosterElement itemRosterElement, EquipmentIndex equipmentIndex)
         {
             SPSkillItemVM SPSkillItemVM;
@@ -1724,25 +1743,25 @@ namespace New_ZZZF
             return SPSkillItemVM;
         }
 
-
+        
         private void UpdateCharacterEquipment()
         {
             SkillSet skillSet = SkillConfigManager.Instance.GetSkillSetForTroop(this._currentCharacter.StringId);
             SkillBase skillBase;
             if (skillSet == null)
             {
-                this.CharacterHelmSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.NumAllWeaponSlots), 1), EquipmentIndex.NumAllWeaponSlots);
-                this.CharacterCloakSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Cape), 1), EquipmentIndex.Cape);
-                this.CharacterTorsoSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Body), 1), EquipmentIndex.Body);
-                this.CharacterGloveSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Gloves), 1), EquipmentIndex.Gloves);
-                this.CharacterBootSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Leg), 1), EquipmentIndex.Leg);
-                this.CharacterMountSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.ArmorItemEndSlot), 1), EquipmentIndex.ArmorItemEndSlot);
-                this.CharacterMountArmorSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.HorseHarness), 1), EquipmentIndex.HorseHarness);
-                this.CharacterWeapon1Slot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.WeaponItemBeginSlot), 1), EquipmentIndex.WeaponItemBeginSlot);
-                this.CharacterWeapon2Slot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Weapon1), 1), EquipmentIndex.Weapon1);
-                this.CharacterWeapon3Slot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Weapon2), 1), EquipmentIndex.Weapon2);
-                this.CharacterWeapon4Slot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Weapon3), 1), EquipmentIndex.Weapon3);
-                this.CharacterBannerSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.ExtraWeaponSlot), 1), EquipmentIndex.ExtraWeaponSlot);
+            this.CharacterHelmSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.NumAllWeaponSlots), 1), EquipmentIndex.NumAllWeaponSlots);
+            this.CharacterCloakSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Cape), 1), EquipmentIndex.Cape);
+            this.CharacterTorsoSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Body), 1), EquipmentIndex.Body);
+            this.CharacterGloveSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Gloves), 1), EquipmentIndex.Gloves);
+            this.CharacterBootSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Leg), 1), EquipmentIndex.Leg);
+            this.CharacterMountSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.ArmorItemEndSlot), 1), EquipmentIndex.ArmorItemEndSlot);
+            this.CharacterMountArmorSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.HorseHarness), 1), EquipmentIndex.HorseHarness);
+            this.CharacterWeapon1Slot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.WeaponItemBeginSlot), 1), EquipmentIndex.WeaponItemBeginSlot);
+            this.CharacterWeapon2Slot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Weapon1), 1), EquipmentIndex.Weapon1);
+            this.CharacterWeapon3Slot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Weapon2), 1), EquipmentIndex.Weapon2);
+            this.CharacterWeapon4Slot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.Weapon3), 1), EquipmentIndex.Weapon3);
+            this.CharacterBannerSlot = this.InitializeCharacterEquipmentSlot(new ItemRosterElement(this.ActiveEquipment.GetEquipmentFromSlot(EquipmentIndex.ExtraWeaponSlot), 1), EquipmentIndex.ExtraWeaponSlot);
             }
             else
             {
@@ -1780,7 +1799,7 @@ namespace New_ZZZF
             //this.MainCharacter.SetEquipment(this.ActiveEquipment);
         }
 
-
+        
         private void UpdateCharacterArmorValues()
         {
             this.CurrentCharacterArmArmor = 0;// this._currentCharacter.GetArmArmorSum(!this.IsInWarSet);
@@ -1790,7 +1809,7 @@ namespace New_ZZZF
             this.CurrentCharacterHorseArmor = 0;//this._currentCharacter.GetHorseArmorSum(!this.IsInWarSet);
         }
 
-
+        
         private void RefreshCharacterTotalWeight()
         {
             CharacterObject currentCharacter = this._currentCharacter;
@@ -1798,7 +1817,7 @@ namespace New_ZZZF
             this.CurrentCharacterTotalEncumbrance = TaleWorlds.Library.MathF.Round(this.ActiveEquipment.GetTotalWeightOfWeapons() + this.ActiveEquipment.GetTotalWeightOfArmor(true) * num, 1).ToString("0.0");
         }
 
-
+        
         private void RefreshCharacterCanUseItem()
         {
             for (int i = 0; i < this.RightItemListVM.Count; i++)
@@ -1811,7 +1830,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void InitializeInventory()
         {
             this.IsRefreshed = false;
@@ -1874,7 +1893,7 @@ namespace New_ZZZF
             this.IsRefreshed = true;
         }
 
-
+        
         private bool IsItemLocked(ItemRosterElement item)
         {
             string text = item.EquipmentElement.Item.StringId;
@@ -1885,14 +1904,14 @@ namespace New_ZZZF
             return this._lockedItemIDs.Contains(text);
         }
 
-
+        
         public void CompareNextItem()
         {
             this.CycleBetweenWeaponSlots();
             this.RefreshComparedItem();
         }
 
-
+        
         private void BuyItem(SPSkillItemVM item)
         {
             if (this.TargetEquipmentType != EquipmentIndex.None && item.ItemType != this.TargetEquipmentType && (this.TargetEquipmentType < EquipmentIndex.WeaponItemBeginSlot || this.TargetEquipmentType > EquipmentIndex.ExtraWeaponSlot || item.ItemType < EquipmentIndex.WeaponItemBeginSlot || item.ItemType > EquipmentIndex.ExtraWeaponSlot))
@@ -1924,7 +1943,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void SellItem(SPSkillItemVM item)
         {
             InventoryLogic.InventorySide inventorySide = item.InventorySide;
@@ -1942,7 +1961,7 @@ namespace New_ZZZF
             this._inventoryLogic.AddTransferCommand(command);
         }
 
-
+        
         private void SlaughterItem(SPSkillItemVM item)
         {
             int num = 1;
@@ -1960,7 +1979,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void DonateItem(SPSkillItemVM item)
         {
             if (this.IsFiveStackModifierActive)
@@ -1975,7 +1994,7 @@ namespace New_ZZZF
             this._inventoryLogic.DonateItem(item.ItemRosterElement);
         }
 
-
+        
         private float GetCapacityBudget(MobileParty party, bool isBuy)
         {
             if (isBuy)
@@ -1998,7 +2017,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void TransferAll(bool isBuy)
         {
             this.IsRefreshed = false;
@@ -2085,20 +2104,20 @@ namespace New_ZZZF
             this.IsRefreshed = true;
         }
 
-
+        
         public void ExecuteBuyAllItems()
         {
             this.TransferAll(true);
         }
 
-
+        
         public void ExecuteSellAllItems()
         {
             return;
             this.TransferAll(false);
         }
 
-
+        
         public void ExecuteBuyItemTest()
         {
             this.TransactionCount = 1;
@@ -2118,7 +2137,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         public void ExecuteResetTranstactions()
         {
             this._inventoryLogic.Reset(false);
@@ -2126,7 +2145,7 @@ namespace New_ZZZF
             this.CurrentFocusedItem = null;
         }
 
-
+        
         public void ExecuteResetAndCompleteTranstactions()
         {
             if (InventoryManager.Instance.CurrentMode == InventoryMode.Loot)
@@ -2145,7 +2164,7 @@ namespace New_ZZZF
             SkillInventoryManager.Instance.CloseInventoryPresentation(true);
         }
 
-
+        
         public void ExecuteCompleteTranstactions()
         {
             if (InventoryManager.Instance.CurrentMode == InventoryMode.Loot && !this._inventoryLogic.IsThereAnyChanges() && this._inventoryLogic.GetElementsInInitialRoster(InventoryLogic.InventorySide.OtherInventory).Any<ItemRosterElement>())
@@ -2156,7 +2175,7 @@ namespace New_ZZZF
             this.HandleDone();
         }
 
-
+        
         private void HandleDone()
         {
             if (!this._isFinalized)
@@ -2190,13 +2209,13 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void SaveItemLockStates()
         {
             this._viewDataTracker.SetInventoryLocks(this._lockedItemIDs);
         }
 
-
+        
         private void SaveItemSortStates()
         {
             this._viewDataTracker.InventorySetSortPreference((int)this._usageType, (int)this.PlayerInventorySortController.CurrentSortOption.Value, (int)this.PlayerInventorySortController.CurrentSortState.Value);
@@ -2326,7 +2345,7 @@ namespace New_ZZZF
             this.IsDoneDisabled = !this._inventoryLogic.CanPlayerCompleteTransaction();
         }
 
-
+        
         private void ProcessFilter(SPInventoryVM.Filters filterIndex)
         {
 
@@ -2351,7 +2370,7 @@ namespace New_ZZZF
             this.IsRefreshed = true;
         }
 
-
+        
         private void UpdateFilteredStatusOfItem(SPSkillItemVM item)
         {
             bool flag = true;
@@ -2395,7 +2414,7 @@ namespace New_ZZZF
             item.IsFiltered = (flag);
         }
 
-
+        
         private void OnSearchTextChanged(bool isLeft)
         {
             if (this.IsSearchAvailable)
@@ -2407,49 +2426,49 @@ namespace New_ZZZF
             }
         }
 
-
+        
         public void ExecuteFilterNone()
         {
             this.ProcessFilter(SPInventoryVM.Filters.All);
             Game.Current.EventManager.TriggerEvent<InventoryFilterChangedEvent>(new InventoryFilterChangedEvent(SPInventoryVM.Filters.All));
         }
 
-
+        
         public void ExecuteFilterWeapons()
         {
             this.ProcessFilter(SPInventoryVM.Filters.Weapons);
             Game.Current.EventManager.TriggerEvent<InventoryFilterChangedEvent>(new InventoryFilterChangedEvent(SPInventoryVM.Filters.Weapons));
         }
 
-
+        
         public void ExecuteFilterArmors()
         {
             this.ProcessFilter(SPInventoryVM.Filters.Armors);
             Game.Current.EventManager.TriggerEvent<InventoryFilterChangedEvent>(new InventoryFilterChangedEvent(SPInventoryVM.Filters.Armors));
         }
 
-
+        
         public void ExecuteFilterShieldsAndRanged()
         {
             this.ProcessFilter(SPInventoryVM.Filters.ShieldsAndRanged);
             Game.Current.EventManager.TriggerEvent<InventoryFilterChangedEvent>(new InventoryFilterChangedEvent(SPInventoryVM.Filters.ShieldsAndRanged));
         }
 
-
+        
         public void ExecuteFilterMounts()
         {
             this.ProcessFilter(SPInventoryVM.Filters.Mounts);
             Game.Current.EventManager.TriggerEvent<InventoryFilterChangedEvent>(new InventoryFilterChangedEvent(SPInventoryVM.Filters.Mounts));
         }
 
-
+        
         public void ExecuteFilterMisc()
         {
             this.ProcessFilter(SPInventoryVM.Filters.Miscellaneous);
             Game.Current.EventManager.TriggerEvent<InventoryFilterChangedEvent>(new InventoryFilterChangedEvent(SPInventoryVM.Filters.Miscellaneous));
         }
 
-
+        
         public void CycleBetweenWeaponSlots()
         {
             EquipmentIndex selectedEquipmentIndex = (EquipmentIndex)this._selectedEquipmentIndex;
@@ -2471,7 +2490,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private SPSkillItemVM GetItemFromIndex(EquipmentIndex itemType)
         {
             switch (itemType)
@@ -2505,7 +2524,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void OnTutorialNotificationElementIDChange(TutorialNotificationElementChangeEvent obj)
         {
             if (obj.NewNotificationElementID != this._latestTutorialElementID)
@@ -2579,7 +2598,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void SetFoodTransferButtonHighlightState(bool state)
         {
             for (int i = 0; i < this.LeftItemListVM.Count; i++)
@@ -2592,7 +2611,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private void SetBannerItemsHighlightState(bool state)
         {
             for (int i = 0; i < this.LeftItemListVM.Count; i++)
@@ -2605,9 +2624,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel ResetHint
         {
@@ -2625,9 +2644,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string LeftInventoryLabel
         {
@@ -2645,9 +2664,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string RightInventoryLabel
         {
@@ -2665,9 +2684,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string DoneLbl
         {
@@ -2685,9 +2704,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsDoneDisabled
         {
@@ -2705,9 +2724,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool OtherSideHasCapacity
         {
@@ -2725,9 +2744,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsSearchAvailable
         {
@@ -2750,9 +2769,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsOtherInventoryGoldRelevant
         {
@@ -2770,9 +2789,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string CancelLbl
         {
@@ -2790,9 +2809,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string ResetLbl
         {
@@ -2810,9 +2829,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string TypeText
         {
@@ -2830,9 +2849,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string NameText
         {
@@ -2850,9 +2869,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string QuantityText
         {
@@ -2870,9 +2889,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string CostText
         {
@@ -2890,9 +2909,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string SearchPlaceholderText
         {
@@ -2910,9 +2929,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public BasicTooltipViewModel ProductionTooltip
         {
@@ -2930,9 +2949,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public BasicTooltipViewModel EquipmentMaxCountHint
         {
@@ -2950,9 +2969,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public BasicTooltipViewModel CurrentCharacterSkillsTooltip
         {
@@ -2970,9 +2989,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel NoSaddleHint
         {
@@ -2990,9 +3009,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel DonationLblHint
         {
@@ -3010,9 +3029,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel ArmArmorHint
         {
@@ -3030,9 +3049,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel BodyArmorHint
         {
@@ -3050,9 +3069,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel HeadArmorHint
         {
@@ -3070,9 +3089,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel LegArmorHint
         {
@@ -3090,9 +3109,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel HorseArmorHint
         {
@@ -3110,9 +3129,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel FilterAllHint
         {
@@ -3130,9 +3149,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel FilterWeaponHint
         {
@@ -3150,9 +3169,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel FilterArmorHint
         {
@@ -3170,9 +3189,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel FilterShieldAndRangedHint
         {
@@ -3190,9 +3209,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel FilterMountAndHarnessHint
         {
@@ -3210,9 +3229,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel FilterMiscHint
         {
@@ -3230,9 +3249,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel CivilianOutfitHint
         {
@@ -3250,9 +3269,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel BattleOutfitHint
         {
@@ -3270,9 +3289,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentHelmSlotHint
         {
@@ -3290,9 +3309,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentArmorSlotHint
         {
@@ -3310,9 +3329,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentBootSlotHint
         {
@@ -3330,9 +3349,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentCloakSlotHint
         {
@@ -3350,9 +3369,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentGloveSlotHint
         {
@@ -3370,9 +3389,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentHarnessSlotHint
         {
@@ -3390,9 +3409,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentMountSlotHint
         {
@@ -3410,9 +3429,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentWeaponSlotHint
         {
@@ -3430,9 +3449,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipmentBannerSlotHint
         {
@@ -3450,9 +3469,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public BasicTooltipViewModel BuyAllHint
         {
@@ -3470,9 +3489,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public BasicTooltipViewModel SellAllHint
         {
@@ -3490,9 +3509,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public BasicTooltipViewModel PreviousCharacterHint
         {
@@ -3510,9 +3529,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public BasicTooltipViewModel NextCharacterHint
         {
@@ -3530,9 +3549,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel WeightHint
         {
@@ -3550,9 +3569,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel PreviewHint
         {
@@ -3570,9 +3589,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel EquipHint
         {
@@ -3590,9 +3609,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel UnequipHint
         {
@@ -3610,9 +3629,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel SellHint
         {
@@ -3630,9 +3649,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel PlayerSideCapacityExceededHint
         {
@@ -3650,9 +3669,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HintViewModel OtherSideCapacityExceededHint
         {
@@ -3670,9 +3689,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SelectorVM<InventoryCharacterSelectorItemVM> CharacterList
         {
@@ -3690,9 +3709,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPInventorySortControllerVM PlayerInventorySortController
         {
@@ -3710,9 +3729,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPInventorySortControllerVM OtherInventorySortController
         {
@@ -3730,9 +3749,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public ItemPreviewVM ItemPreview
         {
@@ -3750,9 +3769,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public int ActiveFilterIndex
         {
@@ -3770,9 +3789,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool CompanionExists
         {
@@ -3790,9 +3809,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsTradingWithSettlement
         {
@@ -3810,9 +3829,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsInWarSet
         {
@@ -3832,9 +3851,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsMicsFilterHighlightEnabled
         {
@@ -3852,9 +3871,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsCivilianFilterHighlightEnabled
         {
@@ -3872,9 +3891,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public ItemMenuVM ItemMenu
         {
@@ -3892,9 +3911,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string PlayerSideCapacityExceededText
         {
@@ -3912,9 +3931,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string OtherSideCapacityExceededText
         {
@@ -3932,9 +3951,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string LeftSearchText
         {
@@ -3953,9 +3972,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string RightSearchText
         {
@@ -3974,9 +3993,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool HasGainedExperience
         {
@@ -3994,9 +4013,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsDonationXpGainExceedsMax
         {
@@ -4014,9 +4033,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool NoSaddleWarned
         {
@@ -4034,9 +4053,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool PlayerEquipmentCountWarned
         {
@@ -4054,9 +4073,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool OtherEquipmentCountWarned
         {
@@ -4074,9 +4093,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string OtherEquipmentCountText
         {
@@ -4094,9 +4113,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string PlayerEquipmentCountText
         {
@@ -4114,9 +4133,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string NoSaddleText
         {
@@ -4134,9 +4153,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public int TargetEquipmentIndex
         {
@@ -4154,9 +4173,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         public EquipmentIndex TargetEquipmentType
         {
             get
@@ -4173,9 +4192,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public int TransactionCount
         {
@@ -4194,9 +4213,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsTrading
         {
@@ -4214,9 +4233,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool EquipAfterBuy
         {
@@ -4234,9 +4253,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string TradeLbl
         {
@@ -4254,9 +4273,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string ExperienceLbl
         {
@@ -4274,9 +4293,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string CurrentCharacterName
         {
@@ -4294,9 +4313,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string RightInventoryOwnerName
         {
@@ -4314,9 +4333,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string LeftInventoryOwnerName
         {
@@ -4334,9 +4353,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public int RightInventoryOwnerGold
         {
@@ -4354,9 +4373,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public int LeftInventoryOwnerGold
         {
@@ -4374,9 +4393,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public int ItemCountToBuy
         {
@@ -4394,9 +4413,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public string CurrentCharacterTotalEncumbrance
         {
@@ -4414,9 +4433,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public float CurrentCharacterLegArmor
         {
@@ -4434,9 +4453,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public float CurrentCharacterHeadArmor
         {
@@ -4454,9 +4473,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public float CurrentCharacterBodyArmor
         {
@@ -4474,9 +4493,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public float CurrentCharacterArmArmor
         {
@@ -4494,9 +4513,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public float CurrentCharacterHorseArmor
         {
@@ -4514,9 +4533,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsRefreshed
         {
@@ -4534,9 +4553,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsExtendedEquipmentControlsEnabled
         {
@@ -4554,9 +4573,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsFocusedOnItemList
         {
@@ -4574,9 +4593,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CurrentFocusedItem
         {
@@ -4594,9 +4613,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterHelmSlot
         {
@@ -4614,9 +4633,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterCloakSlot
         {
@@ -4634,9 +4653,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterTorsoSlot
         {
@@ -4654,9 +4673,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterGloveSlot
         {
@@ -4674,9 +4693,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterBootSlot
         {
@@ -4694,9 +4713,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterMountSlot
         {
@@ -4714,9 +4733,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterMountArmorSlot
         {
@@ -4734,9 +4753,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterWeapon1Slot
         {
@@ -4754,9 +4773,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterWeapon2Slot
         {
@@ -4774,9 +4793,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterWeapon3Slot
         {
@@ -4794,9 +4813,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterWeapon4Slot
         {
@@ -4814,9 +4833,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public SPSkillItemVM CharacterBannerSlot
         {
@@ -4834,9 +4853,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public HeroViewModel MainCharacter
         {
@@ -4854,9 +4873,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public MBBindingList<SPSkillItemVM> RightItemListVM
         {
@@ -4874,9 +4893,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public MBBindingList<SPSkillItemVM> LeftItemListVM
         {
@@ -4894,9 +4913,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public bool IsBannerItemsHighlightApplied
         {
@@ -4914,9 +4933,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public int BannerTypeCode
         {
@@ -4934,7 +4953,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         private TextObject GetPreviousCharacterKeyText()
         {
             if (this.PreviousCharacterInputKey == null || this._getKeyTextFromKeyId == null)
@@ -4944,7 +4963,7 @@ namespace New_ZZZF
             return this._getKeyTextFromKeyId(this.PreviousCharacterInputKey.KeyID);
         }
 
-
+        
         private TextObject GetNextCharacterKeyText()
         {
             if (this.NextCharacterInputKey == null || this._getKeyTextFromKeyId == null)
@@ -4954,7 +4973,7 @@ namespace New_ZZZF
             return this._getKeyTextFromKeyId(this.NextCharacterInputKey.KeyID);
         }
 
-
+        
         private TextObject GetBuyAllKeyText()
         {
             if (this.BuyAllInputKey == null || this._getKeyTextFromKeyId == null)
@@ -4964,7 +4983,7 @@ namespace New_ZZZF
             return this._getKeyTextFromKeyId(this.BuyAllInputKey.KeyID);
         }
 
-
+        
         private TextObject GetSellAllKeyText()
         {
             if (this.SellAllInputKey == null || this._getKeyTextFromKeyId == null)
@@ -4974,61 +4993,61 @@ namespace New_ZZZF
             return this._getKeyTextFromKeyId(this.SellAllInputKey.KeyID);
         }
 
-
+        
         public void SetResetInputKey(HotKey hotkey)
         {
             this.ResetInputKey = InputKeyItemVM.CreateFromHotKey(hotkey, true);
         }
 
-
+        
         public void SetCancelInputKey(HotKey gameKey)
         {
             this.CancelInputKey = InputKeyItemVM.CreateFromHotKey(gameKey, true);
         }
 
-
+        
         public void SetDoneInputKey(HotKey hotKey)
         {
             this.DoneInputKey = InputKeyItemVM.CreateFromHotKey(hotKey, true);
         }
 
-
+        
         public void SetPreviousCharacterInputKey(HotKey hotKey)
         {
             this.PreviousCharacterInputKey = InputKeyItemVM.CreateFromHotKey(hotKey, true);
             this.SetPreviousCharacterHint();
         }
 
-
+        
         public void SetNextCharacterInputKey(HotKey hotKey)
         {
             this.NextCharacterInputKey = InputKeyItemVM.CreateFromHotKey(hotKey, true);
             this.SetNextCharacterHint();
         }
 
-
+        
         public void SetBuyAllInputKey(HotKey hotKey)
         {
             this.BuyAllInputKey = InputKeyItemVM.CreateFromHotKey(hotKey, true);
             this.SetBuyAllHint();
         }
 
-
+        
         public void SetSellAllInputKey(HotKey hotKey)
         {
             this.SellAllInputKey = InputKeyItemVM.CreateFromHotKey(hotKey, true);
             this.SetSellAllHint();
         }
 
-
+        
         public void SetGetKeyTextFromKeyIDFunc(Func<string, TextObject> getKeyTextFromKeyId)
         {
             this._getKeyTextFromKeyId = getKeyTextFromKeyId;
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public InputKeyItemVM ResetInputKey
         {
@@ -5046,9 +5065,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public InputKeyItemVM CancelInputKey
         {
@@ -5066,9 +5085,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public InputKeyItemVM DoneInputKey
         {
@@ -5086,9 +5105,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public InputKeyItemVM PreviousCharacterInputKey
         {
@@ -5106,9 +5125,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public InputKeyItemVM NextCharacterInputKey
         {
@@ -5126,9 +5145,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public InputKeyItemVM BuyAllInputKey
         {
@@ -5146,9 +5165,9 @@ namespace New_ZZZF
             }
         }
 
-
-
-
+        
+        
+        
         [DataSourceProperty]
         public InputKeyItemVM SellAllInputKey
         {
@@ -5166,19 +5185,19 @@ namespace New_ZZZF
             }
         }
 
-
+        
         void IInventoryStateHandler.ExecuteLootingScript()
         {
             this.ExecuteBuyAllItems();
         }
 
-
+        
         void IInventoryStateHandler.ExecuteBuyConsumableItem()
         {
             this.ExecuteBuyItemTest();
         }
 
-
+        
         void IInventoryStateHandler.ExecuteSellAllLoot()
         {
             for (int i = this.RightItemListVM.Count - 1; i >= 0; i--)
@@ -5191,7 +5210,7 @@ namespace New_ZZZF
             }
         }
 
-
+        
         void IInventoryStateHandler.FilterInventoryAtOpening(InventoryManager.InventoryCategoryType inventoryCategoryType)
         {
             if (Game.Current == null)
@@ -5220,85 +5239,85 @@ namespace New_ZZZF
             }
         }
 
-
+        
         public bool DoNotSync;
 
-
+        
         private readonly Func<WeaponComponentData, ItemObject.ItemUsageSetFlags> _getItemUsageSetFlags;
 
-
+        
         private readonly IViewDataTracker _viewDataTracker;
 
-
+        
         public bool IsFiveStackModifierActive;
 
-
+        
         public bool IsEntireStackModifierActive;
 
-
+        
         private readonly int _donationMaxShareableXp;
 
-
+        
         private readonly TroopRoster _rightTroopRoster;
 
-
+        
         private InventoryMode _usageType = InventoryMode.Trade;
 
-
+        
         private readonly TroopRoster _leftTroopRoster;
 
-
+        
         private int _lastComparedItemIndex;
 
-
+        
         private readonly Stack<SPSkillItemVM> _equipAfterTransferStack;
 
-
+        
         private int _currentInventoryCharacterIndex;
 
-
+        
         private bool _isTrading;
 
-
+        
         private bool _isFinalized;
 
-
+        
         private bool _isCharacterEquipmentDirty;
 
-
+        
         private float _equipmentCount;
 
-
+        
         private string _selectedTooltipItemStringID = "";
 
-
+        
         private string _comparedTooltipItemStringID = "";
 
-
+        
         private InventoryLogic _inventoryLogic;
 
-
+        
         private CharacterObject _currentCharacter;
 
-
+        
         private SPSkillItemVM _selectedItem;
 
-
+        
         private string _fiveStackShortcutkeyText;
 
-
+        
         private string _entireStackShortcutkeyText;
 
-
+        
         private List<ItemVM> _comparedItemList;
 
-
+        
         private List<string> _lockedItemIDs;
 
-
+        
         private Func<string, TextObject> _getKeyTextFromKeyId;
 
-
+        
         private readonly List<int> _everyItemType = new List<int>
         {
             1,
@@ -5327,7 +5346,7 @@ namespace New_ZZZF
             24
         };
 
-
+        
         private readonly List<int> _weaponItemTypes = new List<int>
         {
             2,
@@ -5335,7 +5354,7 @@ namespace New_ZZZF
             4
         };
 
-
+        
         private readonly List<int> _armorItemTypes = new List<int>
         {
             12,
@@ -5346,14 +5365,14 @@ namespace New_ZZZF
             22
         };
 
-
+        
         private readonly List<int> _mountItemTypes = new List<int>
         {
             1,
             23
         };
 
-
+        
         private readonly List<int> _shieldAndRangedItemTypes = new List<int>
         {
             7,
@@ -5367,7 +5386,7 @@ namespace New_ZZZF
             18
         };
 
-
+        
         private readonly List<int> _miscellaneousItemTypes = new List<int>
         {
             11,
@@ -5376,379 +5395,379 @@ namespace New_ZZZF
             24
         };
 
-
+        
         private readonly Dictionary<SPInventoryVM.Filters, List<int>> _filters;
 
-
+        
         private int _selectedEquipmentIndex;
 
-
+        
         private bool _isFoodTransferButtonHighlightApplied;
 
-
+        
         private bool _isBannerItemsHighlightApplied;
 
-
+        
         private string _latestTutorialElementID;
 
-
+        
         private string _leftInventoryLabel;
 
-
+        
         private string _rightInventoryLabel;
 
-
+        
         private bool _otherSideHasCapacity;
 
-
+        
         private bool _isDoneDisabled;
 
-
+        
         private bool _isSearchAvailable;
 
-
+        
         private bool _isOtherInventoryGoldRelevant;
 
-
+        
         private string _doneLbl;
 
-
+        
         private string _cancelLbl;
 
-
+        
         private string _resetLbl;
 
-
+        
         private string _typeText;
 
-
+        
         private string _nameText;
 
-
+        
         private string _quantityText;
 
-
+        
         private string _costText;
 
-
+        
         private string _searchPlaceholderText;
 
-
+        
         private HintViewModel _resetHint;
 
-
+        
         private HintViewModel _filterAllHint;
 
-
+        
         private HintViewModel _filterWeaponHint;
 
-
+        
         private HintViewModel _filterArmorHint;
 
-
+        
         private HintViewModel _filterShieldAndRangedHint;
 
-
+        
         private HintViewModel _filterMountAndHarnessHint;
 
-
+        
         private HintViewModel _filterMiscHint;
 
-
+        
         private HintViewModel _civilianOutfitHint;
 
-
+        
         private HintViewModel _battleOutfitHint;
 
-
+        
         private HintViewModel _equipmentHelmSlotHint;
 
-
+        
         private HintViewModel _equipmentArmorSlotHint;
 
-
+        
         private HintViewModel _equipmentBootSlotHint;
 
-
+        
         private HintViewModel _equipmentCloakSlotHint;
 
-
+        
         private HintViewModel _equipmentGloveSlotHint;
 
-
+        
         private HintViewModel _equipmentHarnessSlotHint;
 
-
+        
         private HintViewModel _equipmentMountSlotHint;
 
-
+        
         private HintViewModel _equipmentWeaponSlotHint;
 
-
+        
         private HintViewModel _equipmentBannerSlotHint;
 
-
+        
         private BasicTooltipViewModel _buyAllHint;
 
-
+        
         private BasicTooltipViewModel _sellAllHint;
 
-
+        
         private BasicTooltipViewModel _previousCharacterHint;
 
-
+        
         private BasicTooltipViewModel _nextCharacterHint;
 
-
+        
         private HintViewModel _weightHint;
 
-
+        
         private HintViewModel _armArmorHint;
 
-
+        
         private HintViewModel _bodyArmorHint;
 
-
+        
         private HintViewModel _headArmorHint;
 
-
+        
         private HintViewModel _legArmorHint;
 
-
+        
         private HintViewModel _horseArmorHint;
 
-
+        
         private HintViewModel _previewHint;
 
-
+        
         private HintViewModel _equipHint;
 
-
+        
         private HintViewModel _unequipHint;
 
-
+        
         private HintViewModel _sellHint;
 
-
+        
         private HintViewModel _playerSideCapacityExceededHint;
 
-
+        
         private HintViewModel _noSaddleHint;
 
-
+        
         private HintViewModel _donationLblHint;
 
-
+        
         private HintViewModel _otherSideCapacityExceededHint;
 
-
+        
         private BasicTooltipViewModel _equipmentMaxCountHint;
 
-
+        
         private BasicTooltipViewModel _currentCharacterSkillsTooltip;
 
-
+        
         private BasicTooltipViewModel _productionTooltip;
 
-
+        
         private HeroViewModel _mainCharacter;
 
-
+        
         private bool _isExtendedEquipmentControlsEnabled;
 
-
+        
         private bool _isFocusedOnItemList;
 
-
+        
         private SPSkillItemVM _currentFocusedItem;
 
-
+        
         private bool _equipAfterBuy;
 
-
+        
         private MBBindingList<SPSkillItemVM> _leftItemListVM;
 
-
+        
         private MBBindingList<SPSkillItemVM> _rightItemListVM;
 
-
+        
         private ItemMenuVM _itemMenu;
 
-
+        
         private SPSkillItemVM _characterHelmSlot;
 
-
+        
         private SPSkillItemVM _characterCloakSlot;
 
-
+        
         private SPSkillItemVM _characterTorsoSlot;
 
-
+        
         private SPSkillItemVM _characterGloveSlot;
 
-
+        
         private SPSkillItemVM _characterBootSlot;
 
-
+        
         private SPSkillItemVM _characterMountSlot;
 
-
+        
         private SPSkillItemVM _characterMountArmorSlot;
 
-
+        
         private SPSkillItemVM _characterWeapon1Slot;
 
-
+        
         private SPSkillItemVM _characterWeapon2Slot;
 
-
+        
         private SPSkillItemVM _characterWeapon3Slot;
 
-
+        
         private SPSkillItemVM _characterWeapon4Slot;
 
-
+        
         private SPSkillItemVM _characterBannerSlot;
 
-
+        
         private EquipmentIndex _targetEquipmentIndex = EquipmentIndex.None;
 
-
+        
         private int _transactionCount = -1;
 
-
+        
         private bool _isRefreshed;
 
-
+        
         private string _tradeLbl = "";
 
-
+        
         private string _experienceLbl = "";
 
-
+        
         private bool _hasGainedExperience;
 
-
+        
         private bool _isDonationXpGainExceedsMax;
 
-
+        
         private bool _noSaddleWarned;
 
-
+        
         private bool _otherEquipmentCountWarned;
 
-
+        
         private bool _playerEquipmentCountWarned;
 
-
+        
         private bool _isTradingWithSettlement;
 
-
+        
         private string _otherEquipmentCountText;
 
-
+        
         private string _playerEquipmentCountText;
 
-
+        
         private string _noSaddleText;
 
-
+        
         private string _leftSearchText = "";
 
-
+        
         private string _playerSideCapacityExceededText;
 
-
+        
         private string _otherSideCapacityExceededText;
 
-
+        
         private string _rightSearchText = "";
 
-
+        
         private bool _isInWarSet = true;
 
-
+        
         private bool _companionExists;
 
-
+        
         private SPInventoryVM.Filters _activeFilterIndex;
 
-
+        
         private bool _isMicsFilterHighlightEnabled;
 
-
+        
         private bool _isCivilianFilterHighlightEnabled;
 
-
+        
         private ItemPreviewVM _itemPreview;
 
-
+        
         private SelectorVM<InventoryCharacterSelectorItemVM> _characterList;
 
-
+        
         private SPInventorySortControllerVM _otherInventorySortController;
 
-
+        
         private SPInventorySortControllerVM _playerInventorySortController;
 
-
+        
         private int _bannerTypeCode;
 
-
+        
         private string _leftInventoryOwnerName;
 
-
+        
         private int _leftInventoryOwnerGold;
 
-
+        
         private string _rightInventoryOwnerName;
 
-
+        
         private string _currentCharacterName;
 
-
+        
         private int _rightInventoryOwnerGold;
 
-
+        
         private int _itemCountToBuy;
 
-
+        
         private float _currentCharacterArmArmor;
 
-
+        
         private float _currentCharacterBodyArmor;
 
-
+        
         private float _currentCharacterHeadArmor;
 
-
+        
         private float _currentCharacterLegArmor;
 
-
+        
         private float _currentCharacterHorseArmor;
 
-
+        
         private string _currentCharacterTotalEncumbrance;
 
-
+        
         private InputKeyItemVM _resetInputKey;
 
-
+        
         private InputKeyItemVM _cancelInputKey;
 
-
+        
         private InputKeyItemVM _doneInputKey;
 
-
+        
         private InputKeyItemVM _previousCharacterInputKey;
 
-
+        
         private InputKeyItemVM _nextCharacterInputKey;
 
-
+        
         private InputKeyItemVM _buyAllInputKey;
 
-
+        
         private InputKeyItemVM _sellAllInputKey;
 
         // 将父类列表转换为子类列表
@@ -5812,17 +5831,17 @@ namespace New_ZZZF
         }
         public enum Filters
         {
-
+            
             All,
-
+            
             Weapons,
-
+            
             ShieldsAndRanged,
-
+            
             Armors,
-
+            
             Mounts,
-
+            
             Miscellaneous
         }
     }

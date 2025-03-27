@@ -59,11 +59,11 @@ namespace New_ZZZF
 
                 // 调试日志
                 Debug.Print("[New_ZZZF] 技能配置加载完成！");
-            }
+        }
             catch (Exception ex)
-            {
+        {
                 Debug.Print($"[New_ZZZF] 配置加载失败: {ex.Message}");
-            }
+        }
         }
         public override void OnMissionBehaviorInitialize(Mission mission)
         {

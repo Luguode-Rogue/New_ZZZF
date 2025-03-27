@@ -20,6 +20,7 @@ namespace New_ZZZF
                 return true;
             }
         }
+
         // Token: 0x17000B30 RID: 2864
         // (get) Token: 0x06002EAF RID: 11951 RVA: 0x000C1EEB File Offset: 0x000C00EB
         // (set) Token: 0x06002EB0 RID: 11952 RVA: 0x000C1EF3 File Offset: 0x000C00F3

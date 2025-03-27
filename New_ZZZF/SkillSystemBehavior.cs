@@ -95,7 +95,7 @@ namespace New_ZZZF
                 skillComponent.InitializeFromTroop(troopId);
                 _activeComponents.Add(skillComponent);
                 ActiveComponents.Add(agent.Index, skillComponent);
-
+                
 
                 InformationManager.DisplayMessage(new InformationMessage("[技能系统] Agent"+ agent.Name+" 已绑定技能组件"));
             }
@@ -374,7 +374,7 @@ namespace New_ZZZF
 
                         WoW_AgentRushAgent.Remove(agent.AgentInstance.Index); // 停止冲刺
                         agent.StateContainer.RemoveState("RushToAgentBuff");
-                    }
+            }
                     else
                     {
                         // 否则，向目标位置移动指定的距离
@@ -382,7 +382,7 @@ namespace New_ZZZF
                         Vec3 newPosition = agent.AgentInstance.Position + Script.MultiplyVectorByScalar(directionToTarget.NormalizedCopy(), distanceToMove);
                         agent.AgentInstance.TeleportToPosition(newPosition);
 
-                    }
+        }
                 }
                 Vec3 vec3;
                 if (WoW_AgentRushPos.TryGetValue(agent.AgentInstance.Index, out vec3))
