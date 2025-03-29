@@ -16,8 +16,8 @@ namespace New_ZZZF.Skills//（法术）
         {
             SkillID = "Fireball";
             Type = SkillType.Spell;
-            Cooldown = 1f;
-            ResourceCost = 1f;
+            Cooldown = 100f;
+            ResourceCost = 100f;
             Text = new TaleWorlds.Localization.TextObject("{=12345678}Fireball");
 
         }

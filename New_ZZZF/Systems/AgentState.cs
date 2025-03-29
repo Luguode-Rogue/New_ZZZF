@@ -72,8 +72,8 @@ namespace New_ZZZF
 
                 if (state.Duration <= 0)
                 {
-                    state.OnRemove(agent);
                     _activeStates.RemoveAt(i);
+                    state.OnRemove(agent);
                 }
             }
         }

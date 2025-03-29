@@ -16,6 +16,7 @@ namespace New_ZZZF
 
     public class StrikeMagnitudeScript
     {
+        public static Random random = new Random();
         /// <summary>
         /// 
         /// </summary>
@@ -38,6 +39,31 @@ namespace New_ZZZF
                 if (result.StateContainer.HasState("TianQiBuff"))
                 {
                     native = native * (1 + 1);
+                }
+                if (result.StateContainer.HasState("ZhanHaoBuff"))
+                {
+                    native = native * (1 + 0.2f);
+                }
+                if (result.StateContainer.HasState("WeiYaBuff"))
+                {
+                    native = native * (1 - 0.5f);
+                }
+                if (result.StateContainer.HasState("YingXiongZhuFuBuff"))
+                {
+                    native = native * (1 + 1f);
+                }
+                if (result.StateContainer.HasState("KongNueCiFuBuff"))
+                {
+                    native = native * (1 + 2f);
+                }
+                if (result.StateContainer.HasState("FengBaoZhiLiBuff"))
+                {
+                    Script.AgentGetCurrentWeapon(agent, out var missionWeapon);
+                    if (Script.IsRangeWeapon(missionWeapon.Item))
+                    {
+                        native = native * (1 + 2);
+                    }
+
                 }
             }
             return native;
@@ -292,18 +318,7 @@ namespace New_ZZZF
             //baseMagnitude *= weaponDamageMultiplier;
         }
     }
-    public class WOW_SandboxAgentStatCalculateModel : SandboxAgentStatCalculateModel
-    {
-        public override float GetWeaponDamageMultiplier(Agent agent, WeaponComponentData weapon)
-        {
-            float native = base.GetWeaponDamageMultiplier(agent, weapon);
-            native = StrikeMagnitudeScript.WOW_Script_AgentStatCalculateModel(agent, native);
-            return native;
-            //接下来的代码会乘等这个函数的输出值，所以这个函数的数值1==100%
-            //float weaponDamageMultiplier = MissionGameModels.Current.AgentStatCalculateModel.GetWeaponDamageMultiplier(attackInformation.AttackerAgent, currentUsageItem2);
-            //baseMagnitude *= weaponDamageMultiplier;
-        }
-    }
+
     public class WOW_SandboxAgentApplyDamageModel : SandboxAgentApplyDamageModel
     {
         //public static float CalculateStrikeMagnitudeForSwing(float swingSpeed, float impactPointAsPercent, float weaponWeight, float weaponLength, float weaponInertia, float weaponCoM, float extraLinearSpeed)
@@ -331,6 +346,7 @@ namespace New_ZZZF
         //    // 返回冲击力的大小，基于动能的改变量，并乘以一个系数0.067，再加上一个常数0.5的一半
         //    return 0.067f * (kineticEnergyBeforeImpact - kineticEnergyAfterImpact + 0.5f);
         //}
+
         public override bool DecideCrushedThrough(Agent attackerAgent, Agent defenderAgent, float totalAttackEnergy, Agent.UsageDirection attackDirection, StrikeType strikeType, WeaponComponentData defendItem, bool isPassiveUsage)
         {
             Random random = new Random();
@@ -431,9 +447,21 @@ namespace New_ZZZF
 
         public override float CalculateDamage(in AttackInformation attackInformation, in AttackCollisionData collisionData, in MissionWeapon weapon, float baseDamage)
         {
+            Random random = new Random();
+            float baseDam = base.CalculateDamage(attackInformation, collisionData, weapon, baseDamage);
+            SkillSystemBehavior.ActiveComponents.TryGetValue(attackInformation.AttackerAgent.Index, out var result);
+            if (result != null)
+            {
+                if (result.StateContainer.HasState("ZhanYiBuff"))
+                {
+                    if (random.NextFloat() > 0.5)
+                    { baseDam += 50f; }
+
+                }
+            }
             //做一下护甲的固定数值减伤，最终的伤害，减少护甲15%防御值的伤害。60甲-12的最终伤害，避免重甲被劫匪石头砸死
             int def = (int)(attackInformation.ArmorAmountFloat * 0.1f);
-            return base.CalculateDamage(attackInformation, collisionData, weapon, baseDamage) - def;
+            return baseDam - def;
         }
     }
     public class WOW_CustomAgentApplyDamageModel : CustomAgentApplyDamageModel

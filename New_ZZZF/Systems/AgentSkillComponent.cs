@@ -13,6 +13,7 @@ namespace New_ZZZF
 {
     /// <summary>
     /// 绑定到每个Agent的技能管理器，处理技能槽、冷却、资源消耗
+    /// 新增的agent属性，比如speed和复活次数也放在这里
     /// </summary>
     public class AgentSkillComponent : AgentComponent
     {
@@ -35,6 +36,9 @@ namespace New_ZZZF
         public float _currentStamina = 100f;    // 当前耐力值
         public float _globalCooldownTimer = 0f; // 公共CD计时器（仅法术）
         public bool _isInCombatArtState;        // 是否处于战技准备状态
+        public float _shieldStrength = 0f; //护盾值
+        public int _lifeResurgenceCount = 0;//剩余复活次数
+
         public AgentSpeed Speed { get; set; }
         public class AgentSpeed
         {
@@ -254,7 +258,12 @@ namespace New_ZZZF
         }
 
         //====================== 状态更新 ======================
-        private void UpdateCooldowns(float dt)
+        /// <summary>
+        /// 如果参数二为none类型，则更新全部技能cd，否则只更新对应类型技能的cd
+        /// </summary>
+        /// <param name="dt"></param>
+        /// <param name="skillType"></param>
+        public void UpdateCooldowns(float dt, SkillType skillType= SkillType.None)
         {
             List<SkillBase> expiredSkills = new List<SkillBase>();
             // 使用临时变量来存储剩余时间，避免直接修改字典
@@ -262,16 +271,24 @@ namespace New_ZZZF
 
             foreach (var entry in timersToUpdate)
             {
-                float remainingTime = entry.Value - dt;
-                if (remainingTime <= 0)
+                bool matchedType = ((entry.Key.Type == SkillType.Spell || entry.Key.Type == SkillType.Spell_CombatArt)&& skillType== SkillType.Spell) ||
+                    (entry.Key.Type == SkillType.MainActive && skillType == SkillType.MainActive) ||
+                    (entry.Key.Type == SkillType.SubActive && skillType == SkillType.SubActive) ||
+                    ((entry.Key.Type == SkillType.Passive|| entry.Key.Type == SkillType.Passive_Spell) && skillType == SkillType.Passive);
+                if (skillType== SkillType.None|| matchedType)
                 {
-                    expiredSkills.Add(entry.Key);
-                    _cooldownTimers.Remove(entry.Key); // 直接在这里移除，因为我们使用的是副本
+                    float remainingTime = entry.Value - dt;
+                    if (remainingTime <= 0)
+                    {
+                        expiredSkills.Add(entry.Key);
+                        _cooldownTimers.Remove(entry.Key); // 直接在这里移除，因为我们使用的是副本
+                    }
+                    else
+                    {
+                        _cooldownTimers[entry.Key] = remainingTime; // 更新剩余时间
+                    }
                 }
-                else
-                {
-                    _cooldownTimers[entry.Key] = remainingTime; // 更新剩余时间
-                }
+
             }
         }
 

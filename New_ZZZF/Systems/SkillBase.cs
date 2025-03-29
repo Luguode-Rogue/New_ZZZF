@@ -12,6 +12,7 @@ namespace New_ZZZF
     /// </summary>
     public enum SkillType
     {
+        None = 0,
         /// <summary>
         /// 主主动技能
         /// </summary>
@@ -41,7 +42,7 @@ namespace New_ZZZF
         /// </summary>
         CombatArt_Spell,//
         /// <summary>
-        /// 可放在战技的法术栏
+        /// 可放在战技栏的法术
         /// </summary>
         Spell_CombatArt//
     }

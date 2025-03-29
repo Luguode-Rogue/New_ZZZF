@@ -12,17 +12,17 @@ using TaleWorlds.MountAndBlade;
 
 namespace New_ZZZF
 {
-    internal class GuWu : SkillBase
+    internal class YingXiongZhuFu : SkillBase
     {
-        public GuWu()
+        public YingXiongZhuFu()
         {
-            SkillID = "GuWu";      // 必须唯一
+            SkillID = "YingXiongZhuFu";      // 必须唯一
             Type = SkillType.MainActive;    // 类型必须明确
             Cooldown = 2;             // 冷却时间（秒）
             ResourceCost = 0f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0021}GuWu");
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0035}YingXiongZhuFu");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0022}群体状态，使用后附近士兵获得鼓舞状态，提升射击精度，每秒增加1点耐力，并且回复少量已损生命值。持续时间：30秒。冷却时间：60秒。");
+            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0036}群体状态，使用后附近士兵获得祝福状态，回复全部血量并获得一次死而复生的机会。提高100%造成的伤害，每秒增加2点耐力。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {
@@ -33,7 +33,7 @@ namespace New_ZZZF
                 {
                     item.PlayParticleEffect("fire_burning");
                     // 每次创建新的状态实例
-                    List<AgentBuff> newStates = new List<AgentBuff> { new GuWuBuff(30f, agent), }; // 新实例
+                    List<AgentBuff> newStates = new List<AgentBuff> { new YingXiongZhuFuBuff(60f, agent), }; // 新实例
                     foreach (var state in newStates)
                     {
                         state.TargetAgent = item;
@@ -47,12 +47,12 @@ namespace New_ZZZF
             return false;
         }
 
-        public class GuWuBuff : AgentBuff
+        public class YingXiongZhuFuBuff : AgentBuff
         {
             private float _timeSinceLastTick;
-            public GuWuBuff(float duration, Agent source)
+            public YingXiongZhuFuBuff(float duration, Agent source)
             {
-                StateId = "GuWuBuff";
+                StateId = "YingXiongZhuFuBuff";
                 Duration = duration;
                 SourceAgent = source;
                 _timeSinceLastTick = 0; // 新增初始化
@@ -60,6 +60,10 @@ namespace New_ZZZF
 
             public override void OnApply(Agent agent)
             {
+                SkillSystemBehavior.ActiveComponents.TryGetValue(this.SourceAgent.Index, out var agentSkillComponent);
+                agent.Health=agentSkillComponent.MaxHP;
+                agentSkillComponent._lifeResurgenceCount += 1;
+                agentSkillComponent._shieldStrength += agentSkillComponent.MaxHP;
             }
 
             public override void OnUpdate(Agent agent, float dt)
@@ -76,9 +80,8 @@ namespace New_ZZZF
                     ZZZF_SandboxAgentStatCalculateModel zZZF_SandboxAgentStatCalculate = MissionGameModels.Current.AgentStatCalculateModel as ZZZF_SandboxAgentStatCalculateModel;
                     if (zZZF_SandboxAgentStatCalculate != null)
                     {
+                        agentSkillComponent.ChangeStamina(2);
                         zZZF_SandboxAgentStatCalculate._dt = dt;
-                        agentSkillComponent.ChangeStamina(1);
-                        agent.Health += (agentSkillComponent.MaxHP - agent.Health) * 0.1f;
                         agent.UpdateAgentProperties();
                     }
                     _timeSinceLastTick -= 1f; // 重置计时器

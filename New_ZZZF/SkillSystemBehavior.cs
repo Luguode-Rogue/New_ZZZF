@@ -16,6 +16,7 @@ using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
 using static New_ZZZF.AgentSkillComponent;
+using static New_ZZZF.KongNueCiFu;
 using static TaleWorlds.PlayerServices.Avatar.AvatarData;
 
 namespace New_ZZZF
@@ -164,7 +165,29 @@ namespace New_ZZZF
                     Script.SysOut(Agent.Main.GetCurrentAction(i).Name, Agent.Main);
                 }
             }
-
+            if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyPressed(InputKey.O))
+            {
+                Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+                
+                foreach (var agent in Mission.Current.Agents)
+                {
+                    if (agent.HasMount)
+                    {       agent.MountAgent.SetTargetPosition(foeAgent[0].GetEyeGlobalPosition().AsVec2); }
+                    if (foeAgent.Count > 0&&agent.Index!=Agent.Main.Index)
+                    {
+                        agent.SetTargetPositionAndDirection(Agent.Main.GetEyeGlobalPosition().AsVec2,Agent.Main.LookDirection);
+                        agent.ClearTargetFrame();
+                        //WorldPosition worldPosition = agent.GetRetreatPos();
+                        //worldPosition = agent.GetWorldPosition();
+                        //agent.Retreat(agent.GetWorldPosition());
+                        Vec3 vec3 = Agent.Main.Position;
+                        vec3.y += 10;
+                        Vec2 vec2 = -Agent.Main.LookDirection.AsVec2;
+                        agent.SetInitialFrame(vec3, vec2);
+                        agent.SetActionChannel(1, ActionIndexCache.Create("act_reload_crossbow"),false, 172UL);
+                    }
+                }
+            }
 
             //测试区↑
             // 更新计时器
@@ -464,40 +487,92 @@ namespace New_ZZZF
             WoW_AgentMissileSpeedData.Clear();
             ActiveComponents.Clear();
         }
-        private void ExecuteHitEvents(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
+        private void ExecuteHitEvents(Agent attacker, Agent victim, MissionWeapon affectorWeapon, Blow blow, AttackCollisionData collisionData)
         {
             if (attacker != null)
             {
-                ActiveComponents.TryGetValue(attacker.Index, out var agentSkillComponent);
-                //击杀事件处理
-                if (agentSkillComponent != null)
+                ActiveComponents.TryGetValue(attacker.Index, out var attackerSkillComponent);
+                ActiveComponents.TryGetValue(attacker.Index, out var victimSkillComponent);
+  
+                //非击杀处理
+                //不能先处理击杀事件，不然会先消耗复活次数再消耗护盾
+                ActiveComponents.TryGetValue(victim.Index, out victimSkillComponent);
+                if (victimSkillComponent != null)
                 {
-                    if (victim==null||victim.Health <= 0)
+                    if (victimSkillComponent._shieldStrength>0)
                     {
-                        agentSkillComponent.ChangeStamina(5);
-                        if (agentSkillComponent.StateContainer.HasState("JueXingBuff"))
+                        if (victimSkillComponent._shieldStrength >= blow.InflictedDamage)
                         {
-                            agentSkillComponent.StateContainer.UpdateStates(attacker,0f);
-                            agentSkillComponent.ChangeStamina(5);
+                            Script.SysOut("损失" + blow.InflictedDamage.ToString() + "点护盾，并抵消同等伤害", victim);
+                            victimSkillComponent._shieldStrength -= blow.InflictedDamage;
+                            victim.Health += blow.InflictedDamage;
+                        }
+                        else
+                        {
+                            Script.SysOut("损失" + victimSkillComponent._shieldStrength.ToString() + "点护盾，并抵消同等伤害", victim);
+                            victim.Health += victimSkillComponent._shieldStrength;
+                            victimSkillComponent._shieldStrength =0;
+                            
                         }
                     }
 
+                    if (victimSkillComponent.StateContainer.HasState("TianQiBuff"))
+                    {
+                        victim.Health +=Math.Max(blow.InflictedDamage, victimSkillComponent.MaxHP) ;
+                    }
+
+                }              
+                //击杀事件处理
+                if (attackerSkillComponent != null)
+                {
+                    if (victim == null || victim.Health <= 0)
+                    {
+                        attackerSkillComponent.ChangeStamina(5);
+                        if (attackerSkillComponent.StateContainer.HasState("JueXingBuff"))
+                        {
+                            attackerSkillComponent.StateContainer.UpdateStates(attacker, 0f);
+                            attackerSkillComponent.ChangeStamina(5);
+                        }
+                        if (attackerSkillComponent.StateContainer.HasState("ZhanYiBuff"))
+                        {
+                            attacker.Health += (attackerSkillComponent.MaxHP - attacker.Health) * 0.5f;
+                        }
+                        if (attackerSkillComponent.StateContainer.HasState("KongNueCiFuBuff"))
+                        {
+                            KongNueCiFuBuff buff = attackerSkillComponent.StateContainer.GetState("KongNueCiFuBuff") as KongNueCiFuBuff;
+                            buff.carnageRankCounter += victim.Character.Level;
+                            if (buff.carnageRankCounter > 888)
+                            {
+                                buff.carnageRankCounter -= 888;
+                                Script.SysOut("受赐获得复活次数", attacker);
+                                attackerSkillComponent._lifeResurgenceCount += 1;
+                            }
+                            attackerSkillComponent.StateContainer.UpdateStates(attacker, 0f);
+                            attackerSkillComponent.ChangeStamina(5);
+                            attacker.Health += (attackerSkillComponent.MaxHP - attacker.Health) * 0.5f;
+                        }
+                        if (victimSkillComponent !=null&& victimSkillComponent._lifeResurgenceCount >= 1)
+                        {
+                            Script.SysOut("损失" + victimSkillComponent._lifeResurgenceCount.ToString() + "复活次数", victim);
+                            victimSkillComponent._lifeResurgenceCount -= 1;
+                            victim.Health += victimSkillComponent.MaxHP;
+                        }
+                    }
+
+
                 }
             }
-            
+
+
         }
         public override void OnMeleeHit(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
         {
             base.OnMeleeHit(attacker, victim, isCanceled, collisionData);
-            ExecuteHitEvents(attacker, victim, isCanceled, collisionData);
         }
-
-
 
         public override void OnMissileHit(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
         {
             base.OnMissileHit(attacker, victim, isCanceled, collisionData);
-            ExecuteHitEvents(attacker, victim, isCanceled, collisionData);
             if (WoW_MissileIndex.Contains(collisionData.AffectorWeaponSlotOrMissileIndex))
             {
                 WoW_MissileIndex.Remove(collisionData.AffectorWeaponSlotOrMissileIndex);
@@ -517,19 +592,8 @@ namespace New_ZZZF
         public override void OnAgentHit(Agent affectedAgent, Agent affectorAgent, in MissionWeapon affectorWeapon, in Blow blow, in AttackCollisionData attackCollisionData)
         {
             base.OnAgentHit(affectedAgent, affectorAgent, affectorWeapon,blow, attackCollisionData);
-            ActiveComponents.TryGetValue(affectedAgent.Index, out var affectedComponent);
-            if (affectedComponent != null)
-            {
-                if (affectedComponent.StateContainer.HasState("TianQiBuff"))
-                {
-                    affectedAgent.Health += blow.InflictedDamage;
-                }
-                if (affectedComponent.StateContainer.HasState("ZhanYiBuff"))
-                {
-                    
-                    affectedAgent.Health += (affectedComponent.MaxHP- affectedAgent.Health)*0.5f;
-                }
-            }
+            ExecuteHitEvents(affectorAgent, affectedAgent, affectorWeapon, blow, attackCollisionData);
+
         }
         public override void OnAgentShootMissile(Agent shooterAgent, EquipmentIndex weaponIndex, Vec3 position, Vec3 velocity, Mat3 orientation, bool hasRigidBody, int forcedMissileIndex)
         {

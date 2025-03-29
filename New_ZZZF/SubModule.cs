@@ -118,7 +118,6 @@ namespace New_ZZZF
                 //gameStarterObject.AddModel(new WoW_DefaultClanTierModel());
                 gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
                 gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
-                gameStarterObject.AddModel(new WOW_SandboxAgentStatCalculateModel());
                 gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());
 
             }

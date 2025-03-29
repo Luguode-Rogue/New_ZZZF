@@ -137,16 +137,7 @@ namespace New_ZZZF
             }
             return false;
         }
-        public static Mat3 LookAt(Vec3 eye, Vec3 target)
-        {
-            Vec3 forward = (target - eye).NormalizedCopy();
 
-            Vec3 up = Vec3.Up; // 假设默认的上方向是Y轴正方向
-            Vec3 right = Vec3.CrossProduct(forward, up);
-            Vec3 newUp = Vec3.CrossProduct(right, forward);
-
-            return new Mat3(right, -forward, newUp);
-        }
     }
     public class 暗影步增伤 : AgentBuff
     {

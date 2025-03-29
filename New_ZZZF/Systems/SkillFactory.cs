@@ -8,6 +8,7 @@ using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.Localization;
 using TaleWorlds.MountAndBlade;
+using static New_ZZZF.YingXiongZhuFu;
 
 namespace New_ZZZF
 {
@@ -31,23 +32,25 @@ namespace New_ZZZF
             {"JueXing",new JueXing() },
             {"TianQi",new TianQi() },
             {"GuWu",new GuWu() },
-            //{ "ShieldCharge", new ShieldChargeSkill() },       // 盾牌冲锋
-            //{ "BladeStorm", new BladeStormSkill() },           // 剑刃风暴
+            {"ChaoFeng",new ChaoFeng() },
+            {"DunWu",new DunWu() },
+            {"FengBaoZhiLi",new FengBaoZhiLi() },
+            {"ZhanHao",new ZhanHao() },
+            {"WeiYa",new WeiYa() },
+            {"JingXia",new JingXia() },
+            {"YingXiongZhuFu",new YingXiongZhuFu() },
+            {"KongNueCiFu",new KongNueCiFu() },
             
             //// 副主动技能
             { "Rush", new Rush() },             // Rush
             {"MagicShoot",new MagicShoot() },
-                                                //{ "AdrenalineRush", new AdrenalineRushSkill() },   // 肾上腺素爆发
 
             //// 被动技能
             {"Roll",new Roll() },
-            //{ "IronWill", new IronWillPassive() },             // 钢铁意志（减伤）
-            //{ "CriticalStrike", new CriticalStrikePassive() }, // 暴击被动
             
             //// 法术
             { "Fireball", new FireballSkill() },               // 火球术
             { "lingmashaodi", new lingmashaodi() },               // 
-            //{ "Heal", new HealSkill() },                       // 治疗术
             { "HuiJianYuanZhen", new HuiJianYuanZhen() },               // 辉剑圆阵
 
             

@@ -36,11 +36,13 @@ namespace New_ZZZF
                     if (!SkillSystemBehavior.WoW_AgentRushAgent.ContainsKey(agent.Index))
                     {
                         SkillSystemBehavior.WoW_AgentRushAgent.Add(agent.Index, TAgent);
+                        RushToAgentBuff rushToAgentBuff = new RushToAgentBuff(5f, 0f, agent); // 新实例
+                        rushToAgentBuff.TargetPosition = TAgent.Position;
                         // 每次创建新的状态实例
                         List<AgentBuff> newStates = new List<AgentBuff>
-                        {
-                            new RushToAgentBuff(5f, 0f, agent), // 新实例
-                        };
+                            {
+                               rushToAgentBuff,
+                            };
                         foreach (var state in newStates)
                         {
                             state.TargetAgent = agent;
@@ -58,10 +60,12 @@ namespace New_ZZZF
                         if (!SkillSystemBehavior.WoW_AgentRushAgent.ContainsKey(agent.Index))
                         {
                             SkillSystemBehavior.WoW_AgentRushAgent.Add(agent.Index, agents);
+                            RushToAgentBuff rushToAgentBuff = new RushToAgentBuff(5f, 0f, agent); // 新实例
+                            rushToAgentBuff.TargetPosition = agents.Position;
                             // 每次创建新的状态实例
                             List<AgentBuff> newStates = new List<AgentBuff>
                             {
-                                new RushToAgentBuff(5f, 0f, agent), // 新实例
+                               rushToAgentBuff,
                             };
                             foreach (var state in newStates)
                             {
@@ -79,19 +83,19 @@ namespace New_ZZZF
 
     public class RushToAgentBuff : AgentBuff
     {
-        private float _damagePerSecond;
+        public Vec3 TargetPosition { get; set; }
         private float _timeSinceLastTick;
         public RushToAgentBuff(float duration, float dps, Agent source)
         {
             StateId = "RushToAgentBuff";
             Duration = duration;
-            _damagePerSecond = 0;
             SourceAgent = source;
             _timeSinceLastTick = 0; // 新增初始化
         }
 
         public override void OnApply(Agent agent)
         {
+            agent.SetTargetPosition(TargetPosition.AsVec2);
         }
 
         public override void OnUpdate(Agent agent, float dt)
@@ -110,6 +114,7 @@ namespace New_ZZZF
 
         public override void OnRemove(Agent agent)
         {
+            agent.ClearTargetFrame();
             SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var result);
             if (result != null)
             {

@@ -18,6 +18,7 @@ using TaleWorlds.ObjectSystem;
 using New_ZZZF.Skills;
 using static TaleWorlds.MountAndBlade.Agent;
 using System.Reflection;
+using static TaleWorlds.Core.ItemObject;
 
 namespace New_ZZZF
 {
@@ -346,6 +347,31 @@ namespace New_ZZZF
             Mission.Current.Scene.RayCastForClosestEntityOrTerrain(agent.GetEyeGlobalPosition(), agent.GetEyeGlobalPosition() + MultiplyVectorByScalar(agent.LookDirection, 5000f), out f, out vec3);
 
             return vec3;
+        }
+        public static bool IsRangeWeapon(ItemObject item)
+        {
+            return !(item.Type == ItemTypeEnum.Horse || item.Type == ItemTypeEnum.Polearm || item.Type == ItemTypeEnum.Shield || item.Type == ItemTypeEnum.OneHandedWeapon || item.Type == ItemTypeEnum.TwoHandedWeapon);
+        }
+        /// <summary>
+        /// 获得输入agent当前手持武器的MissionWeapon版
+        /// </summary>
+        /// <param name="agent"></param>
+        /// <param name="missionWeapon"></param>
+        /// <returns></returns>
+        public static bool AgentGetCurrentWeapon(Agent agent,out MissionWeapon missionWeapon)
+        {                 // 获取Agent主手中武器的Index索引
+            EquipmentIndex mainHandIndex = agent.GetWieldedItemIndex(Agent.HandIndex.MainHand);
+            if (mainHandIndex == EquipmentIndex.None)
+            {
+                SysOut("无有效武器", agent);
+                missionWeapon =MissionWeapon.Invalid;
+                return false;
+            }
+
+            // EquipmentIndex转MissionWeapon
+            MissionWeapon mainHandEquipmentElement = agent.Equipment[mainHandIndex];
+            missionWeapon = mainHandEquipmentElement;
+            return true;
         }
         /// <summary>
         /// agent朝目视方向射击，勉强可用，比实际落点要低要近,需要删掉游戏配置里的空气阻力，删除后正常
