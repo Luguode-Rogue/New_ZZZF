@@ -18,6 +18,7 @@ using TaleWorlds.ScreenSystem;
 using static New_ZZZF.AgentSkillComponent;
 using static New_ZZZF.KongNueCiFu;
 using static TaleWorlds.PlayerServices.Avatar.AvatarData;
+using MathF = TaleWorlds.Library.MathF;
 
 namespace New_ZZZF
 {
@@ -25,27 +26,27 @@ namespace New_ZZZF
     /// 负责全局管理技能系统的 Mission 行为..\..\..\
     /// 核心职责：监听Agent创建事件并挂载技能组件
     /// </summary>
- 
+
     public class SkillSystemBehavior : MissionLogic
     {
 
         /// <summary>
         /// activeComponents绑定了agent的新属性
         /// </summary>
-        private  readonly List<AgentSkillComponent> _activeComponents = new List<AgentSkillComponent>();
-        public static Dictionary<int,AgentSkillComponent> ActiveComponents = new Dictionary<int,AgentSkillComponent>();
+        private readonly List<AgentSkillComponent> _activeComponents = new List<AgentSkillComponent>();
+        public static Dictionary<int, AgentSkillComponent> ActiveComponents = new Dictionary<int, AgentSkillComponent>();
 
 
-        public static Dictionary<float, GameEntity> WoW_Line = new Dictionary<float, GameEntity >()
+        public static Dictionary<float, GameEntity> WoW_Line = new Dictionary<float, GameEntity>()
         {
 
-        
+
         }
         ;
 
         //辉剑圆阵类制导追踪
         public static Dictionary<GameEntity, ProjectileData> WoW_ProjectileDB = new Dictionary<GameEntity, ProjectileData>();
-        public static List<GameEntity> WoW_CustomGameEntity = new List<GameEntity>() { };   
+        public static List<GameEntity> WoW_CustomGameEntity = new List<GameEntity>() { };
         // 定义一个计时器变量
         // 定义触发间隔时间（0.5秒）
         private float _tickTimer05 = 0.0f;
@@ -98,9 +99,9 @@ namespace New_ZZZF
                 skillComponent.InitializeFromTroop(troopId);
                 _activeComponents.Add(skillComponent);
                 ActiveComponents.Add(agent.Index, skillComponent);
-                
 
-                InformationManager.DisplayMessage(new InformationMessage("[技能系统] Agent"+ agent.Name+" 已绑定技能组件"));
+
+                InformationManager.DisplayMessage(new InformationMessage("[技能系统] Agent" + agent.Name + " 已绑定技能组件"));
             }
             catch (Exception ex)
             {
@@ -114,7 +115,7 @@ namespace New_ZZZF
         private string GetTroopId(Agent agent)
         {
             // 战役模式中Hero对象的处理
-            
+
             if (Game.Current.GameType is Campaign && agent.IsHero)
             {
                 Hero? hero = (agent.Character as CharacterObject)?.HeroObject;
@@ -157,7 +158,7 @@ namespace New_ZZZF
                 InformationManager.DisplayMessage(new InformationMessage(GameTexts.FindText((base.Mission.Mode == MissionMode.Battle || base.Mission.Mode == MissionMode.Duel) ? "str_cannot_reach_inventory_during_battle" : "str_cannot_reach_inventory", null).ToString()));
                 return;
             }
-            if (Mission.Current!=null&&Mission.MainAgent!=null&&Input.IsKeyPressed(InputKey.L))
+            if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyPressed(InputKey.L))
             {
                 //Agent agent =Script.FindClosestAgentToCaster(Agent.Main, Mission.Current.Agents);
                 for (int i = 0; i < 20; i++)
@@ -168,14 +169,14 @@ namespace New_ZZZF
             if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyPressed(InputKey.O))
             {
                 Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
-                
+
                 foreach (var agent in Mission.Current.Agents)
                 {
                     if (agent.HasMount)
-                    {       agent.MountAgent.SetTargetPosition(foeAgent[0].GetEyeGlobalPosition().AsVec2); }
-                    if (foeAgent.Count > 0&&agent.Index!=Agent.Main.Index)
+                    { agent.MountAgent.SetTargetPosition(foeAgent[0].GetEyeGlobalPosition().AsVec2); }
+                    if (foeAgent.Count > 0 && agent.Index != Agent.Main.Index)
                     {
-                        agent.SetTargetPositionAndDirection(Agent.Main.GetEyeGlobalPosition().AsVec2,Agent.Main.LookDirection);
+                        agent.SetTargetPositionAndDirection(Agent.Main.GetEyeGlobalPosition().AsVec2, Agent.Main.LookDirection);
                         agent.ClearTargetFrame();
                         //WorldPosition worldPosition = agent.GetRetreatPos();
                         //worldPosition = agent.GetWorldPosition();
@@ -184,7 +185,7 @@ namespace New_ZZZF
                         vec3.y += 10;
                         Vec2 vec2 = -Agent.Main.LookDirection.AsVec2;
                         agent.SetInitialFrame(vec3, vec2);
-                        agent.SetActionChannel(1, ActionIndexCache.Create("act_reload_crossbow"),false, 172UL);
+                        agent.SetActionChannel(1, ActionIndexCache.Create("act_reload_crossbow"), false, 172UL);
                     }
                 }
             }
@@ -262,7 +263,7 @@ namespace New_ZZZF
             }
             if (_tickTimer001 >= TickInterval_001)
             {
-                _tickTimer001 -= TickInterval_001; 
+                _tickTimer001 -= TickInterval_001;
                 foreach (GameEntity missileEntity in WoW_CustomGameEntity.ToList())
                 {
                     if (!WoW_ProjectileDB.TryGetValue(missileEntity, out ProjectileData data))
@@ -277,7 +278,7 @@ namespace New_ZZZF
                     Vec3 currentPos = missileEntity.GlobalPosition;
                     Mat3 currentRotation = missileEntity.GetGlobalFrame().rotation;
                     Vec3 currentDirection = currentRotation.f;
-                    Vec3 targetPos=new Vec3();
+                    Vec3 targetPos = new Vec3();
                     // 计算目标方向
                     if (data.TargetAgent != null)
                     {
@@ -349,7 +350,7 @@ namespace New_ZZZF
                     // 距离判定（使用文档中的Distance方法）
                     if (currentPos.Distance(targetPos) < 0.5f)
                     {
-                        if (data.Name=="HuiJianYuanZhen") { HuiJianYuanZhen.HuiJianYuanZhenDamage(missileEntity); }
+                        if (data.Name == "HuiJianYuanZhen") { HuiJianYuanZhen.HuiJianYuanZhenDamage(missileEntity); }
                         missileEntity.Remove(1);
                         WoW_ProjectileDB.Remove(missileEntity);
                         WoW_CustomGameEntity.Remove(missileEntity);
@@ -387,7 +388,7 @@ namespace New_ZZZF
             }
             foreach (AgentSkillComponent agent in _activeComponents)
             {
-                
+
                 Agent TAgent;
                 //平滑移动的实现部分
                 if (WoW_AgentRushAgent.TryGetValue(agent.AgentInstance.Index, out TAgent))
@@ -400,8 +401,8 @@ namespace New_ZZZF
                     {
 
                         WoW_AgentRushAgent.Remove(agent.AgentInstance.Index); // 停止冲刺
-                        agent.StateContainer.RemoveState("RushToAgentBuff",agent.BaseAgent);
-            }
+                        agent.StateContainer.RemoveState("RushToAgentBuff", agent.BaseAgent);
+                    }
                     else
                     {
                         // 否则，向目标位置移动指定的距离
@@ -409,7 +410,7 @@ namespace New_ZZZF
                         Vec3 newPosition = agent.AgentInstance.Position + Script.MultiplyVectorByScalar(directionToTarget.NormalizedCopy(), distanceToMove);
                         agent.AgentInstance.TeleportToPosition(newPosition);
 
-        }
+                    }
                 }
                 Vec3 vec3;
                 if (WoW_AgentRushPos.TryGetValue(agent.AgentInstance.Index, out vec3))
@@ -418,11 +419,11 @@ namespace New_ZZZF
 
                     float _dashSpeed = 15f; // 速度，单位为米/秒
                     float distanceToMove = _dashSpeed * dt;
-                    if (directionToTarget.AsVec2.Length < 1f  || !agent.StateContainer.HasState("RushToPosBuff"))
+                    if (directionToTarget.AsVec2.Length < 1f || !agent.StateContainer.HasState("RushToPosBuff"))
                     {
 
                         WoW_AgentRushPos.Remove(agent.AgentInstance.Index); // 停止冲刺
-                        agent.StateContainer.RemoveState("RushToPosBuff",agent.AgentInstance);
+                        agent.StateContainer.RemoveState("RushToPosBuff", agent.AgentInstance);
                         if (agent.AgentInstance.GetCurrentAction(0).Name == "act_horse_fall_roll")
                         {
                             agent.AgentInstance.GetCurrentActionProgress(0);
@@ -446,7 +447,7 @@ namespace New_ZZZF
         public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow)
         {
             base.OnAgentRemoved(affectedAgent, affectorAgent, agentState, blow);
-            if (affectedAgent != null&&!affectedAgent.IsMount)
+            if (affectedAgent != null && !affectedAgent.IsMount)
             {
                 // 清理失效的组件引用
                 var comp = affectedAgent.GetComponent<AgentSkillComponent>();
@@ -489,39 +490,46 @@ namespace New_ZZZF
         }
         private void ExecuteHitEvents(Agent attacker, Agent victim, MissionWeapon affectorWeapon, Blow blow, AttackCollisionData collisionData)
         {
+            Random random = new Random();
             if (attacker != null)
             {
                 ActiveComponents.TryGetValue(attacker.Index, out var attackerSkillComponent);
                 ActiveComponents.TryGetValue(attacker.Index, out var victimSkillComponent);
-  
                 //非击杀处理
                 //不能先处理击杀事件，不然会先消耗复活次数再消耗护盾
                 ActiveComponents.TryGetValue(victim.Index, out victimSkillComponent);
                 if (victimSkillComponent != null)
                 {
-                    if (victimSkillComponent._shieldStrength>0)
+                    if (victimSkillComponent._shieldStrength > 0)
                     {
                         if (victimSkillComponent._shieldStrength >= blow.InflictedDamage)
                         {
                             Script.SysOut("损失" + blow.InflictedDamage.ToString() + "点护盾，并抵消同等伤害", victim);
                             victimSkillComponent._shieldStrength -= blow.InflictedDamage;
-                            victim.Health += blow.InflictedDamage;
+                            victim.Health = MathF.Clamp(victim.Health + blow.InflictedDamage,0,victimSkillComponent.MaxHP); 
                         }
                         else
                         {
                             Script.SysOut("损失" + victimSkillComponent._shieldStrength.ToString() + "点护盾，并抵消同等伤害", victim);
-                            victim.Health += victimSkillComponent._shieldStrength;
-                            victimSkillComponent._shieldStrength =0;
-                            
+                            victim.Health = MathF.Clamp(victimSkillComponent._shieldStrength , 0, victimSkillComponent.MaxHP);
+                            victimSkillComponent._shieldStrength = 0;
+
+                        }
+                        return;
+                    }
+                    if (victimSkillComponent.StateContainer.HasState("NaGouCiFuBuff"))
+                    {
+                        if (random.NextFloat() <= 0.5f)
+                        {
+                            victim.Health += Math.Max(blow.InflictedDamage, victimSkillComponent.MaxHP);
                         }
                     }
-
                     if (victimSkillComponent.StateContainer.HasState("TianQiBuff"))
                     {
-                        victim.Health +=Math.Max(blow.InflictedDamage, victimSkillComponent.MaxHP) ;
+                        victim.Health += Math.Max(blow.InflictedDamage, victimSkillComponent.MaxHP);
                     }
 
-                }              
+                }
                 //击杀事件处理
                 if (attackerSkillComponent != null)
                 {
@@ -551,7 +559,7 @@ namespace New_ZZZF
                             attackerSkillComponent.ChangeStamina(5);
                             attacker.Health += (attackerSkillComponent.MaxHP - attacker.Health) * 0.5f;
                         }
-                        if (victimSkillComponent !=null&& victimSkillComponent._lifeResurgenceCount >= 1)
+                        if (victimSkillComponent != null && victimSkillComponent._lifeResurgenceCount >= 1)
                         {
                             Script.SysOut("损失" + victimSkillComponent._lifeResurgenceCount.ToString() + "复活次数", victim);
                             victimSkillComponent._lifeResurgenceCount -= 1;
@@ -591,7 +599,7 @@ namespace New_ZZZF
         /// <param name="attackCollisionData"></param>
         public override void OnAgentHit(Agent affectedAgent, Agent affectorAgent, in MissionWeapon affectorWeapon, in Blow blow, in AttackCollisionData attackCollisionData)
         {
-            base.OnAgentHit(affectedAgent, affectorAgent, affectorWeapon,blow, attackCollisionData);
+            base.OnAgentHit(affectedAgent, affectorAgent, affectorWeapon, blow, attackCollisionData);
             ExecuteHitEvents(affectorAgent, affectedAgent, affectorWeapon, blow, attackCollisionData);
 
         }
@@ -600,7 +608,7 @@ namespace New_ZZZF
             base.OnAgentShootMissile(shooterAgent, weaponIndex, position, velocity, orientation, hasRigidBody, forcedMissileIndex);
             MissionWeapon missionWeapon = shooterAgent.Equipment[weaponIndex];
             float speed = velocity.Length;
-            AgentMissileSpeedData agentMissileSpeedData = new AgentMissileSpeedData(missionWeapon, speed ,shooterAgent);
+            AgentMissileSpeedData agentMissileSpeedData = new AgentMissileSpeedData(missionWeapon, speed, shooterAgent);
             if (!WoW_AgentMissileSpeedData.ContainsKey(shooterAgent.Index))
             {
                 List<AgentMissileSpeedData> list = new List<AgentMissileSpeedData>();
@@ -631,7 +639,7 @@ namespace New_ZZZF
             }
 
 
-            
+
 
         }
         private static void DestroyProjectile(GameEntity proj)

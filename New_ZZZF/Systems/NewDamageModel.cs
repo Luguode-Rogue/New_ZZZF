@@ -56,6 +56,10 @@ namespace New_ZZZF
                 {
                     native = native * (1 + 2f);
                 }
+                if (result.StateContainer.HasState("NaGouCiFuBuff"))
+                {
+                    native = native * (1 + 0.5f);
+                }
                 if (result.StateContainer.HasState("FengBaoZhiLiBuff"))
                 {
                     Script.AgentGetCurrentWeapon(agent, out var missionWeapon);

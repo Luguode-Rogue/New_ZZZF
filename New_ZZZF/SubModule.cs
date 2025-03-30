@@ -32,10 +32,10 @@ namespace New_ZZZF
         }
         public override void OnNewGameCreated(Game game, object initializerObject)
         {
-            base.OnNewGameCreated(game,initializerObject);
+            base.OnNewGameCreated(game, initializerObject);
             SkillFactory.SkillToItemObject();
             SkillConfigManager.Instance._troopSkillMap.Clear();
-            if (!(SkillConfigManager.Instance._troopSkillMap!=null&& SkillConfigManager.Instance._troopSkillMap.Count>1))
+            if (!(SkillConfigManager.Instance._troopSkillMap != null && SkillConfigManager.Instance._troopSkillMap.Count > 1))
             {
                 try
                 {
@@ -53,28 +53,23 @@ namespace New_ZZZF
             }
 
         }
+        protected override  void OnGameStart(Game game, IGameStarter gameStarterObject)
+        {
+            base.OnGameStart(game, gameStarterObject);
+
+        
+        }
         public override void OnGameLoaded(Game game, object gameStarterObject)
         {
             base.OnGameLoaded(game, gameStarterObject);
             if (game.GameType is Campaign)
             {
                 CampaignGameStarter campaignGameStarter = gameStarterObject as CampaignGameStarter;
-                //campaignGameStarter.AddBehavior(new HeroSkillSvaeCustomBehavior());
+                
             }
             SkillFactory.SkillToItemObject();
-            try
-            {
-                // 初始化技能配置管理器并加载XML
-                string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
-                SkillConfigManager.Instance.LoadFromXml(xmlPath);
 
-                // 调试日志
-                Debug.Print("[New_ZZZF] 技能配置加载完成！");
-        }
-            catch (Exception ex)
-        {
-                Debug.Print($"[New_ZZZF] 配置加载失败: {ex.Message}");
-        }
+            SkillConfigManager.Instance._troopSkillMap.Clear();
         }
         public override void OnMissionBehaviorInitialize(Mission mission)
         {
@@ -120,6 +115,9 @@ namespace New_ZZZF
                 gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
                 gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());
 
+                CampaignGameStarter campaignGameStarter = gameStarterObject as CampaignGameStarter;
+                campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
+
             }
         }
         protected override void OnApplicationTick(float dt)
@@ -142,7 +140,7 @@ namespace New_ZZZF
 
 
                 }
-                if (Input.IsKeyPressed(InputKey.L) )
+                if (Input.IsKeyPressed(InputKey.L))
                 {
                     MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
 

@@ -18,6 +18,7 @@ using static New_ZZZF.ZhanHao;
 using static New_ZZZF.WeiYa;
 using static New_ZZZF.YingXiongZhuFu;
 using static New_ZZZF.KongNueCiFu;
+using static New_ZZZF.NaGouCiFu;
 
 namespace New_ZZZF.Systems
 {
@@ -134,6 +135,17 @@ namespace New_ZZZF.Systems
                         agent.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 2f;
                         agent.AgentDrivenProperties.AttributeHorseArchery *= 2f;
                         agent.AgentDrivenProperties.AttributeCourage *= 2f;
+                    }
+                }
+                if (result.StateContainer.HasState("NaGouCiFuBuff"))
+                {
+                    NaGouCiFuBuff buff = result.StateContainer.GetState("NaGouCiFuBuff") as NaGouCiFuBuff;
+                    if (buff != null)
+                    {
+                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
+                        agent.AgentDrivenProperties.TopSpeedReachDuration *= 2f;
+                        agent.AgentDrivenProperties.MaxSpeedMultiplier /= 2f;
+                        agent.AgentDrivenProperties.CombatMaxSpeedMultiplier /= 2f;
                     }
                 }
                 if (result.StateContainer.HasState("ZhanHaoBuff"))

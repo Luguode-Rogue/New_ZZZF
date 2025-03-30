@@ -976,11 +976,19 @@ namespace New_ZZZF
         public static void CalculateFinalMagicDamage(Agent Caster, Agent Victim, float BaseDamage, String DamageType)
         {
             SkillSystemBehavior.ActiveComponents.TryGetValue(Victim.Index, out var affectedComponent);
+            SkillSystemBehavior.ActiveComponents.TryGetValue(Caster.Index, out var attackerComponent);
             if (affectedComponent != null)
             {
                 if (affectedComponent.StateContainer.HasState("TianQiBuff"))
                 {
                     return;
+                }
+            }
+            if (attackerComponent != null)
+            {
+                if (attackerComponent.StateContainer.HasState("JianQiCiFuBuff"))
+                {
+                   
                 }
             }
             float DifHP = Victim.Health;

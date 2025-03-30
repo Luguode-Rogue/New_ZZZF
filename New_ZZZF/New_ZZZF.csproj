@@ -30,6 +30,96 @@
       <HintPath>%(Identity)</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Bannerlord.ButterLib">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.0.0">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.0.0.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.0.1">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.0.1.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.0.2">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.0.2.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.0.3">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.0.3.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.0">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.0.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.1">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.1.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.2">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.2.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.3">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.3.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.4">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.4.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.5">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.5.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.4">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.4.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.5">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.5.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.6">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.6.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.7">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.7.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.8">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.8.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.9">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.9.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Models">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Models.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Renderer.Html">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Renderer.Html.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Renderer.ImGui">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Renderer.ImGui.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Renderer.WinForms">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Renderer.WinForms.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Renderer.Zip">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Renderer.Zip.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Bcl.HashCode">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Bcl.HashCode.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.DependencyInjection">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.DependencyInjection.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.Logging.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Options">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.Options.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Primitives">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.Primitives.dll</HintPath>
+    </Reference>
     <Reference Include="SandBox">
       <HintPath>..\..\..\SandBox\bin\Win64_Shipping_Client\SandBox.dll</HintPath>
     </Reference>
@@ -48,6 +138,15 @@
     <Reference Include="SandBox.ViewModelCollection">
       <HintPath>..\..\..\SandBox\bin\Win64_Shipping_Client\SandBox.ViewModelCollection.dll</HintPath>
     </Reference>
+    <Reference Include="Serilog">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Serilog.dll</HintPath>
+    </Reference>
+    <Reference Include="Serilog.Extensions.Logging">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Serilog.Extensions.Logging.dll</HintPath>
+    </Reference>
+    <Reference Include="Serilog.Sinks.File">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Serilog.Sinks.File.dll</HintPath>
+    </Reference>
     <Reference Include="StoryMode">
       <HintPath>..\..\..\StoryMode\bin\Win64_Shipping_Client\StoryMode.dll</HintPath>
     </Reference>
@@ -62,6 +161,24 @@
     </Reference>
     <Reference Include="StoryMode.ViewModelCollection">
       <HintPath>..\..\..\StoryMode\bin\Win64_Shipping_Client\StoryMode.ViewModelCollection.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Collections.Immutable.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reflection.Metadata">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Reflection.Metadata.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
     </Reference>
     <Reference Include="TaleWorlds.AchievementSystem">
       <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.AchievementSystem.dll</HintPath>

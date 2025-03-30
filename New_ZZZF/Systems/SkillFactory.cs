@@ -40,6 +40,8 @@ namespace New_ZZZF
             {"JingXia",new JingXia() },
             {"YingXiongZhuFu",new YingXiongZhuFu() },
             {"KongNueCiFu",new KongNueCiFu() },
+            {"NaGouCiFu",new NaGouCiFu() },
+            {"JianQiCiFu",new JianQiCiFu() },
             
             //// 副主动技能
             { "Rush", new Rush() },             // Rush
@@ -128,7 +130,8 @@ namespace New_ZZZF
                 SkillID = "NullSkill";
                 Type = SkillType.Passive; // 设为被动避免意外触发
                 Cooldown = 0;
-                ResourceCost = 0;
+                ResourceCost = 0; 
+                Text = new TaleWorlds.Localization.TextObject("{=ZZZF0000}Wu");
             }
 
             public override bool Activate(Agent agent)

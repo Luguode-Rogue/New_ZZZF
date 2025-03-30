@@ -6,13 +6,14 @@ using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using static New_ZZZF.SkillFactory;
 using TaleWorlds.SaveSystem;
+using SandBox.Objects.Usables;
 
 namespace New_ZZZF
 {
     /// <summary>
     /// 兵种技能配置管理器（单例模式）
     /// </summary>
-    [SaveableRootClass(1)]
+    
     public sealed class SkillConfigManager
     {
         // 单例实例
@@ -92,7 +93,35 @@ namespace New_ZZZF
             }
  
         }
+        public static List<string> ToStringList(SkillSet skillSet)
+        {
+            SkillFactory._skillRegistry.TryGetValue("NullSkill", out SkillBase skillBase);
+            List<string> list = new List<string>();
+            list.Add(skillSet.MainActive!=null? skillSet.MainActive.SkillID: skillBase.SkillID);
+            list.Add(skillSet.SubActive != null ? skillSet.SubActive.SkillID : skillBase.SkillID);
+            list.Add(skillSet.Passive != null ? skillSet.Passive.SkillID : skillBase.SkillID);
+            list.Add(skillSet.CombatArt != null ? skillSet.CombatArt.SkillID : skillBase.SkillID);
+            list.Add(skillSet.Spells[0] != null ? skillSet.Spells[0].SkillID : skillBase.SkillID);
+            list.Add(skillSet.Spells[1] != null ? skillSet.Spells[1].SkillID : skillBase.SkillID);
+            list.Add(skillSet.Spells[2] != null ? skillSet.Spells[2].SkillID : skillBase.SkillID);
+            list.Add(skillSet.Spells[3] != null ? skillSet.Spells[3].SkillID : skillBase.SkillID);
+            return list;
+        }
+        public static SkillSet ListToSkillSet(List<string> list)
+        {
 
+            SkillSet skillSet = new SkillSet();
+  
+                skillSet.MainActive = SkillConfigManager.Instance.ParseSkill(list[0]);
+                skillSet.SubActive = SkillConfigManager.Instance.ParseSkill(list[1]);
+                skillSet.Passive = SkillConfigManager.Instance.ParseSkill(list[2]);
+                skillSet.CombatArt = SkillConfigManager.Instance.ParseSkill(list[3]);
+                skillSet.Spells[0] = SkillConfigManager.Instance.ParseSkill(list[4]);
+                skillSet.Spells[1] = SkillConfigManager.Instance.ParseSkill(list[5]);
+                skillSet.Spells[2] = SkillConfigManager.Instance.ParseSkill(list[6]);
+                skillSet.Spells[3] = SkillConfigManager.Instance.ParseSkill(list[7]);
+            return skillSet;
+        }
         /// <summary>
         /// 将技能ID转换为SkillBase实例
         /// </summary>
