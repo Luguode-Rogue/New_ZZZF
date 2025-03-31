@@ -22,7 +22,7 @@ namespace New_ZZZF
             ResourceCost = 30f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0029}ZhanHao");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0030}群体状态，使用后附近士兵获得战嚎状态，提升20%全战斗能力。消耗耐力：50。持续时间：30秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0030}群体状态，使用后附近士兵获得战嚎状态，提升20%全战斗能力。消耗耐力：50。持续时间：30秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {

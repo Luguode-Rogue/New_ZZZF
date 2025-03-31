@@ -21,7 +21,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0015}ZhanYi");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0016}开启后获得战意状态，每秒回复5耐力，并且击杀敌方单位后，恢复50%自身已损失血量。按当前耐力值增加等量的伤害加成与速度加成。基础持续8秒，每次击杀敌方单位后，持续时间重置为8秒。如果持续时间大于8秒时造成击杀，则持续时间加1秒。消耗耐力：0。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0016}开启后获得战意状态，每秒回复5耐力，并且击杀敌方单位后，恢复50%自身已损失血量。按当前耐力值增加等量的伤害加成与速度加成。基础持续8秒，每次击杀敌方单位后，持续时间重置为8秒。如果持续时间大于8秒时造成击杀，则持续时间加1秒。消耗耐力：0。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {

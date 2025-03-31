@@ -22,7 +22,7 @@ namespace New_ZZZF
             ResourceCost = 60f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0027}FengBaoZhiLi");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0028}群体状态，使用后附近士兵获得风暴之力状态，提升200%射击精度与远程伤害，并有概率额外附加50伤害。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0028}群体状态，使用后附近士兵获得风暴之力状态，提升200%射击精度与远程伤害，并有概率额外附加50伤害。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {

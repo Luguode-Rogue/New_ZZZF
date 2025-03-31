@@ -61,7 +61,7 @@ namespace New_ZZZF
     //}
     internal class HeroSkillSaveCustomBehavior : CampaignBehaviorBase
     {
-        public Dictionary<string, SkillSet> troopSkillMap = SkillConfigManager.Instance._troopSkillMap;
+        public Dictionary<string, SkillSet> troopSkill = SkillConfigManager.Instance._troopSkillMap;
         public Dictionary<string, List<string>> _troopSkillMap = new Dictionary<string, List<string>>();
         public override void SyncData(IDataStore dataStore)
         {
@@ -80,7 +80,6 @@ namespace New_ZZZF
                 {
                     SkillConfigManager.Instance._troopSkillMap[item.Key] = SkillConfigManager.ListToSkillSet(item.Value);
                 }
-                //SkillConfigManager.Instance._troopSkillMap = _troopSkillMap;
 
             }
         }

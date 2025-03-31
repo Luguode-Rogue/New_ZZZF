@@ -21,7 +21,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0019}TianQi");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0020}开启后回满血量，并获得近乎无敌的状态，免疫物理与魔法伤害，并获得100%的伤害提升。濒死时自动无消耗触发，但持续时间减半，冷却时间加倍。消耗耐力：50。持续时间：30秒。冷却时间：60秒。非英雄使用时，持续与冷却减半");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0020}开启后回满血量，并获得近乎无敌的状态，免疫物理与魔法伤害，并获得100%的伤害提升。濒死时自动无消耗触发，但持续时间减半，冷却时间加倍。消耗耐力：50。持续时间：30秒。冷却时间：60秒。非英雄使用时，持续与冷却减半");
         }
         public override bool Activate(Agent agent)
         {

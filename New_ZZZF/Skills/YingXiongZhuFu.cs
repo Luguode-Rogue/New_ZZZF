@@ -22,7 +22,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0035}YingXiongZhuFu");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0036}群体状态，使用后附近士兵获得祝福状态，回复全部血量并获得一次死而复生的机会。提高100%造成的伤害，每秒增加2点耐力。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0036}群体状态，使用后附近士兵获得祝福状态，回复全部血量并获得一次死而复生的机会。提高100%造成的伤害，每秒增加2点耐力。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {

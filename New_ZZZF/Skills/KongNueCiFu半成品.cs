@@ -21,7 +21,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0037}KongNueCiFu");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0038}开启后，攻击必定突破格挡，" +
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0038}开启后，攻击必定突破格挡，" +
                 "并且可以贯穿多人，移除贯穿减伤。耐力回复+10，魔力回复-10，提升200%伤害与近战攻速/移速。" +
                 "造成击杀时，回复已损失血量的50%，且额外获得5耐力，并延长持续时间1秒。" +
                 "累计击杀888等级的敌人后，获得1次复活。消耗耐力：50。持续时间：30秒。冷却时间：60秒。");

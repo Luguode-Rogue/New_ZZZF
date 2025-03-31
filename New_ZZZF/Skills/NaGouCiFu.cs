@@ -23,7 +23,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0039}NaGouCiFu");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject(
+            Description = new TaleWorlds.Localization.TextObject(
                 "{=ZZZF0040}群体状态，使用后附近士兵获得瘟疫赐福，每秒扣除10%最大血量并转化为护盾，但获得3次死而复生的机会。扣除生命值不会致死，且转化护盾会继续持续5秒。" +
                 "提高50%造成的伤害，降低50%移动速度，受到物理伤害时50%免疫此次伤害。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
         }

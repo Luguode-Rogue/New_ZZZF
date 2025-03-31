@@ -23,7 +23,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0023}ChaoFeng");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0024}嘲讽附近敌方单位，并持续大幅回复自身血量。受到嘲讽的单位会持续靠近施法者。持续时间：30秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0024}嘲讽附近敌方单位，并持续大幅回复自身血量。受到嘲讽的单位会持续靠近施法者。持续时间：30秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {                    

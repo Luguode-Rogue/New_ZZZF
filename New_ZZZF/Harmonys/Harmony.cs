@@ -17,10 +17,43 @@ using TaleWorlds.Engine;
 using MathF = TaleWorlds.Library.MathF;
 using TaleWorlds.MountAndBlade.ComponentInterfaces;
 using System.Reflection;
+using TaleWorlds.Core.ViewModelCollection;
+using TaleWorlds.CampaignSystem.ViewModelCollection.Inventory;
+using TaleWorlds.CampaignSystem.Extensions;
+using TaleWorlds.CampaignSystem;
 namespace New_ZZZF.Harmonys
 {
 
+    [HarmonyPatch(typeof(ItemPreviewVM), "Open")]
+    public class ItemPreviewVMPatch
+    {
+        // 原始方法的前缀补丁
+        [HarmonyPrefix]
+        
+        public static bool Open_Prefix(ItemPreviewVM __instance, EquipmentElement item)
+        {
+            string s = "";
+            // 自定义逻辑：在调用原始方法之前执行
 
+
+            __instance.ItemTableau.FillFrom(item, BannerCode.CreateFrom(Clan.PlayerClan.Banner).Code);
+            __instance.ItemName = item.Item.Name.ToString();
+            __instance.IsSelected = true;
+
+            if (SkillFactory._skillRegistry.TryGetValue(item.Item.StringId, out var skillBase))
+            {
+                if (skillBase.Description != null)
+                {
+                    s = item.Item.StringId;
+                    __instance.ItemName = skillBase.Description.ToString();
+                }
+            }
+
+            // 如果返回true，则继续执行原始方法；如果返回false，则跳过原始方法
+            return false;
+        }
+
+    }
     //// 针对 MeleeHitCallback 的 Harmony 补丁
     //[HarmonyPatch(typeof(Mission), "MeleeHitCallback")]
     //public static class MeleeHitCallbackPatch

@@ -23,7 +23,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0031}WeiYa");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0032}群体负面状态，影响所有敌方单位，但施法者等级低于敌方太多时将不生效。降低敌方50%移动能力/伤害加成/射击精度。消耗耐力：50。持续时间：45秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0032}群体负面状态，影响所有敌方单位，但施法者等级低于敌方太多时将不生效。降低敌方50%移动能力/伤害加成/射击精度。消耗耐力：50。持续时间：45秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {

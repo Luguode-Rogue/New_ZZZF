@@ -23,7 +23,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0033}JingXia");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0034}群体负面状态，持续影响附近敌方单位。受到惊吓的敌人将不受控制的远离施法者。对英雄单位无影响，施法者等级低于敌方太多时将不生效。消耗耐力：20。持续时间：10秒。冷却时间：20");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0034}群体负面状态，持续影响附近敌方单位。受到惊吓的敌人将不受控制的远离施法者。对英雄单位无影响，施法者等级低于敌方太多时将不生效。消耗耐力：20。持续时间：10秒。冷却时间：20");
         }
         public override bool Activate(Agent agent)
         {

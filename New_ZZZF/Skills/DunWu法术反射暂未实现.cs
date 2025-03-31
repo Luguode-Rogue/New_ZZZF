@@ -23,7 +23,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0025}DunWu");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0026}开启后每秒回蓝+10，同时清除法术cd。被反射法术伤害时，不会受到反射伤害。持续时间：10秒。冷却时间：10秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0026}开启后每秒回蓝+10，同时清除法术cd。被反射法术伤害时，不会受到反射伤害。持续时间：10秒。冷却时间：10秒。");
         }
         public override bool Activate(Agent agent)
         {                    

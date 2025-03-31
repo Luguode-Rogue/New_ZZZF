@@ -22,7 +22,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0017}JueXing");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            base.Description = new TaleWorlds.Localization.TextObject("{=ZZZF0018}开启后获得觉醒状态，按当前耐力值增加少量的伤害加成与大量的速度加成。持续时间无限，但开启后每秒扣除4耐力，耐力不足时自动停止。每有30耐力，额外特技冷却时间加速100%，并每秒额外扣除1耐力。消耗耐力：0。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0018}开启后获得觉醒状态，按当前耐力值增加少量的伤害加成与大量的速度加成。持续时间无限，但开启后每秒扣除4耐力，耐力不足时自动停止。每有30耐力，额外特技冷却时间加速100%，并每秒额外扣除1耐力。消耗耐力：0。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {
