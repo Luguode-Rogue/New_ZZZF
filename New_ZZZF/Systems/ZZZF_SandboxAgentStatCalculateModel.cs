@@ -19,6 +19,9 @@ using static New_ZZZF.WeiYa;
 using static New_ZZZF.YingXiongZhuFu;
 using static New_ZZZF.KongNueCiFu;
 using static New_ZZZF.NaGouCiFu;
+using TaleWorlds.InputSystem;
+using TaleWorlds.MountAndBlade.View.Screens;
+using TaleWorlds.ScreenSystem;
 
 namespace New_ZZZF.Systems
 {
@@ -51,6 +54,21 @@ namespace New_ZZZF.Systems
             SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var result);
             if (result != null)
             {
+                MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+                if (missionScreen!=null&&missionScreen.SceneLayer.Input.IsGameKeyPressed(14))
+                {
+                    Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 2;
+                    Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 2;
+                    SkillSystemBehavior.ActiveComponents.TryGetValue(Agent.Main.Index, out var resultMain);
+                    resultMain.ChangeStamina(-5);
+
+                }
+                if (missionScreen!=null&&missionScreen.SceneLayer.Input.IsGameKeyReleased(14))
+                {
+                    Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 1;
+                    Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 1;
+
+                }
                 if (result.StateContainer.HasState("ZhanYiBuff"))
                 {
                     ZhanYiBuff buff = result.StateContainer.GetState("ZhanYiBuff") as ZhanYiBuff;

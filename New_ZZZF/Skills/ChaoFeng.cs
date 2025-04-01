@@ -39,7 +39,6 @@ namespace New_ZZZF
             {
                 foreach (var item in values)
                 {
-                    item.PlayParticleEffect("fire_burning");
                     // 每次创建新的状态实例
                     newStates = new List<AgentBuff> { new ChaoFengBuffApplyToEnemy(30f, agent), }; // 新实例
                     foreach (var state in newStates)
@@ -52,6 +51,30 @@ namespace New_ZZZF
                 return true;
             }
 
+            return false;
+        }
+        public override bool CheckCondition(Agent caster)
+        {
+            SkillSystemBehavior.ActiveComponents.TryGetValue(caster.Index, out var agentSkill);
+            if (agentSkill == null) { return false; }
+            if (caster.Health/ agentSkill.MaxHP<=0.5f)
+            {
+                return true;
+            }
+            List<Agent> FoeList = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 30);
+            List<Agent> FriendList = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 30,true);
+            if (FoeList.Count>0)
+            {
+                if (FoeList.Count > 5)
+                {
+                    return true;
+                }
+                else if (FoeList.Count>2&&FriendList.Count>0)
+                { 
+                    return true;
+                }
+            }
+            // 默认条件：Agent存活且非坐骑
             return false;
         }
 

@@ -83,7 +83,7 @@ namespace New_ZZZF
         /// </summary>
         public TextObject Text { get;  set; } //
         /// <summary>
-        /// 物品说明
+        /// 物品说明-技能说明
         /// </summary>
         public TextObject Description { get; set; } 
         // ========== 核心方法 ==========
@@ -114,12 +114,12 @@ namespace New_ZZZF
 
         // ========== 条件检查 ==========
         /// <summary>
-        /// 技能激活条件检查（可被子类重写）
+        /// 技能激活条件检查（可被子类重写）用于士兵ai
         /// </summary>
-        public virtual bool CheckCondition(Agent agent)
+        public virtual bool CheckCondition(Agent caster)
         {
             // 默认条件：Agent存活且非坐骑
-            return agent.IsActive() && !agent.IsMount;
+            return caster.IsActive() && !caster.IsMount;
         }
     }
 

@@ -442,6 +442,15 @@ namespace New_ZZZF
                     }
                 }
             }
+            MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyPressed(14))
+            {
+                Agent.Main.UpdateAgentProperties();
+            }
+            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(14))
+            {
+                Agent.Main.UpdateAgentProperties();
+            }
         }
 
         public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow)

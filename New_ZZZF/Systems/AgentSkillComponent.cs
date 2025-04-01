@@ -24,11 +24,11 @@ namespace New_ZZZF
         // 新增状态容器
         public AgentBuffContainer StateContainer { get; } = new AgentBuffContainer();
         //------------------------ 技能槽配置 ------------------------
-        public SkillBase MainActiveSkill { get; private set; }    // 主主动技能
-        public SkillBase SubActiveSkill { get; private set; }     // 副主动技能
-        public SkillBase PassiveSkill { get; private set; } // 被动栏技能
-        public SkillBase[] SpellSlots { get; } = new SkillBase[4];// 法术栏（0-3号位）
-        public SkillBase CombatArtSkill { get; private set; }     // 战技
+        public SkillBase MainActiveSkill { get; private set; } = new NullSkill();    // 主主动技能
+        public SkillBase SubActiveSkill { get; private set; } = new NullSkill();    // 副主动技能
+        public SkillBase PassiveSkill { get; private set; } = new NullSkill(); // 被动栏技能
+        public SkillBase[] SpellSlots { get; } = new SkillBase[4] {  new NullSkill() ,  new NullSkill() ,  new NullSkill() ,  new NullSkill()  };// 法术栏（0-3号位）
+        public SkillBase CombatArtSkill { get; private set; } = new NullSkill();   // 战技
         private bool CombatArtFlag { get; set; } = false;// 是否处于战技准备状态
 
         //------------------------ 资源与状态 ------------------------
@@ -156,13 +156,13 @@ namespace New_ZZZF
                 {
                     _selectedSpellSlot = (_selectedSpellSlot + 1) % 4;
                     if (SpellSlots[_selectedSpellSlot].SkillID != "NullSkill")
-                        InformationManager.DisplayMessage(new InformationMessage(SpellSlots[_selectedSpellSlot].SkillID));
+                        Script.SysOut(SpellSlots[_selectedSpellSlot].SkillID, Agent);
                 }
                 else if (scrollDelta < 0)
                 {
                     _selectedSpellSlot = (_selectedSpellSlot - 1 + 4) % 4;
                     if (SpellSlots[_selectedSpellSlot].SkillID != "NullSkill")
-                        InformationManager.DisplayMessage(new InformationMessage(SpellSlots[_selectedSpellSlot].SkillID));
+                        Script.SysOut(SpellSlots[_selectedSpellSlot].SkillID, Agent);
                 }
             }
 
@@ -197,7 +197,7 @@ namespace New_ZZZF
         private void TryActivateSkill(SkillBase skill)
         {
             if (skill == null || !CanActivateSkill(skill)) {
-                InformationManager.DisplayMessage(new InformationMessage("条件不满足"));
+                Script.SysOut("条件不满足", Agent);
                 return; }
 
             // 扣除资源// 触发技能效果
@@ -251,9 +251,9 @@ namespace New_ZZZF
             // 冷却检查
             bool isOnCooldown = _cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0;
             bool isGCDBlocked = (skill.Type == SkillType.Spell) && _globalCooldownTimer > 0;
-            if (!hasResource) { InformationManager.DisplayMessage(new InformationMessage("hasResource条件不满足")); }
-            if (isOnCooldown) { InformationManager.DisplayMessage(new InformationMessage("isOnCooldown条件不满足")); }
-            if (isGCDBlocked){ InformationManager.DisplayMessage(new InformationMessage("isGCDBlocked条件不满足")); }
+            if (!hasResource) { Script.SysOut("耐力或魔法不足",Agent); }
+            if (isOnCooldown) { Script.SysOut("技能未冷却", Agent); }
+            if (isGCDBlocked) { Script.SysOut("法术公共冷却未结束", Agent); }
             return hasResource && !isOnCooldown && !isGCDBlocked;
         }
 
@@ -307,24 +307,45 @@ namespace New_ZZZF
         {
             if (Agent.IsPlayerControlled)
             {
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"当前法术槽: {_selectedSpellSlot + 1} - {SpellSlots[_selectedSpellSlot]?.SkillID ?? "空"}"
-                ));
+
             }
         }
 
 
-        //====================== AI逻辑（示例） ======================
+        //====================== AI逻辑 ======================
+        //依次调用所有装备的技能的ai施法检查
         private void HandleAIBehaviorOfTick(float dt)
         {
-            // 简单示例：低血量时概率触发治疗法术
-            if (Agent.Health < Agent.HealthLimit * 0.3f &&
-                MBRandom.RandomFloat < 0.01f &&
-                SpellSlots[0] != null)
+            Random random = new Random();
+            if (MainActiveSkill.CheckCondition(Agent)&& random.NextFloat()>0.5f)
+            {
+                TryActivateSkill(MainActiveSkill);
+            }
+            else if (SubActiveSkill.CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            {
+                TryActivateSkill(SubActiveSkill);
+            }
+            else if (CombatArtSkill.CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            {
+                TryActivateSkill(CombatArtSkill);
+            }
+            else if (SpellSlots[0].CheckCondition(Agent) && random.NextFloat() > 0.5f)
             {
                 TryActivateSkill(SpellSlots[0]);
             }
-            //TryActivateSkill(MainActiveSkill);
+            else if (SpellSlots[1].CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            {
+                TryActivateSkill(SpellSlots[1]);
+            }
+            else if (SpellSlots[2].CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            {
+                TryActivateSkill(SpellSlots[2]);
+            }
+            else if (SpellSlots[3].CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            {
+                TryActivateSkill(SpellSlots[3]);
+            }
+            
         }
     }
 }

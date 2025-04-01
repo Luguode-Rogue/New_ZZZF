@@ -21,9 +21,9 @@ namespace New_ZZZF
             Type = SkillType.MainActive;    // 类型必须明确
             Cooldown = 2;             // 冷却时间（秒）
             ResourceCost = 0f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0039}JianQiCiFu");
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0041}JianQiCiFu");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0040}开启后每秒回蓝+10，每秒耐力-10，同时获得元素法术大师被动。" +
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0042}开启后每秒回蓝+10，每秒耐力-10，同时获得元素法术大师被动。" +
                 "使用副特技时，消耗魔法而非耐力。被反射法术伤害时，不会受到反射伤害。持续时间：60秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
