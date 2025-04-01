@@ -21,6 +21,7 @@ using TaleWorlds.Core.ViewModelCollection;
 using TaleWorlds.CampaignSystem.ViewModelCollection.Inventory;
 using TaleWorlds.CampaignSystem.Extensions;
 using TaleWorlds.CampaignSystem;
+using New_ZZZF.Skills;
 namespace New_ZZZF.Harmonys
 {
 
@@ -876,6 +877,7 @@ namespace New_ZZZF.Harmonys
                     {
                         var traverse = Traverse.Create(__instance);
                         traverse.Property("MountAgent").SetValue(mountAgent);
+                        __instance.SetActionChannel(0,ActionIndexCache.Create("act_mount_horse_from_left"),false, 272UL, 0, 1, -0.2f, 0.4f, 0.25f);
                         //v._globalCooldownTimer += 5;
                     }
 
@@ -891,6 +893,9 @@ namespace New_ZZZF.Harmonys
                 {
                     var traverse = Traverse.Create(__instance);
                     traverse.Property("MountAgent").SetValue(null);
+                    __instance.SetActionChannel(0, ActionIndexCache.Create("act_horse_fall_roll"));
+                    __instance.SetCurrentActionProgress(0, 0.3f);
+                    __instance.SetCurrentActionSpeed(0, 2f);
                     //v._globalCooldownTimer +=5;
                 }
             }

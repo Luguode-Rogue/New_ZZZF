@@ -970,3 +970,15 @@ protected override void OnGameStart(Game game, IGameStarter gameStarter)
 
                 shooterAgent.Equipment.SetAmountOfSlot(equipmentIndex, (short)(shooterAgent.Equipment[equipmentIndex].MaxAmmo));这个是没用的，只改面板数值
                 shooterAgent.SetWeaponAmountInSlot(equipmentIndex, (short)(shooterAgent.Equipment[equipmentIndex].MaxAmmo), false);		修改子弹数量用这个，但是暂时用着感觉有卡死的风险
+
+
+			TaleWorlds.MountAndBlade.View.MissionViews.MissionMainAgentController.ControlTick() : void @06000392双击设定
+				if (base.Input.IsGameKeyPressed(0))
+				{
+					if (this._lastForwardKeyPressTime + 0.3f > Time.ApplicationTime)
+					{
+						mainAgent.EventControlFlags &= ~(Agent.EventControlFlag.DoubleTapToDirectionUp | Agent.EventControlFlag.DoubleTapToDirectionDown | Agent.EventControlFlag.DoubleTapToDirectionRight);
+						mainAgent.EventControlFlags |= Agent.EventControlFlag.DoubleTapToDirectionUp;
+					}
+					this._lastForwardKeyPressTime = Time.ApplicationTime;
+				}

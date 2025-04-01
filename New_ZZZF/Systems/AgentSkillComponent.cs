@@ -39,6 +39,8 @@ namespace New_ZZZF
         public float _shieldStrength = 0f; //护盾值
         public int _lifeResurgenceCount = 0;//剩余复活次数
 
+
+        private Vec3 _velocity = Vec3.Zero; // 当前速度（内部状态）用于坐骑横向行走
         public AgentSpeed Speed { get; set; }
         public class AgentSpeed
         {
@@ -113,6 +115,7 @@ namespace New_ZZZF
         {
             if (!Agent.IsActive()) return;
 
+            _currentStamina += dt;
             // 玩家控制时处理输入
             if (Agent.IsPlayerControlled)
                 HandlePlayerInput(dt);

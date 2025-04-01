@@ -134,7 +134,7 @@ namespace New_ZZZF
                     SourceAgent,
                     agent,
                     _damagePerSecond,
-                    "Fire"
+                    DamageType.FIRE_DAMAGE
                 );
 
                 _timeSinceLastTick -= 1f; // 重置计时器
@@ -179,7 +179,7 @@ namespace New_ZZZF
                     SourceAgent,
                     agent,
                     _damagePerSecond,
-                    "Fire"
+                    DamageType.FIRE_DAMAGE
                 );
 
                 _timeSinceLastTick -= 1f; // 重置计时器

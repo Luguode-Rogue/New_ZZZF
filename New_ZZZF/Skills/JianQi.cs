@@ -93,7 +93,7 @@ namespace New_ZZZF.Skills
             Script.AgentListIFF(castAgent, list, out FriendAgent, out FoeAgent);
             foreach (Agent agent in FoeAgent)
             {
-                Script.CalculateFinalMagicDamage(data.CasterAgent, agent, BaseDamage, "mofa");
+                Script.CalculateFinalMagicDamage(data.CasterAgent, agent, BaseDamage, DamageType.None);
             }
 
 

@@ -98,7 +98,7 @@ namespace New_ZZZF.Skills
                 }
                 //固定翻滚一个距离
                 //射线检测阻挡物
-                Mission.Current.Scene.RayCastForClosestEntityOrTerrain(agent.GetEyeGlobalPosition(), agent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(lookR.f, 7), out f, out vec3);
+                Mission.Current.Scene.RayCastForClosestEntityOrTerrain(agent.GetEyeGlobalPosition(), agent.Position + Script.MultiplyVectorByScalar(lookR.f, 7), out f, out vec3);
                 //如果没有阻挡物但是距离过远或者射线检测没有碰撞
                 if (f < 7)
                 {
@@ -117,7 +117,7 @@ namespace New_ZZZF.Skills
                 }
                 else
                 {
-                    SkillSystemBehavior.WoW_AgentRushPos.Add(agent.Index, agent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(lookR.f, 7));
+                    SkillSystemBehavior.WoW_AgentRushPos.Add(agent.Index, agent.Position + Script.MultiplyVectorByScalar(lookR.f, 7));
                     // 每次创建新的状态实例
                     List<AgentBuff> newStates = new List<AgentBuff>
                             {

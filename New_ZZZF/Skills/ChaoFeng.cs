@@ -39,6 +39,7 @@ namespace New_ZZZF
             {
                 foreach (var item in values)
                 {
+                    if(item.IsHero) { continue; }
                     // 每次创建新的状态实例
                     newStates = new List<AgentBuff> { new ChaoFengBuffApplyToEnemy(30f, agent), }; // 新实例
                     foreach (var state in newStates)
@@ -55,7 +56,8 @@ namespace New_ZZZF
         }
         public override bool CheckCondition(Agent caster)
         {
-            SkillSystemBehavior.ActiveComponents.TryGetValue(caster.Index, out var agentSkill);
+            SkillSystemBehavior.ActiveComponents.TryGetValue(caster.Index, out var result); if (result.StateContainer.HasState("ChaoFengBuffApplyToSelf")) { return false; }
+                SkillSystemBehavior.ActiveComponents.TryGetValue(caster.Index, out var agentSkill);
             if (agentSkill == null) { return false; }
             if (caster.Health/ agentSkill.MaxHP<=0.5f)
             {

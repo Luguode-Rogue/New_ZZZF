@@ -146,8 +146,9 @@ namespace New_ZZZF
         public override void OnMissionTick(float dt)
         {
             base.OnMissionTick(dt);
+            if ((Mission.Current.Mode == MissionMode.Deployment || Mission.Current.Mode == MissionMode.Conversation || Mission.Current.Mode == MissionMode.Deployment) && Mission.Current.Mode != MissionMode.Battle) { return; }
             //代码测试区
-            if (Input.IsKeyPressed(InputKey.K))
+            if (Input.IsKeyPressed(InputKey.M))
             {
                 if (base.Mission.IsInventoryAccessAllowed)
                 {
@@ -158,14 +159,28 @@ namespace New_ZZZF
                 InformationManager.DisplayMessage(new InformationMessage(GameTexts.FindText((base.Mission.Mode == MissionMode.Battle || base.Mission.Mode == MissionMode.Duel) ? "str_cannot_reach_inventory_during_battle" : "str_cannot_reach_inventory", null).ToString()));
                 return;
             }
-            if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyPressed(InputKey.L))
+            MissionScreen camScreenManager = ScreenManager.TopScreen as MissionScreen;
+            if (Mission.Current != null && Mission.MainAgent != null && (Input.IsKeyPressed(InputKey.L)))
             {
                 //Agent agent =Script.FindClosestAgentToCaster(Agent.Main, Mission.Current.Agents);
+
                 for (int i = 0; i < 20; i++)
                 {
-                    Script.SysOut(Agent.Main.GetCurrentAction(i).Name, Agent.Main);
+                    Agent house = Agent.Main.MountAgent;
+                    if (Agent.Main.GetCurrentAction(i).Name.Equals("act_horse_jump_forward") || Agent.Main.GetCurrentAction(i).Name.Equals("act_horse_jump_high"))
+                    {
+                        if (house != null)
+                        {
+
+                            Vec3 direction = camScreenManager.CombatCamera.Direction;
+                            house.SetInitialFrame(house.Position, direction.AsVec2);
+                        }
+                    }
+
+                    //{ Script.SysOut(Agent.Main.MountAgent.GetCurrentAction(i).Name, Agent.Main); }
                 }
             }
+
             if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyPressed(InputKey.O))
             {
                 Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
@@ -385,14 +400,75 @@ namespace New_ZZZF
                     }
                 }//ai
 
+
+                ActiveComponents.TryGetValue(Agent.Main.Index, out var agentMainSkillComponent);
+                Agent house = Agent.Main.MountAgent;
+                if (house != null && Mission.Current != null && Mission.MainAgent != null
+                    && (house.Velocity.Length <= 5 && agentMainSkillComponent._globalCooldownTimer <= 0))
+                {
+
+                    Vec2 currentDirection = house.Frame.rotation.f.AsVec2;
+                    Vec3 lookD = camScreenManager.CombatCamera.Direction;
+                    // 计算右向量（注意叉积顺序为 lookD × Up）
+                    Vec3 right = Vec3.CrossProduct(lookD, Vec3.Up).NormalizedCopy();
+                    Vec2 forward = new Vec2(lookD.X, lookD.Y);
+                    Vec3 housePosition = house.Position;
+                    if (false)
+                    {
+                    }
+                    else if (Input.IsKeyDown(InputKey.A))
+                    {
+                        // 调整位置
+                        float delta = -dt * 3; // 调整量，正=右，负=左
+                        housePosition = housePosition + right * delta;
+                    }
+                    else if (Input.IsKeyDown(InputKey.D))
+                    {
+                        // 调整位置
+                        float delta = dt * 3; // 调整量，正=右，负=左
+                        housePosition = housePosition + right * delta;
+                    }
+                    else if (Input.IsKeyDown(InputKey.W))
+                    {
+                        // 调整位置
+                        float delta = dt * 2; // 调整量，正=右，负=左
+                        housePosition = housePosition + forward.ToVec3() * delta;
+                    }
+                    else if (Input.IsKeyDown(InputKey.S))
+                    {
+                        // 调整位置
+                        //float delta = -dt * 5; // 调整量，正=右，负=左
+                        //housePosition = housePosition + forward.ToVec3() * delta;
+                    }
+                    Vec3 vec3 = new Vec3();
+                    currentDirection = Vec3Extensions.SmoothDamp(currentDirection.ToVec3(), lookD, ref vec3, 0.05f, 10f, dt).AsVec2;
+                    house.SetInitialFrame(housePosition, currentDirection);
+
+                    //Script.SysOut(Agent.Main.MountAgent.GetCurrentAction(0).Name, Agent.Main);
+                    Script.SysOut(agentMainSkillComponent.Speed.speed.Length.ToString(), Agent.Main);
+
+
+                }
+                else if (Mission.Current != null && Mission.MainAgent != null
+                    && ((int)agentMainSkillComponent.Speed.speed.Length >= 8 || agentMainSkillComponent._globalCooldownTimer <= 0))
+                {
+                    agentMainSkillComponent._globalCooldownTimer = MathF.Clamp(agentMainSkillComponent._globalCooldownTimer + 2, 0, 2);
+                    Script.SysOut(agentMainSkillComponent._globalCooldownTimer.ToString(), Agent.Main);
+                }
+
             }
             foreach (AgentSkillComponent agent in _activeComponents)
             {
 
                 Agent TAgent;
                 //平滑移动的实现部分
+
                 if (WoW_AgentRushAgent.TryGetValue(agent.AgentInstance.Index, out TAgent))
                 {
+
+                    try
+                    { if (TAgent.Position == null) { continue; } }
+                    catch (Exception e) { return; }
                     Vec3 directionToTarget = TAgent.Position - agent.AgentInstance.Position;
 
                     float _dashSpeed = 30.2f; // 速度，单位为米/秒
@@ -515,12 +591,12 @@ namespace New_ZZZF
                         {
                             Script.SysOut("损失" + blow.InflictedDamage.ToString() + "点护盾，并抵消同等伤害", victim);
                             victimSkillComponent._shieldStrength -= blow.InflictedDamage;
-                            victim.Health = MathF.Clamp(victim.Health + blow.InflictedDamage,0,victimSkillComponent.MaxHP); 
+                            victim.Health = MathF.Clamp(victim.Health + blow.InflictedDamage, 0, victimSkillComponent.MaxHP);
                         }
                         else
                         {
                             Script.SysOut("损失" + victimSkillComponent._shieldStrength.ToString() + "点护盾，并抵消同等伤害", victim);
-                            victim.Health = MathF.Clamp(victimSkillComponent._shieldStrength , 0, victimSkillComponent.MaxHP);
+                            victim.Health = MathF.Clamp(victimSkillComponent._shieldStrength, 0, victimSkillComponent.MaxHP);
                             victimSkillComponent._shieldStrength = 0;
 
                         }
@@ -535,7 +611,7 @@ namespace New_ZZZF
                     }
                     if (victimSkillComponent.StateContainer.HasState("TianQiBuff"))
                     {
-                        victim.Health += Math.Max(blow.InflictedDamage, victimSkillComponent.MaxHP);
+                        victim.Health = MathF.Clamp(victim.Health + blow.InflictedDamage, 0, victimSkillComponent.MaxHP);
                     }
 
                 }
@@ -610,6 +686,10 @@ namespace New_ZZZF
         {
             base.OnAgentHit(affectedAgent, affectorAgent, affectorWeapon, blow, attackCollisionData);
             ExecuteHitEvents(affectorAgent, affectedAgent, affectorWeapon, blow, attackCollisionData);
+            if (Agent.Main != null && affectedAgent.Index == Agent.Main.Index)
+            {
+                Script.SysOut(affectedAgent.Health.ToString(), Agent.Main);
+            }
 
         }
         public override void OnAgentShootMissile(Agent shooterAgent, EquipmentIndex weaponIndex, Vec3 position, Vec3 velocity, Mat3 orientation, bool hasRigidBody, int forcedMissileIndex)

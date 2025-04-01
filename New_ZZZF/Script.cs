@@ -19,6 +19,7 @@ using New_ZZZF.Skills;
 using static TaleWorlds.MountAndBlade.Agent;
 using System.Reflection;
 using static TaleWorlds.Core.ItemObject;
+using MathF = TaleWorlds.Library.MathF;
 
 namespace New_ZZZF
 {
@@ -350,6 +351,7 @@ namespace New_ZZZF
         }
         public static bool IsRangeWeapon(ItemObject item)
         {
+            if(item==null) { return false; }
             return !(item.Type == ItemTypeEnum.Horse || item.Type == ItemTypeEnum.Polearm || item.Type == ItemTypeEnum.Shield || item.Type == ItemTypeEnum.OneHandedWeapon || item.Type == ItemTypeEnum.TwoHandedWeapon);
         }
         /// <summary>
@@ -967,13 +969,37 @@ namespace New_ZZZF
             return new Vec3(x, y, z);
         }
         /// <summary>
+        /// 查找目标地点，周围敌人数量最多的一个agent
+        /// </summary>
+        /// <param name="caster"></param>
+        /// <param name="tarPos"></param>
+        /// <param name="range"></param>
+        /// <returns></returns>
+        public static Agent FindOptimalConflictPos(Agent caster,Vec3 tarPos, int range)
+        {
+            List<Agent>l= GetTargetedInRange(caster, tarPos, (int)range);
+            int conut= 0;
+            Agent tarAgent= null;
+            foreach (Agent agent in l )
+            {
+                int c=GetTargetedInRange(caster, agent.Position, (int)range).Count;
+                if (conut< c)
+                {
+                    tarAgent = agent;
+                    conut = c;
+                }
+            }
+            if (tarAgent == null) return tarAgent;
+            return null;
+        }
+        /// <summary>
         /// 魔法伤害脚本
         /// </summary>
         /// <param name="Caster"></param>
         /// <param name="Victim"></param>
         /// <param name="BaseDamage"></param>
         /// <param name="DamageType"></param>
-        public static void CalculateFinalMagicDamage(Agent Caster, Agent Victim, float BaseDamage, String DamageType)
+        public static void CalculateFinalMagicDamage(Agent Caster, Agent Victim, float BaseDamage, DamageType DamageType)
         {
             SkillSystemBehavior.ActiveComponents.TryGetValue(Victim.Index, out var affectedComponent);
             SkillSystemBehavior.ActiveComponents.TryGetValue(Caster.Index, out var attackerComponent);
@@ -994,7 +1020,7 @@ namespace New_ZZZF
             float DifHP = Victim.Health;
             DifHP -= BaseDamage;
             Victim.Health = DifHP;
-            InformationManager.DisplayMessage(new InformationMessage("造成了" + BaseDamage.ToString() + "点" + DamageType + "伤害"));
+            InformationManager.DisplayMessage(new InformationMessage("造成了" + BaseDamage.ToString() + "点" + DamageType.ToString() + "伤害"));
 
             if (Victim.Health <= 0)
             {

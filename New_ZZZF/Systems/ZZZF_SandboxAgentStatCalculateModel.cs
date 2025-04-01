@@ -55,20 +55,24 @@ namespace New_ZZZF.Systems
             if (result != null)
             {
                 MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
-                if (missionScreen!=null&&missionScreen.SceneLayer.Input.IsGameKeyPressed(14))
+                if (missionScreen.SceneLayer!=null)
                 {
-                    Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 2;
-                    Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 2;
-                    SkillSystemBehavior.ActiveComponents.TryGetValue(Agent.Main.Index, out var resultMain);
-                    resultMain.ChangeStamina(-5);
+                    if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyPressed(14))
+                    {
+                        Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 2;
+                        Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 2;
+                        SkillSystemBehavior.ActiveComponents.TryGetValue(Agent.Main.Index, out var resultMain);
+                        resultMain.ChangeStamina(-5);
 
-                }
-                if (missionScreen!=null&&missionScreen.SceneLayer.Input.IsGameKeyReleased(14))
-                {
-                    Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 1;
-                    Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 1;
+                    }
+                    if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(14))
+                    {
+                        Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 1;
+                        Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 1;
 
+                    }
                 }
+                
                 if (result.StateContainer.HasState("ZhanYiBuff"))
                 {
                     ZhanYiBuff buff = result.StateContainer.GetState("ZhanYiBuff") as ZhanYiBuff;

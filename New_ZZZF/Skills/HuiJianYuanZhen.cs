@@ -19,13 +19,14 @@ namespace New_ZZZF.Skills
         {
             SkillID = "HuiJianYuanZhen";      // 必须唯一
             Type = SkillType.Spell;    // 类型必须明确
-            Cooldown = 0f;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 法力消耗
+            Cooldown = 10f;             // 冷却时间（秒）
+            ResourceCost = 30f;        // 法力消耗
             Text = new TaleWorlds.Localization.TextObject("{=12345677}HuiJianYuanZhen");
         }
 
         public override bool Activate(Agent casterAgent)
         {
+            return false;
             Random random = new Random();
             if (casterAgent != null)
             {
@@ -115,7 +116,10 @@ namespace New_ZZZF.Skills
             return true;
 
         }
-
+        //public override bool CheckCondition(Agent caster)
+        //{ 
+        //    return false;
+        //}
         public static void HuiJianYuanZhenDamage(GameEntity missileEntity)
         {
             if (!SkillSystemBehavior.WoW_ProjectileDB.TryGetValue(missileEntity, out ProjectileData data))
@@ -139,7 +143,7 @@ namespace New_ZZZF.Skills
             BaseDamage= BaseDamage * (1+ skill / 100);
             // 通过属性管理器获取智力值//小兵没有智力值，改用熟练度吧
             //int intelligenceValue = character.HeroObject.GetAttributeValue(DefaultCharacterAttributes.Intelligence);
-            Script.CalculateFinalMagicDamage(data.CasterAgent,data.TargetAgent,BaseDamage,"mofa");
+            Script.CalculateFinalMagicDamage(data.CasterAgent,data.TargetAgent,BaseDamage,DamageType.None);
         }
     }
 }

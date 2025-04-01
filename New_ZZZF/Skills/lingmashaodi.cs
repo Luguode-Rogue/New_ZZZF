@@ -18,7 +18,7 @@ namespace New_ZZZF
         {
             SkillID = "lingmashaodi";      // 必须唯一
             Type = SkillType.Spell;    // 类型必须明确
-            Cooldown = 5;             // 冷却时间（秒）
+            Cooldown = 3;             // 冷却时间（秒）
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0009}lingmashaodi");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
@@ -93,10 +93,10 @@ namespace New_ZZZF
 
                         // 骑乘动作系统
                         Rider.Mount(agent); // 绑定骑乘关系
-                        Rider.SetActionChannel(0,
-                            ActionIndexCache.Create("act_mount_horse_from_left"), // 上马动作
-                            false, 272UL, 0, 1, -0.2f, 0.4f, 0.25f
-                        );
+                        //Rider.SetActionChannel(0,
+                        //    ActionIndexCache.Create("act_mount_horse_from_left"), // 上马动作
+                        //    false, 272UL, 0, 1, -0.2f, 0.4f, 0.25f
+                        //);
                     }
                     return true;
                 }
@@ -111,7 +111,7 @@ namespace New_ZZZF
                     Rider.Mount(Rider.MountAgent); // 解除骑乘（API可能设计为传入null才是下马）
 
                     // 角色动作系统
-                    Roll.AgentRoll(Rider); // 执行翻滚动作（需确认是否合理）
+                    //Roll.AgentRoll(Rider); // 执行翻滚动作（需确认是否合理）
                     RiderMountAgent.FadeOut(false, false); // 坐骑渐隐
                     return true;
                 }

@@ -7,9 +7,48 @@ using TaleWorlds.Core;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
+using TaleWorlds.TwoDimension;
 
 namespace New_ZZZF
 {
+    public static class Vec3Extensions
+    {
+        public static Vec3 SmoothDamp(
+            Vec3 current,
+            Vec3 target,
+            ref Vec3 currentVelocity,
+            float smoothTime,
+            float maxSpeed,
+            float deltaTime
+        )
+        {
+            if (deltaTime <= 0) return current;
+
+            // 计算理想速度
+            Vec3 delta = target - current;
+            float omega = 2f / smoothTime; // 阻尼系数
+            Vec3 idealVelocity = delta * omega;
+
+            // 手动限制速度最大值
+            float idealSpeedSq = idealVelocity.X * idealVelocity.X +
+                                 idealVelocity.Y * idealVelocity.Y +
+                                 idealVelocity.Z * idealVelocity.Z;
+            float maxSpeedSq = maxSpeed * maxSpeed;
+
+            if (idealSpeedSq > maxSpeedSq)
+            {
+                // 单位化并限制长度
+                float idealSpeed = (float)Math.Sqrt(idealSpeedSq);
+                idealVelocity = idealVelocity / idealSpeed * maxSpeed;
+            }
+
+            // 速度插值
+            currentVelocity = currentVelocity + (idealVelocity - currentVelocity) * (omega * deltaTime);
+
+            // 应用速度
+            return current + currentVelocity * deltaTime;
+        }
+    }
     //统一存放各种需要自己实现的扩展方法
     public static class AgentExtensions
     {

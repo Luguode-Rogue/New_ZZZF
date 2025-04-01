@@ -6,7 +6,22 @@ using TaleWorlds.MountAndBlade;
 using static TaleWorlds.CampaignSystem.CampaignOptions;
 
 namespace New_ZZZF
-{
+{    /// <summary>
+     /// 伤害元素类型枚举
+     /// </summary>
+    public enum DamageType
+    {
+        None = 0,
+        ICE_DAMAGE,
+        FIRE_DAMAGE,
+        ELECTRICITY_DAMAGE,
+        TOXIN_DAMAGE,
+        ICE_ENHANCEMENT_FREEZING,
+        FIRE_ENHANCEMENT_BLASTING,
+        ELECTRICITY_ENHANCEMENT_PARALYZING,
+        TOXIN_ENHANCEMENT_CORRUPTING
+
+    }
     /// <summary>
     /// 技能类型枚举
     /// </summary>

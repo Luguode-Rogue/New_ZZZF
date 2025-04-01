@@ -125,7 +125,7 @@ namespace New_ZZZF
             base.OnApplicationTick(dt);
             if (Game.Current != null)
             {
-                if (Input.IsKeyPressed(InputKey.K) && !Game.Current.GameStateManager.ActiveState.IsMenuState)
+                if (Input.IsKeyPressed(InputKey.M) && !Game.Current.GameStateManager.ActiveState.IsMenuState)
                 {
 
                     if (Hero.MainHero != null)

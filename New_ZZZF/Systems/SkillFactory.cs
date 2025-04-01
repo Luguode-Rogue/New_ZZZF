@@ -42,14 +42,16 @@ namespace New_ZZZF
             {"KongNueCiFu",new KongNueCiFu() },
             {"NaGouCiFu",new NaGouCiFu() },
             {"JianQiCiFu",new JianQiCiFu() },
+            {"LeiJi",new LeiJi() },
             
             //// 副主动技能
             { "Rush", new Rush() },             // Rush
             {"MagicShoot",new MagicShoot() },
 
-            //// 被动技能
             {"Roll",new Roll() },
-            
+            //// 被动技能
+
+            {"ShengZhuangWuBu",new ShengZhuangWuBu() },
             //// 法术
             { "Fireball", new FireballSkill() },               // 火球术
             { "lingmashaodi", new lingmashaodi() },               // 
