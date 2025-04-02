@@ -1,6 +1,7 @@
 ﻿using New_ZZZF.Skills;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -162,23 +163,40 @@ namespace New_ZZZF
             MissionScreen camScreenManager = ScreenManager.TopScreen as MissionScreen;
             if (Mission.Current != null && Mission.MainAgent != null && (Input.IsKeyPressed(InputKey.L)))
             {
+                Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+                foreach (var item in Mission.Current.Agents)
+                {
+                    if (!item.IsHuman) continue;
+
+                    EquipmentIndex mainHandIndex = item.GetWieldedItemIndex(Agent.HandIndex.MainHand);
+                    if (mainHandIndex == EquipmentIndex.None)
+                    {
+                        continue;
+                    }
+                    // EquipmentIndex转MissionWeapon
+                    MissionWeapon mainHandEquipmentElement = item.Equipment[mainHandIndex];
+                    if (mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.Polearm || mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.TwoHandedWeapon)
+                    {
+                        item.DropItem(mainHandIndex);
+                    }
+                }
                 //Agent agent =Script.FindClosestAgentToCaster(Agent.Main, Mission.Current.Agents);
 
-                for (int i = 0; i < 20; i++)
-                {
-                    Agent house = Agent.Main.MountAgent;
-                    if (Agent.Main.GetCurrentAction(i).Name.Equals("act_horse_jump_forward") || Agent.Main.GetCurrentAction(i).Name.Equals("act_horse_jump_high"))
-                    {
-                        if (house != null)
-                        {
+                //for (int i = 0; i < 20; i++)
+                //{
+                //    Agent house = Agent.Main.MountAgent;
+                //    if (Agent.Main.GetCurrentAction(i).Name.Equals("act_horse_jump_forward") || Agent.Main.GetCurrentAction(i).Name.Equals("act_horse_jump_high"))
+                //    {
+                //        if (house != null)
+                //        {
 
-                            Vec3 direction = camScreenManager.CombatCamera.Direction;
-                            house.SetInitialFrame(house.Position, direction.AsVec2);
-                        }
-                    }
+                //            Vec3 direction = camScreenManager.CombatCamera.Direction;
+                //            house.SetInitialFrame(house.Position, direction.AsVec2);
+                //        }
+                //    }
 
-                    //{ Script.SysOut(Agent.Main.MountAgent.GetCurrentAction(i).Name, Agent.Main); }
-                }
+                //    //{ Script.SysOut(Agent.Main.MountAgent.GetCurrentAction(i).Name, Agent.Main); }
+                //}
             }
 
             if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyPressed(InputKey.O))
@@ -358,9 +376,9 @@ namespace New_ZZZF
                     Mat3 newRotation = Mat3.CreateMat3WithForward(newDirection); // 使用文档中存在的CreateMat3WithForward
                     missileEntity.SetGlobalFrame(new MatrixFrame(newRotation, newPosition));
 
-                    if (data.Name == "JianQi")
+                    if (data.skillBase != null)
                     {
-                        JianQi.JianQiDamage(missileEntity);
+                        data.skillBase.GameEntityDamage(missileEntity);
                     }
                     // 距离判定（使用文档中的Distance方法）
                     if (currentPos.Distance(targetPos) < 0.5f)
@@ -400,61 +418,65 @@ namespace New_ZZZF
                     }
                 }//ai
 
-
-                ActiveComponents.TryGetValue(Agent.Main.Index, out var agentMainSkillComponent);
-                Agent house = Agent.Main.MountAgent;
-                if (house != null && Mission.Current != null && Mission.MainAgent != null
-                    && (house.Velocity.Length <= 5 && agentMainSkillComponent._globalCooldownTimer <= 0))
+                if (Agent.Main!=null&&false)
                 {
+                    ActiveComponents.TryGetValue(Agent.Main.Index, out var agentMainSkillComponent);
+                    Agent house = Agent.Main.MountAgent;
+                    if (house != null && Mission.Current != null && Mission.MainAgent != null
+                        && (house.Velocity.Length <= 10 && agentMainSkillComponent._globalCooldownTimer <= 0))
+                    {
 
-                    Vec2 currentDirection = house.Frame.rotation.f.AsVec2;
-                    Vec3 lookD = camScreenManager.CombatCamera.Direction;
-                    // 计算右向量（注意叉积顺序为 lookD × Up）
-                    Vec3 right = Vec3.CrossProduct(lookD, Vec3.Up).NormalizedCopy();
-                    Vec2 forward = new Vec2(lookD.X, lookD.Y);
-                    Vec3 housePosition = house.Position;
-                    if (false)
-                    {
-                    }
-                    else if (Input.IsKeyDown(InputKey.A))
-                    {
-                        // 调整位置
-                        float delta = -dt * 3; // 调整量，正=右，负=左
-                        housePosition = housePosition + right * delta;
-                    }
-                    else if (Input.IsKeyDown(InputKey.D))
-                    {
-                        // 调整位置
-                        float delta = dt * 3; // 调整量，正=右，负=左
-                        housePosition = housePosition + right * delta;
-                    }
-                    else if (Input.IsKeyDown(InputKey.W))
-                    {
-                        // 调整位置
-                        float delta = dt * 2; // 调整量，正=右，负=左
-                        housePosition = housePosition + forward.ToVec3() * delta;
-                    }
-                    else if (Input.IsKeyDown(InputKey.S))
-                    {
-                        // 调整位置
-                        //float delta = -dt * 5; // 调整量，正=右，负=左
-                        //housePosition = housePosition + forward.ToVec3() * delta;
-                    }
-                    Vec3 vec3 = new Vec3();
-                    currentDirection = Vec3Extensions.SmoothDamp(currentDirection.ToVec3(), lookD, ref vec3, 0.05f, 10f, dt).AsVec2;
-                    house.SetInitialFrame(housePosition, currentDirection);
+                        Vec2 currentDirection = house.Frame.rotation.f.AsVec2;
+                        Vec3 lookD = camScreenManager.CombatCamera.Direction;
+                        // 计算右向量（注意叉积顺序为 lookD × Up）
+                        Vec3 right = Vec3.CrossProduct(lookD, Vec3.Up).NormalizedCopy();
+                        Vec2 forward = new Vec2(lookD.X, lookD.Y);
+                        Vec3 housePosition = house.Position;
+                        if (false)
+                        {
+                        }
+                        else if (Input.IsKeyDown(InputKey.A))
+                        {
+                            // 调整位置
+                            float delta = -dt * 3; // 调整量，正=右，负=左
+                            housePosition = housePosition + right * delta;
+                        }
+                        else if (Input.IsKeyDown(InputKey.D))
+                        {
+                            // 调整位置
+                            float delta = dt * 3; // 调整量，正=右，负=左
+                            housePosition = housePosition + right * delta;
+                        }
+                        else if (Input.IsKeyDown(InputKey.W))
+                        {
+                            // 调整位置
+                            float delta = dt * 2; // 调整量，正=右，负=左
+                            housePosition = housePosition + forward.ToVec3() * delta;
+                        }
+                        else if (Input.IsKeyDown(InputKey.S))
+                        {
+                            // 调整位置
+                            //float delta = -dt * 5; // 调整量，正=右，负=左
+                            //housePosition = housePosition + forward.ToVec3() * delta;
+                        }
+                        Vec3 vec3 = new Vec3();
+                        currentDirection = Vec3Extensions.SmoothDamp(currentDirection.ToVec3(), lookD, ref vec3, 0.05f, 10f, dt).AsVec2;
+                        house.SetInitialFrame(housePosition, currentDirection);
 
-                    //Script.SysOut(Agent.Main.MountAgent.GetCurrentAction(0).Name, Agent.Main);
-                    Script.SysOut(agentMainSkillComponent.Speed.speed.Length.ToString(), Agent.Main);
+                        //Script.SysOut(Agent.Main.MountAgent.GetCurrentAction(0).Name, Agent.Main);
+
+                        //Script.SysOut(house.Velocity.Length.ToString(), Agent.Main);
 
 
+                    }
+                    else if (Mission.Current != null && Mission.MainAgent != null
+                        && ((int)agentMainSkillComponent.Speed.speed.Length >= 8 || agentMainSkillComponent._globalCooldownTimer <= 0))
+                    {
+                        agentMainSkillComponent._globalCooldownTimer = MathF.Clamp(agentMainSkillComponent._globalCooldownTimer + 2, 0, 2);
+                        //Script.SysOut(agentMainSkillComponent._globalCooldownTimer.ToString(), Agent.Main);
+                    }
                 }
-                else if (Mission.Current != null && Mission.MainAgent != null
-                    && ((int)agentMainSkillComponent.Speed.speed.Length >= 8 || agentMainSkillComponent._globalCooldownTimer <= 0))
-                {
-                    agentMainSkillComponent._globalCooldownTimer = MathF.Clamp(agentMainSkillComponent._globalCooldownTimer + 2, 0, 2);
-                    Script.SysOut(agentMainSkillComponent._globalCooldownTimer.ToString(), Agent.Main);
-                }
+                
 
             }
             foreach (AgentSkillComponent agent in _activeComponents)
@@ -690,6 +712,24 @@ namespace New_ZZZF
             {
                 Script.SysOut(affectedAgent.Health.ToString(), Agent.Main);
             }
+            ////记录
+            //try
+            //{
+
+            //    // 构建日志条目
+            //    string logEntry = $"受击单位： {affectedAgent.Name}  伤害值：{blow.InflictedDamage}  打击点位：{attackCollisionData.VictimHitBodyPart}  " +
+            //        $"攻击者动作方向：{attackCollisionData.AttackDirection}  动作进度：{attackCollisionData.AttackProgress}  " ;
+            //    if(Agent.Main!=null)                Script.SysOut(logEntry,Agent.Main);
+
+            //    // 将日志条目写入文件
+            //    File.AppendAllText("attack_log2.txt", logEntry + Environment.NewLine);
+
+            //    Console.WriteLine("Attack logged successfully.");
+            //}
+            //catch (Exception ex)
+            //{
+            //    Console.WriteLine($"An error occurred while logging the attack: {ex.Message}");
+            //}
 
         }
         public override void OnAgentShootMissile(Agent shooterAgent, EquipmentIndex weaponIndex, Vec3 position, Vec3 velocity, Mat3 orientation, bool hasRigidBody, int forcedMissileIndex)

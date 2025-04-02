@@ -148,7 +148,7 @@ namespace New_ZZZF.Skills
         private float _timeSinceLastTick;
         public RushToPosBuff(float duration, float dps, Agent source)
         {
-            StateId = "RushToAgentBuff";
+            StateId = "RushToPosBuff";
             Duration = duration;
             _damagePerSecond = 0;
             SourceAgent = source;

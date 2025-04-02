@@ -30,27 +30,45 @@ namespace New_ZZZF.Skills//（法术）
         public override bool Activate(Agent agent)
         {
             List<Agent> target = FindTarget(agent);
-            foreach (var item in target)
+            if (target != null && target.Count > 0)
             {
-                if (item == null || !item.IsActive()) continue;
-                Script.CalculateFinalMagicDamage(agent, item, 30, DamageType.ELECTRICITY_DAMAGE);
+                foreach (var item in target)
+                {
+                    if (item == null || !item.IsActive()) continue;
+                    Script.CalculateFinalMagicDamage(agent, item, 30, DamageType.ELECTRICITY_DAMAGE);
+                    item.SetActionChannel(0, ActionIndexCache.Create("act_jump_loop"));
+                }
+                return true;
             }
+            else
+                return false;
 
 
-            return true;
         }
         private List<Agent> FindTarget(Agent agent)
         {
 
-            Agent tarAgent = Script.FindOptimalConflictPos(agent, Script.AgentLookPos(agent), 3);
-            List<Agent> list = Script.FindAgentsWithinSpellRange(tarAgent.Position, 30);
-            Script.AgentListIFF(tarAgent, list, out var FriendAgent, out var FoeAgent);
-            foreach (var item in FoeAgent)
+            Agent tarAgent = Script.FindOptimalConflictPos(agent, Script.AgentLookPos(agent), 30);
+            if (tarAgent != null)
             {
 
+                List<Agent> list = Script.FindAgentsWithinSpellRange(tarAgent.Position, 3);
+                Script.AgentListIFF(agent, list, out var FriendAgent, out var FoeAgent);
+                return FoeAgent;
             }
+            else return null;
+        }
+        public static void useToAgent(Agent caster, Agent vimAgent)
+        {
+            SkillSystemBehavior.ActiveComponents.TryGetValue(vimAgent.Index, out var ActiveComponents);
+            if (ActiveComponents ==null|| ActiveComponents._beHitCount <= 5)
+            {
 
-            return FoeAgent;
+                if (vimAgent == null || !vimAgent.IsActive()) return;
+                Script.CalculateFinalMagicDamage(caster, vimAgent, 30, DamageType.ELECTRICITY_DAMAGE);
+                vimAgent.SetActionChannel(0, ActionIndexCache.Create("act_jump_end"));
+
+            }
         }
     }
 }

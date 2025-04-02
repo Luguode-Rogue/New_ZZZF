@@ -72,6 +72,7 @@ namespace New_ZZZF
                     _troopSkillMap[item.Key] = SkillConfigManager.ToStringList(item.Value);
                 }
                 dataStore.SyncDataAsJson("troopSkillMap", ref _troopSkillMap);
+                SkillConfigManager.Instance.SaveToXml("../../Modules/New_ZZZF/svae_troop_skills.xml");
             }
             if (dataStore.IsLoading)
             {

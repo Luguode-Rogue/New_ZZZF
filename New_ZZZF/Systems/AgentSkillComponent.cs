@@ -39,6 +39,8 @@ namespace New_ZZZF
         public float _shieldStrength = 0f; //护盾值
         public int _lifeResurgenceCount = 0;//剩余复活次数
 
+        public int _beHitCount = 0;//受击次数记录
+        public float _beHitTime = 0f;//受击间隔记录
 
         private Vec3 _velocity = Vec3.Zero; // 当前速度（内部状态）用于坐骑横向行走
         public AgentSpeed Speed { get; set; }
@@ -115,7 +117,6 @@ namespace New_ZZZF
         {
             if (!Agent.IsActive()) return;
 
-            _currentStamina += dt;
             // 玩家控制时处理输入
             if (Agent.IsPlayerControlled)
                 HandlePlayerInput(dt);
@@ -127,6 +128,13 @@ namespace New_ZZZF
         /// </summary>
         public void CoolDownTick(float dt)
         {
+            _currentStamina += dt;
+            _currentMana += dt;
+            _beHitTime -= dt;
+            if (_beHitTime <= 0)
+            { 
+                _beHitCount = 0;
+            }
             UpdateCooldowns(dt);
             UpdateGlobalCooldown(dt);
 
@@ -254,9 +262,9 @@ namespace New_ZZZF
             // 冷却检查
             bool isOnCooldown = _cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0;
             bool isGCDBlocked = (skill.Type == SkillType.Spell) && _globalCooldownTimer > 0;
-            if (!hasResource) { Script.SysOut("耐力或魔法不足",Agent); }
-            if (isOnCooldown) { Script.SysOut("技能未冷却", Agent); }
-            if (isGCDBlocked) { Script.SysOut("法术公共冷却未结束", Agent); }
+            if (!hasResource) { Script.SysOut("耐力或魔法不足,需要的值为"+ skill.ResourceCost,Agent); }
+            if (isOnCooldown) { Script.SysOut("技能未冷却,当前的冷却剩余"+ remaining.ToString(), Agent); }
+            if (isGCDBlocked) { Script.SysOut("法术公共冷却未结束,当前的冷却剩余"+ _globalCooldownTimer.ToString(), Agent); }
             return hasResource && !isOnCooldown && !isGCDBlocked;
         }
 

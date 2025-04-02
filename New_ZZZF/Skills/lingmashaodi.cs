@@ -28,7 +28,7 @@ namespace New_ZZZF
             if (CreatMount(agent))
             {
                 SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var v);
-                v._globalCooldownTimer += 5f;
+                v._globalCooldownTimer += 3f;
                 return true;
             }
 

@@ -220,6 +220,20 @@ namespace New_ZZZF.Systems
 
                     }
                 }
+                if (result.StateContainer.HasState("XieEZuZhouBuffToEnemy"))
+                {
+                    XieEZuZhouBuffToEnemy buff = result.StateContainer.GetState("XieEZuZhouBuffToEnemy") as XieEZuZhouBuffToEnemy;
+                    if (buff != null)
+                    {
+                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
+                        if (agent.Equipment!=null&&  agent.GetWieldedItemIndex(Agent.HandIndex.MainHand) != EquipmentIndex.None &&
+                            agent.Equipment[agent.GetWieldedItemIndex(Agent.HandIndex.MainHand)].CurrentUsageItem.IsRangedWeapon)
+                        {
+                            agent.AgentDrivenProperties.AIDecideOnAttackChance = 0f;
+                            agent.AgentDrivenProperties.AiShootFreq = 0f;
+                        }
+                    }
+                }
                 if (result.StateContainer.HasState("FengBaoZhiLiBuff"))
                 {
                     FengBaoZhiLiBuff buff = result.StateContainer.GetState("FengBaoZhiLiBuff") as FengBaoZhiLiBuff;

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using TaleWorlds.Core;
+using TaleWorlds.Engine;
 using TaleWorlds.Localization;
 using TaleWorlds.MountAndBlade;
 using static TaleWorlds.CampaignSystem.CampaignOptions;
@@ -126,6 +127,10 @@ namespace New_ZZZF
             // 示例：注销事件监听
             // agent.OnAttack -= HandleAttack;
         }
+        /// <summary>
+        /// 剑气斩之类的技能通过这个函数实现
+        /// </summary>
+        public virtual void GameEntityDamage(GameEntity missileEntity) { }
 
         // ========== 条件检查 ==========
         /// <summary>
@@ -136,6 +141,7 @@ namespace New_ZZZF
             // 默认条件：Agent存活且非坐骑
             return caster.IsActive() && !caster.IsMount;
         }
+
     }
 
     public class SkillDifficulty

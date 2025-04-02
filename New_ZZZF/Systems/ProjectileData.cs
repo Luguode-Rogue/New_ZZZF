@@ -12,6 +12,7 @@ namespace New_ZZZF
     {
         // 基础属性
         public string Name { get; set; }
+        public SkillBase skillBase { get; set; }//由某个技能产生，方便调用技能的方法
         public Agent CasterAgent { get; set; }
         public Agent TargetAgent { get; set; }//目标与地点二选一
         public Vec3 TargetPos { get; set; }//目标与地点二选一

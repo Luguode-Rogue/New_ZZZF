@@ -42,7 +42,10 @@ namespace New_ZZZF
             {"KongNueCiFu",new KongNueCiFu() },
             {"NaGouCiFu",new NaGouCiFu() },
             {"JianQiCiFu",new JianQiCiFu() },
-            {"LeiJi",new LeiJi() },
+            {"HuHuanFengBao",new HuHuanFengBao() },
+            {"ZhaoHuan",new ZhaoHuan半成品() },
+            {"HuoYanTuXi",new HuoYanTuXi() },
+            {"XieEZuZhou",new XieEZuZhou() },
             
             //// 副主动技能
             { "Rush", new Rush() },             // Rush
@@ -56,7 +59,8 @@ namespace New_ZZZF
             { "Fireball", new FireballSkill() },               // 火球术
             { "lingmashaodi", new lingmashaodi() },               // 
             { "HuiJianYuanZhen", new HuiJianYuanZhen() },               // 辉剑圆阵
-
+            
+            {"LeiJi",new LeiJi() },
             
             //// 战技
             //{ "ShieldBash", new ShieldBashSkill() },           // 盾牌猛击

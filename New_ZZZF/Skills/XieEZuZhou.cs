@@ -4,31 +4,32 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TaleWorlds.CampaignSystem.Extensions;
 using TaleWorlds.Core;
 using TaleWorlds.Engine;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
-using static New_ZZZF.ZhanYi;
+using static New_ZZZF.JingXia;
 
 namespace New_ZZZF
 {
-    internal class JingXia : SkillBase
+    internal class XieEZuZhou : SkillBase
     {
-        public JingXia()
+        public XieEZuZhou()
         {
-            SkillID = "JingXia";      // 必须唯一
+            SkillID = "XieEZuZhou";      // 必须唯一
             Type = SkillType.MainActive;    // 类型必须明确
             Cooldown = 2;             // 冷却时间（秒）
             ResourceCost = 0f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0033}JingXia");
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0053}XieEZuZhou");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0034}群体负面状态，持续影响附近敌方单位。受到惊吓的敌人将不受控制的远离施法者。对英雄单位无影响，施法者等级低于敌方太多时将不生效。消耗耐力：20。持续时间：10秒。冷却时间：20");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0054}群群体负面状态，持续影响附近敌方单位。受影响单位每秒生命值减少1%，并且禁用远程武器，对英雄单位无影响。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {
             // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new JingXiaBuffToSelf(10f, agent), }; // 新实例
+            List<AgentBuff> newStates = new List<AgentBuff> { new XieEZuZhouBuffToSelf(60f, agent), }; // 新实例
             foreach (var state in newStates)
             {
                 state.TargetAgent = agent;
@@ -37,14 +38,14 @@ namespace New_ZZZF
             return true;
         }
 
-        
+
     }
-    public class JingXiaBuffToSelf : AgentBuff
+    public class XieEZuZhouBuffToSelf : AgentBuff
     {
         private float _timeSinceLastTick;
-        public JingXiaBuffToSelf(float duration, Agent source)
+        public XieEZuZhouBuffToSelf(float duration, Agent source)
         {
-            StateId = "JingXiaBuffToSelf";
+            StateId = "XieEZuZhouBuffToSelf";
             Duration = duration;
             SourceAgent = source;
             _timeSinceLastTick = 0; // 新增初始化
@@ -68,23 +69,19 @@ namespace New_ZZZF
             {
                 List<Agent> values = Mission.Current.Agents;
                 Script.AgentListIFF(agent, values, out var friendAgent, out var foeAgent);
-                int agentLv = agent.Character.Level + 15;
                 if (foeAgent != null && foeAgent.Count > 0)
                 {
                     foreach (var item in foeAgent)
                     {
-                        int tarLv = item.Character.Level;
-                        if (tarLv < agentLv)
+
+                        // 每次创建新的状态实例
+                        List<AgentBuff> newStates = new List<AgentBuff> { new XieEZuZhouBuffToEnemy(2F, agent), }; // 新实例
+                        foreach (var state in newStates)
                         {
-                            //item.PlayParticleEffect("fire_burning");
-                            // 每次创建新的状态实例
-                            List<AgentBuff> newStates = new List<AgentBuff> { new JingXiaBuffToEnemy(10f, agent), }; // 新实例
-                            foreach (var state in newStates)
-                            {
-                                state.TargetAgent = item;
-                                item.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                            }
+                            state.TargetAgent = item;
+                            item.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
                         }
+
                     }
 
                     return;
@@ -98,12 +95,14 @@ namespace New_ZZZF
 
         }
     }
-    public class JingXiaBuffToEnemy : AgentBuff
+    public class XieEZuZhouBuffToEnemy : AgentBuff
     {
         private float _timeSinceLastTick;
-        public JingXiaBuffToEnemy(float duration, Agent source)
+        private List<EquipmentIndex> itemsIndex = new List<EquipmentIndex>();
+        private List<MissionWeapon> weapon = new List<MissionWeapon>();
+        public XieEZuZhouBuffToEnemy(float duration, Agent source)
         {
-            StateId = "JingXiaBuffToEnemy";
+            StateId = "XieEZuZhouBuffToEnemy";
             Duration = duration;
             SourceAgent = source;
             _timeSinceLastTick = 0; // 新增初始化
@@ -111,37 +110,28 @@ namespace New_ZZZF
 
         public override void OnApply(Agent agent)
         {
-            Vec3 vec2 = SourceAgent.Position - agent.Position;
-            vec2 = vec2.NormalizedCopy();
-            Vec3 vec3 = agent.Position - SourceAgent.Position;
-            vec3 = vec3.NormalizedCopy();
-            vec3 = Script.MultiplyVectorByScalar(vec3, 10f);
-            agent.SetTargetPosition((agent.Position + vec3).AsVec2);
+
         }
 
         public override void OnUpdate(Agent agent, float dt)
         {
-            SkillSystemBehavior.ActiveComponents.TryGetValue(this.SourceAgent.Index, out var agentSkillComponent);
-            if (agentSkillComponent == null) { return; }
+
             // 累积时间
             _timeSinceLastTick += dt;
 
             //每秒刷一次状态
             if (_timeSinceLastTick >= 1f)
             {
-                Vec3 vec2 = SourceAgent.Position - agent.Position;
-                vec2 = vec2.NormalizedCopy();
-                Vec3 vec3 = agent.Position - SourceAgent.Position;
-                vec3 = vec3.NormalizedCopy();
-                vec3 = Script.MultiplyVectorByScalar(vec3, 10f);
-                agent.SetTargetPosition((agent.Position + vec3).AsVec2);
+
+                agent.UpdateAgentProperties();
+
                 _timeSinceLastTick -= 1f; // 重置计时器
             }
         }
 
         public override void OnRemove(Agent agent)
         {
-            agent.ClearTargetFrame();
+            agent.UpdateAgentProperties();
         }
     }
 }

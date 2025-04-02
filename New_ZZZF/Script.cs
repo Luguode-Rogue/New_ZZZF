@@ -982,14 +982,14 @@ namespace New_ZZZF
             Agent tarAgent= null;
             foreach (Agent agent in l )
             {
-                int c=GetTargetedInRange(caster, agent.Position, (int)range).Count;
+                int c=GetTargetedInRange(caster, agent.Position, (int)3).Count;
                 if (conut< c)
                 {
                     tarAgent = agent;
                     conut = c;
                 }
             }
-            if (tarAgent == null) return tarAgent;
+            if (tarAgent != null) return tarAgent;
             return null;
         }
         /// <summary>

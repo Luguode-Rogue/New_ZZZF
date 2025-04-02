@@ -64,7 +64,47 @@ namespace New_ZZZF
                 }
             }
         }
-        
+        /// <summary>
+        /// 保存时，读取当前所有的技能信息，存储到一个xml
+        /// </summary>
+        /// <param name="xmlPath"></param>
+        public void SaveToXml(string xmlPath)
+        {
+            XDocument doc = new XDocument(new XElement("TroopSkills"));
+
+            foreach (var kvp in _troopSkillMap)
+            {
+                string troopId = kvp.Key;
+                SkillSet skillSet = kvp.Value;
+
+                XElement troopElement = new XElement("Troop",
+                    new XAttribute("id", troopId),
+                    CreateSkillElement("MainActive", skillSet.MainActive),
+                    CreateSkillElement("SubActive", skillSet.SubActive),
+                    CreateSkillElement("Passive", skillSet.Passive),
+                    CreateSkillElement("CombatArt", skillSet.CombatArt));
+
+                XElement spellsElement = new XElement("Spells");
+                for (int i = 0; i < 4; i++)
+                {
+                    var spell = (skillSet.Spells.Length > i) ? skillSet.Spells[i] : null;
+                    spellsElement.Add(CreateSkillElement($"Slot{i + 1}", spell));
+                }
+                troopElement.Add(spellsElement);
+
+                doc.Root.Add(troopElement);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(xmlPath));
+            doc.Save(xmlPath);
+        }
+        // 辅助方法：创建技能节点（处理null值）
+        private XElement CreateSkillElement(string name, SkillBase skill)
+        {
+            // 假设SkillBase有Id属性存储配置标识符
+            // 如果实际存储的是对象名称，请改为skill?.Name
+            return new XElement(name, skill?.SkillID ?? "");
+        }
         /// <summary>
         /// 获取指定兵种的技能配置
         /// </summary>

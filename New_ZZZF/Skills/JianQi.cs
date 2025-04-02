@@ -21,7 +21,7 @@ namespace New_ZZZF.Skills
             Cooldown = 1f;             // 冷却时间（秒）
             ResourceCost = 0f;        // 法力消耗
             Text = new TaleWorlds.Localization.TextObject("{=12345676}JianQi");
-            Difficulty = new List<SkillDifficulty> {new SkillDifficulty(60,"Strong"), new SkillDifficulty(120, "OneHand") };//技能装备的需求
+            Difficulty = null;// new List<SkillDifficulty> {new SkillDifficulty(60,"Strong"), new SkillDifficulty(120, "OneHand") };//技能装备的需求
         }
         public override bool Activate(Agent casterAgent)
         {
@@ -43,6 +43,7 @@ namespace New_ZZZF.Skills
                 var projData = new ProjectileData
                 {
                     Name = SkillID,
+                    skillBase = this,
                     CasterAgent = casterAgent,
                     TargetPos = TarPos,
                     SpawnTime = Mission.Current.CurrentTime,
@@ -63,11 +64,11 @@ namespace New_ZZZF.Skills
 
             return true;
         }
-        public static void JianQiDamage(GameEntity missileEntity)
+        public override void GameEntityDamage(GameEntity missileEntity)
         {
             if (!SkillSystemBehavior.WoW_ProjectileDB.TryGetValue(missileEntity, out ProjectileData data))
                 return;
-            float BaseDamage = 50;
+            float BaseDamage = 20;
             // 获取Agent的CharacterObject
 
             int skill = 0;
@@ -94,6 +95,11 @@ namespace New_ZZZF.Skills
             foreach (Agent agent in FoeAgent)
             {
                 Script.CalculateFinalMagicDamage(data.CasterAgent, agent, BaseDamage, DamageType.None);
+                AgentSkillComponent agentComponent= Script.GetActiveComponents(agent);
+                agentComponent._beHitCount += 1;
+                agentComponent._beHitTime += 0.3f;
+
+
             }
 
 

@@ -48,10 +48,10 @@ namespace New_ZZZF
 
         public bool HasState(string stateId)
         {
-            AgentBuff state = _activeStates.Find(s => s.StateId == stateId);
-            if (state != null)
+            foreach (var state in _activeStates)
             {
-                return true;
+                if (state.StateId.ToString().Equals(stateId))
+                { return true; }
             }
             return false;
         }
