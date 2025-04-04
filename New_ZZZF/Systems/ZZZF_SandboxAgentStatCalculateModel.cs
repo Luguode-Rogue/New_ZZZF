@@ -234,6 +234,15 @@ namespace New_ZZZF.Systems
                         }
                     }
                 }
+                if (result.StateContainer.HasState("XuRuoZuZhouBuffToEnemy"))
+                {
+                    XuRuoZuZhouBuffToEnemy buff = result.StateContainer.GetState("XuRuoZuZhouBuffToEnemy") as XuRuoZuZhouBuffToEnemy;
+                    if (buff != null)
+                    {
+                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
+
+                    }
+                }
                 if (result.StateContainer.HasState("FengBaoZhiLiBuff"))
                 {
                     FengBaoZhiLiBuff buff = result.StateContainer.GetState("FengBaoZhiLiBuff") as FengBaoZhiLiBuff;

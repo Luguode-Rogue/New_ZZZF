@@ -27,7 +27,6 @@ namespace New_ZZZF
             { "ConeOfArrows", new ConeOfArrows() }   ,         // 多重射击
             { "DaoShan", new DaoShan() }   ,         // 刀扇
             {"ShadowStep",new ShadowStep() },//暗影步
-            {"DaDiJianTa",new DaDiJianTa() },
             {"ZhanYi",new ZhanYi() },
             {"JueXing",new JueXing() },
             {"TianQi",new TianQi() },
@@ -46,6 +45,11 @@ namespace New_ZZZF
             {"ZhaoHuan",new ZhaoHuan半成品() },
             {"HuoYanTuXi",new HuoYanTuXi() },
             {"XieEZuZhou",new XieEZuZhou() },
+            {"DaDiJianTa",new DaDiJianTa() },
+            {"XuRuoZuZhou",new XuRuoZuZhou() },
+            {"HuoLiZaiSheng",new HuoLiZaiSheng() },
+            {"JianRenBuQu",new JianRenBuQu() },
+            {"KuangNuLongXi",new KuangNuLongXi() },
             
             //// 副主动技能
             { "Rush", new Rush() },             // Rush
@@ -63,7 +67,8 @@ namespace New_ZZZF
             {"LeiJi",new LeiJi() },
             
             //// 战技
-            //{ "ShieldBash", new ShieldBashSkill() },           // 盾牌猛击
+            //{ "ShieldBash", new ShieldBashSkill() }, 
+            { "HongShiZiHuoYan", new HongShiZiHuoYan() },           // 喷火
 
         };
         /// <summary>

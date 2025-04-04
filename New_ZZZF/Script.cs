@@ -261,6 +261,32 @@ namespace New_ZZZF
             return agentsWithinRange;
         }
         /// <summary>
+        ///参数1:目标地点vec3
+        ///参数2:弧度
+        ///参数3:距离
+        ///获取目标面前锥形区域内所有agent,存放在列表里.敌我判定只有拿列表里的agent再去判定,不在这里判定
+        /// </summary>
+        /// <param name="castAgent"></param>
+        /// <param name="spellRange"></param>
+        /// <returns></returns>
+        public static List<Agent> FindAgentsInFrontArc(Agent castAgent,int frontArc, int spellRange)
+        {
+            List<Agent> list = new List<Agent>();
+            Vec3 vec3 = new Vec3();
+            for (int i = -frontArc; i <= frontArc; i++)
+            {
+                for (global::System.Int32 j = 0; j <= spellRange; j++)
+                {
+                    vec3 = castAgent.Position + Script.MultiplyVectorByScalar(castAgent.LookDirection, j);
+                    vec3.RotateAboutZ(i*30 * (float)Math.PI / 180f);
+                    list.AddRange(Script.FindAgentsWithinSpellRange(vec3, 3));
+                }
+            }
+            list =list.Distinct<Agent>().ToList();
+            return list;
+        
+        }
+        /// <summary>
         ///敌我识别脚本,不获取坐骑
         ///参数1：基于某agent进行敌我识别
         ///参数2：需要敌我识别的list

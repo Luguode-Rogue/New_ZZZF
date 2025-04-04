@@ -201,25 +201,20 @@ namespace New_ZZZF
 
             if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyPressed(InputKey.O))
             {
-                Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
-
-                foreach (var agent in Mission.Current.Agents)
+                Mission.Current.Scene.RayCastForClosestEntityOrTerrain(Mission.MainAgent.GetEyeGlobalPosition(),
+                    Mission.MainAgent.GetEyeGlobalPosition()+Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection,50),
+                    out var collisionDistance1, out var closestPoint1, out var gameE1, 0.5f);
+                if (Mission.Current.RayCastForClosestAgent(Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 0.5f),
+                    Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 50),
+                    out var collisionDistance)!=null)
                 {
-                    if (agent.HasMount)
-                    { agent.MountAgent.SetTargetPosition(foeAgent[0].GetEyeGlobalPosition().AsVec2); }
-                    if (foeAgent.Count > 0 && agent.Index != Agent.Main.Index)
-                    {
-                        agent.SetTargetPositionAndDirection(Agent.Main.GetEyeGlobalPosition().AsVec2, Agent.Main.LookDirection);
-                        agent.ClearTargetFrame();
-                        //WorldPosition worldPosition = agent.GetRetreatPos();
-                        //worldPosition = agent.GetWorldPosition();
-                        //agent.Retreat(agent.GetWorldPosition());
-                        Vec3 vec3 = Agent.Main.Position;
-                        vec3.y += 10;
-                        Vec2 vec2 = -Agent.Main.LookDirection.AsVec2;
-                        agent.SetInitialFrame(vec3, vec2);
-                        agent.SetActionChannel(1, ActionIndexCache.Create("act_reload_crossbow"), false, 172UL);
-                    }
+                    Script.SysOut(Mission.Current.RayCastForClosestAgent(Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 0.5f),
+                    Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 50),
+                    out collisionDistance).Name, Agent.Main);
+                }
+                if (gameE1 != null)
+                {
+                    Script.SysOut(gameE1.Name, Mission.MainAgent);
                 }
             }
 
@@ -398,6 +393,8 @@ namespace New_ZZZF
 
                     if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(currentPos, newPosition, out var collisionDistance1, out var closestPoint1, out var gameE1, 1f))
                     {
+                        if (gameE1 != null)
+                        { }
                         if (collisionDistance1 < 0.5f)
                         {
                             missileEntity.Remove(1);
@@ -408,6 +405,8 @@ namespace New_ZZZF
                     newPosition.z = 1;
                     if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(currentPos, newPosition, out var collisionDistance12, out _, out _, 1f))
                     {
+                        if (gameE1 != null)
+                        { }
                         if (collisionDistance12 < 0.5f)
                         {
                             missileEntity.Remove(1);
@@ -541,11 +540,11 @@ namespace New_ZZZF
                 }
             }
             MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
-            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyPressed(14))
+            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyPressed(14)&& Agent.Main!=null)
             {
                 Agent.Main.UpdateAgentProperties();
             }
-            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(14))
+            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(14) && Agent.Main != null)
             {
                 Agent.Main.UpdateAgentProperties();
             }

@@ -26,7 +26,6 @@ namespace New_ZZZF.Skills
 
         public override bool Activate(Agent casterAgent)
         {
-            return false;
             Random random = new Random();
             if (casterAgent != null)
             {
@@ -42,7 +41,7 @@ namespace New_ZZZF.Skills
                 Agent TarAgent=Script.FindClosestAgentToCaster(casterAgent, FoeAgent);
                 if (casterAgent == TarAgent)
                 {
-                    InformationManager.DisplayMessage(new InformationMessage("无有效目标"));
+                    Script.SysOut("无有效目标",casterAgent);
                     return false;
                 }
                 for (int i = 0; i <= 20; i++)

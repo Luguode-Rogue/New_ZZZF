@@ -10,6 +10,7 @@ using TaleWorlds.CampaignSystem.CharacterDevelopment;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
+using MathF = TaleWorlds.Library.MathF;
 
 namespace New_ZZZF
 {
@@ -46,7 +47,7 @@ namespace New_ZZZF
                 }
                 if (result.StateContainer.HasState("WeiYaBuff"))
                 {
-                    native = native * (1 - 0.5f);
+                    native = native * (1 - 0.25f);
                 }
                 if (result.StateContainer.HasState("YingXiongZhuFuBuff"))
                 {
@@ -59,6 +60,10 @@ namespace New_ZZZF
                 if (result.StateContainer.HasState("NaGouCiFuBuff"))
                 {
                     native = native * (1 + 0.5f);
+                }
+                if (result.StateContainer.HasState("XuRuoZuZhouBuffToEnemy"))
+                {
+                    native = native * (1 - 0.5f);
                 }
                 if (result.StateContainer.HasState("FengBaoZhiLiBuff"))
                 {
@@ -451,21 +456,36 @@ namespace New_ZZZF
 
         public override float CalculateDamage(in AttackInformation attackInformation, in AttackCollisionData collisionData, in MissionWeapon weapon, float baseDamage)
         {
+            //做一下护甲的固定数值减伤，最终的伤害，减少护甲15%防御值的伤害。60甲-12的最终伤害，避免重甲被劫匪石头砸死
+            int def = (int)(attackInformation.ArmorAmountFloat * 0.1f);
             Random random = new Random();
             float baseDam = base.CalculateDamage(attackInformation, collisionData, weapon, baseDamage);
-            SkillSystemBehavior.ActiveComponents.TryGetValue(attackInformation.AttackerAgent.Index, out var result);
-            if (result != null)
+            if(attackInformation.AttackerAgent==null|| attackInformation.VictimAgent==null) { return baseDam; }
+            SkillSystemBehavior.ActiveComponents.TryGetValue(attackInformation.AttackerAgent.Index, out var attackerComponent);
+            SkillSystemBehavior.ActiveComponents.TryGetValue(attackInformation.VictimAgent.Index, out var victimComponent);
+            if (attackerComponent != null)
             {
-                if (result.StateContainer.HasState("ZhanYiBuff"))
+                if (attackerComponent.StateContainer.HasState("ZhanYiBuff"))
                 {
                     if (random.NextFloat() > 0.5)
                     { baseDam += 50f; }
 
                 }
             }
-            //做一下护甲的固定数值减伤，最终的伤害，减少护甲15%防御值的伤害。60甲-12的最终伤害，避免重甲被劫匪石头砸死
-            int def = (int)(attackInformation.ArmorAmountFloat * 0.1f);
-            return baseDam - def;
+            if (victimComponent != null)
+            {
+                if (victimComponent.StateContainer.HasState("JianRenBuQuuBuff"))
+                {
+                    baseDam = 1;
+
+                }
+                else if (victimComponent.StateContainer.HasState("TianQiBuff"))
+                {
+                    baseDam = 1;
+
+                }
+            }
+            return MathF.Clamp(baseDam - def,0,1000);
         }
     }
     public class WOW_CustomAgentApplyDamageModel : CustomAgentApplyDamageModel
@@ -569,9 +589,35 @@ namespace New_ZZZF
         }
         public override float CalculateDamage(in AttackInformation attackInformation, in AttackCollisionData collisionData, in MissionWeapon weapon, float baseDamage)
         {
+            Random random = new Random();
+            float baseDam = base.CalculateDamage(attackInformation, collisionData, weapon, baseDamage);
+            SkillSystemBehavior.ActiveComponents.TryGetValue(attackInformation.AttackerAgent.Index, out var attackerComponent);
+            SkillSystemBehavior.ActiveComponents.TryGetValue(attackInformation.VictimAgent.Index, out var victimComponent);
+            if (attackerComponent != null)
+            {
+                if (attackerComponent.StateContainer.HasState("ZhanYiBuff"))
+                {
+                    if (random.NextFloat() > 0.5)
+                    { baseDam += 50f; }
+
+                }
+            }
+            if (victimComponent != null)
+            {
+                if (victimComponent.StateContainer.HasState("JianRenBuQu"))
+                {
+                    baseDam = 1;
+
+                }
+                else if (victimComponent.StateContainer.HasState("TianQi"))
+                {
+                    baseDam = 1;
+
+                }
+            }
             //做一下护甲的固定数值减伤，最终的伤害，减少护甲15%防御值的伤害。60甲-12的最终伤害，避免重甲被劫匪石头砸死
             int def = (int)(attackInformation.ArmorAmountFloat * 0.1f);
-            return base.CalculateDamage(attackInformation, collisionData, weapon, baseDamage) - def;
+            return MathF.Clamp(baseDam - def,0,1000);
         }
 
     }

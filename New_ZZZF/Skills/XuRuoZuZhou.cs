@@ -14,22 +14,22 @@ using static New_ZZZF.JingXia;
 
 namespace New_ZZZF
 {
-    internal class XieEZuZhou : SkillBase
+    internal class XuRuoZuZhou : SkillBase
     {
-        public XieEZuZhou()
+        public XuRuoZuZhou()
         {
-            SkillID = "XieEZuZhou";      // 必须唯一
+            SkillID = "XuRuoZuZhou";      // 必须唯一
             Type = SkillType.MainActive;    // 类型必须明确
             Cooldown = 2;             // 冷却时间（秒）
             ResourceCost = 0f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0053}XieEZuZhou");
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0056}XuRuoZuZhou");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0054}群体负面状态，持续影响附近敌方单位。受影响单位每秒生命值减少1%，并且禁用远程武器，对英雄单位无影响。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0057}群体负面状态，持续影响附近敌方单位。受影响单位降低造成的伤害，并且耐力回复-10。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {
             // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new XieEZuZhouBuffToSelf(60f, agent), }; // 新实例
+            List<AgentBuff> newStates = new List<AgentBuff> { new XuRuoZuZhouBuffToSelf(60f, agent), }; // 新实例
             foreach (var state in newStates)
             {
                 state.TargetAgent = agent;
@@ -40,12 +40,12 @@ namespace New_ZZZF
 
 
     }
-    public class XieEZuZhouBuffToSelf : AgentBuff
+    public class XuRuoZuZhouBuffToSelf : AgentBuff
     {
         private float _timeSinceLastTick;
-        public XieEZuZhouBuffToSelf(float duration, Agent source)
+        public XuRuoZuZhouBuffToSelf(float duration, Agent source)
         {
-            StateId = "XieEZuZhouBuffToSelf";
+            StateId = "XuRuoZuZhouBuffToSelf";
             Duration = duration;
             SourceAgent = source;
             _timeSinceLastTick = 0; // 新增初始化
@@ -75,7 +75,7 @@ namespace New_ZZZF
                     {
 
                         // 每次创建新的状态实例
-                        List<AgentBuff> newStates = new List<AgentBuff> { new XieEZuZhouBuffToEnemy(2F, agent), }; // 新实例
+                        List<AgentBuff> newStates = new List<AgentBuff> { new XuRuoZuZhouBuffToEnemy(2F, agent), }; // 新实例
                         foreach (var state in newStates)
                         {
                             state.TargetAgent = item;
@@ -95,14 +95,14 @@ namespace New_ZZZF
 
         }
     }
-    public class XieEZuZhouBuffToEnemy : AgentBuff
+    public class XuRuoZuZhouBuffToEnemy : AgentBuff
     {
         private float _timeSinceLastTick;
         private List<EquipmentIndex> itemsIndex = new List<EquipmentIndex>();
         private List<MissionWeapon> weapon = new List<MissionWeapon>();
-        public XieEZuZhouBuffToEnemy(float duration, Agent source)
+        public XuRuoZuZhouBuffToEnemy(float duration, Agent source)
         {
-            StateId = "XieEZuZhouBuffToEnemy";
+            StateId = "XuRuoZuZhouBuffToEnemy";
             Duration = duration;
             SourceAgent = source;
             _timeSinceLastTick = 0; // 新增初始化
@@ -122,7 +122,7 @@ namespace New_ZZZF
             //每秒刷一次状态
             if (_timeSinceLastTick >= 1f)
             {
-
+                Script.GetActiveComponents(agent).ChangeStamina(-5);
                 agent.UpdateAgentProperties();
 
                 _timeSinceLastTick -= 1f; // 重置计时器
