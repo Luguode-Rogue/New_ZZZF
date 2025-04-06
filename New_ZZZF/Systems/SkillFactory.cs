@@ -18,59 +18,70 @@ namespace New_ZZZF
     public static class SkillFactory
     {
         // 技能注册表：技能ID -> 技能实例（硬编码参数）
-        public static readonly Dictionary<string, SkillBase> _skillRegistry = new Dictionary<string, SkillBase>
+        public static readonly Dictionary<string, SkillBase> _skillRegistry = Refresh_skillRegistry();
+        public static Dictionary<string, SkillBase> Refresh_skillRegistry()
         {
-            //空技能
-            {"NullSkill",new NullSkill() },
-            //// 主主动技能
-            { "JianQi", new JianQi() }  ,          // 剑气斩
-            { "ConeOfArrows", new ConeOfArrows() }   ,         // 多重射击
-            { "DaoShan", new DaoShan() }   ,         // 刀扇
-            {"ShadowStep",new ShadowStep() },//暗影步
-            {"ZhanYi",new ZhanYi() },
-            {"JueXing",new JueXing() },
-            {"TianQi",new TianQi() },
-            {"GuWu",new GuWu() },
-            {"ChaoFeng",new ChaoFeng() },
-            {"DunWu",new DunWu() },
-            {"FengBaoZhiLi",new FengBaoZhiLi() },
-            {"ZhanHao",new ZhanHao() },
-            {"WeiYa",new WeiYa() },
-            {"JingXia",new JingXia() },
-            {"YingXiongZhuFu",new YingXiongZhuFu() },
-            {"KongNueCiFu",new KongNueCiFu() },
-            {"NaGouCiFu",new NaGouCiFu() },
-            {"JianQiCiFu",new JianQiCiFu() },
-            {"HuHuanFengBao",new HuHuanFengBao() },
-            {"ZhaoHuan",new ZhaoHuan半成品() },
-            {"HuoYanTuXi",new HuoYanTuXi() },
-            {"XieEZuZhou",new XieEZuZhou() },
-            {"DaDiJianTa",new DaDiJianTa() },
-            {"XuRuoZuZhou",new XuRuoZuZhou() },
-            {"HuoLiZaiSheng",new HuoLiZaiSheng() },
-            {"JianRenBuQu",new JianRenBuQu() },
-            {"KuangNuLongXi",new KuangNuLongXi() },
+           return new Dictionary<string, SkillBase>
+            {
+                //空技能
+                {"NullSkill",new NullSkill() },
+                //// 主主动技能
+                { "JianQi", new JianQi() }  ,          // 剑气斩
+                { "ConeOfArrows", new ConeOfArrows() }   ,         // 多重射击
+                { "DaoShan", new DaoShan() }   ,         // 刀扇
+                {"ShadowStep",new ShadowStep() },//暗影步
+                {"ZhanYi",new ZhanYi() },
+                {"JueXing",new JueXing() },
+                {"TianQi",new TianQi() },
+                {"GuWu",new GuWu() },
+                {"ChaoFeng",new ChaoFeng() },
+                {"DunWu",new DunWu() },
+                {"FengBaoZhiLi",new FengBaoZhiLi() },
+                {"ZhanHao",new ZhanHao() },
+                {"WeiYa",new WeiYa() },
+                {"JingXia",new JingXia() },
+                {"YingXiongZhuFu",new YingXiongZhuFu() },
+                {"KongNueCiFu",new KongNueCiFu() },
+                {"NaGouCiFu",new NaGouCiFu() },
+                {"JianQiCiFu",new JianQiCiFu() },
+                {"HuHuanFengBao",new HuHuanFengBao() },
+                {"ZhaoHuan",new ZhaoHuan半成品() },
+                {"HuoYanTuXi",new HuoYanTuXi() },
+                {"XieEZuZhou",new XieEZuZhou() },
+                {"DaDiJianTa",new DaDiJianTa() },
+                {"XuRuoZuZhou",new XuRuoZuZhou() },
+                {"HuoLiZaiSheng",new HuoLiZaiSheng() },
+                {"JianRenBuQu",new JianRenBuQu() },
+                {"KuangNuLongXi",new KuangNuLongXi() },
+                {"LingHunDanMu",new LingHunDanMu() },
+                {"JianRenLuanWu",new JianRenLuanWu() },
+                {"BKB",new BKB() },
+                {"ZhenYinZhan",new ZhenYinZhan() },
+                {"TianFaZhiJian",new TianFaZhiJian() },
             
-            //// 副主动技能
-            { "Rush", new Rush() },             // Rush
-            {"MagicShoot",new MagicShoot() },
+                //// 副主动技能
+                { "BaseZhanJi", new BaseZhanJi() },
+                { "Rush", new Rush() },             // Rush
+                {"MagicShoot",new MagicShoot() },
 
-            {"Roll",new Roll() },
-            //// 被动技能
+                {"HouYueSheJi",new HouYueSheJi() },
+                {"Roll",new Roll() },
+                //// 被动技能
 
-            {"ShengZhuangWuBu",new ShengZhuangWuBu() },
-            //// 法术
-            { "Fireball", new FireballSkill() },               // 火球术
-            { "lingmashaodi", new lingmashaodi() },               // 
-            { "HuiJianYuanZhen", new HuiJianYuanZhen() },               // 辉剑圆阵
+                {"ShengZhuangWuBu",new ShengZhuangWuBu() },
+                //// 法术
+                { "Fireball", new FireballSkill() },               // 火球术
+                { "lingmashaodi", new lingmashaodi() },               // 
+                { "HuiJianYuanZhen", new HuiJianYuanZhen() },               // 辉剑圆阵
             
-            {"LeiJi",new LeiJi() },
+                {"LeiJi",new LeiJi() },
             
-            //// 战技
-            //{ "ShieldBash", new ShieldBashSkill() }, 
-            { "HongShiZiHuoYan", new HongShiZiHuoYan() },           // 喷火
+                //// 战技
+                //{ "ShieldBash", new ShieldBashSkill() }, 
+                { "HongShiZiHuoYan", new HongShiZiHuoYan() },           // 喷火
 
-        };
+            };
+        }
         /// <summary>
         /// 根据技能列表，将技能转化为物品对象，方便选择技能界面使用
         /// 调用时间：游戏开始和游戏读取
@@ -96,34 +107,43 @@ namespace New_ZZZF
         /// <returns>返回对应的技能实例，若未找到则返回NullSkill</returns>
         public static SkillBase Create(string skillID)
         {
-            if (Game.Current.GameType is Campaign)
+            if (true||Game.Current.GameType is Campaign)
             {
                 // 处理空值或空白ID
                 if (string.IsNullOrWhiteSpace(skillID))
                 {
                     Debug.Print("[SkillFactory] 警告：传入空技能ID");
                     SkillBase skillBase = new NullSkill();
-                    ItemObject io = Game.Current.ObjectManager.RegisterPresumedObject<ItemObject>(new ItemObject("NullSkill"));
-                    ItemObject.InitializeTradeGood(io, new TextObject("NullSkill", null), "lib_book_open_a", DefaultItemCategories.Unassigned, 60, 1f, ItemObject.ItemTypeEnum.Book);
-                    skillBase.Item = io;
+                    if (Game.Current.GameType is Campaign)
+                    {
+                        ItemObject io = Game.Current.ObjectManager.RegisterPresumedObject<ItemObject>(new ItemObject("NullSkill"));
+                        ItemObject.InitializeTradeGood(io, new TextObject("NullSkill", null), "lib_book_open_a", DefaultItemCategories.Unassigned, 30, 1f, ItemObject.ItemTypeEnum.Book);
+                        skillBase.Item = io;
+                    }
                     return skillBase;
                 }
 
                 // 查找技能
                 if (_skillRegistry.TryGetValue(skillID, out SkillBase skill))
                 {
-                    ItemObject io = Game.Current.ObjectManager.RegisterPresumedObject<ItemObject>(new ItemObject(skillID));
-                    ItemObject.InitializeTradeGood(io, skill.Text, "lib_book_open_a", DefaultItemCategories.Unassigned, 60, 1f, ItemObject.ItemTypeEnum.Book);
-                    skill.Item = io;
+                    if (Game.Current.GameType is Campaign)
+                    {
+                        ItemObject io = Game.Current.ObjectManager.RegisterPresumedObject<ItemObject>(new ItemObject(skillID));
+                        ItemObject.InitializeTradeGood(io, skill.Text, "lib_book_open_a", DefaultItemCategories.Unassigned, 30, 1f, ItemObject.ItemTypeEnum.Book);
+                        skill.Item = io;
+                    }
                     return skill;
                 }
 
                 // 处理未知技能ID
                 Debug.Print($"[SkillFactory] 错误：未注册的技能ID '{skillID}'");
                 SkillBase skillBase2 = new NullSkill();
-                ItemObject io2 = Game.Current.ObjectManager.RegisterPresumedObject<ItemObject>(new ItemObject("NullSkill"));
-                ItemObject.InitializeTradeGood(io2, new TextObject("NullSkill", null), "lib_book_open_a", DefaultItemCategories.Unassigned, 60, 1f, ItemObject.ItemTypeEnum.Book);
-                skillBase2.Item = io2;
+                if (Game.Current.GameType is Campaign)
+                {
+                    ItemObject io2 = Game.Current.ObjectManager.RegisterPresumedObject<ItemObject>(new ItemObject("NullSkill"));
+                    ItemObject.InitializeTradeGood(io2, new TextObject("NullSkill", null), "lib_book_open_a", DefaultItemCategories.Unassigned, 30, 1f, ItemObject.ItemTypeEnum.Book);
+                    skillBase2.Item = io2;
+                }
                 return skillBase2;
             }
             return null;
@@ -139,9 +159,9 @@ namespace New_ZZZF
             public NullSkill()
             {
                 SkillID = "NullSkill";
-                Type = SkillType.Passive; // 设为被动避免意外触发
+                Type = SkillType.None; // 设为被动避免意外触发
                 Cooldown = 0;
-                ResourceCost = 0; 
+                ResourceCost = 0;
                 Text = new TaleWorlds.Localization.TextObject("{=ZZZF0000}Wu");
             }
 

@@ -5,24 +5,32 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.Extensions;
 using TaleWorlds.Core;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
+using static New_ZZZF.GuWu;
 
-namespace New_ZZZF.Skills
+namespace New_ZZZF.Skills//（法术）
 {
-    internal class JianQi : SkillBase
+    // 示例：在火球术中附加燃烧状态
+    public class BaseZhanJi : SkillBase
     {
-        public JianQi()
+        public BaseZhanJi()
         {
-            SkillID = "JianQi";      // 必须唯一
-            Type = SkillType.MainActive;    // 类型必须明确
-            Cooldown = 1f;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 法力消耗
-            Text = new TaleWorlds.Localization.TextObject("{=12345676}JianQi");
-            Difficulty = null;// new List<SkillDifficulty> {new SkillDifficulty(60,"Strong"), new SkillDifficulty(120, "OneHand") };//技能装备的需求
+            SkillID = "BaseZhanJi";
+            Type = SkillType.None;
+            Cooldown = 3;
+            ResourceCost = 15;
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0062}BaseZhanJi");
+            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0063}BaseZhanJi");
+
+
         }
+
+
         public override bool Activate(Agent casterAgent)
         {
             if (casterAgent != null)
@@ -37,7 +45,7 @@ namespace New_ZZZF.Skills
                 GameEntity projectile = GameEntity.CreateEmpty(Mission.Current.Scene);
                 projectile.AddAllMeshesOfGameEntity(GameEntity.Instantiate(Mission.Current.Scene, "weapon_heap_sword_a", true));
                 projectile.SetLocalPosition(vec3);
-                Vec3 TarPos = vec3 + Script.MultiplyVectorByScalar(vec31, 15);//做一下向量计算,获得一个延目视方向往前走n个单位长度的坐标
+                Vec3 TarPos = vec3 + Script.MultiplyVectorByScalar(vec31, 1);//做一下向量计算,获得一个延目视方向往前走n个单位长度的坐标
 
                 // 初始化数据对象
                 var projData = new ProjectileData
@@ -47,9 +55,7 @@ namespace New_ZZZF.Skills
                     CasterAgent = casterAgent,
                     TargetPos = TarPos,
                     SpawnTime = Mission.Current.CurrentTime,
-                    Lifetime = 7f, // 自定义存在时间
-                    BaseColor = new Vec3(0, 1, 0), // 绿色拖尾
-                    SpiralIntensity = 2.5f // 强螺旋效果
+                    Lifetime = 0.1f, // 自定义存在时间
                 };
                 // 获取当前 vec3 位置
                 Vec3 currentPos = vec3; // 这里的 vec3 应该是你在循环中计算得到的
@@ -68,7 +74,7 @@ namespace New_ZZZF.Skills
         {
             if (!SkillSystemBehavior.WoW_ProjectileDB.TryGetValue(missileEntity, out ProjectileData data))
                 return;
-            float BaseDamage = 20;
+            float BaseDamage = 40;
             // 获取Agent的CharacterObject
 
             int skill = 0;
@@ -94,16 +100,19 @@ namespace New_ZZZF.Skills
             Script.AgentListIFF(castAgent, list, out FriendAgent, out FoeAgent);
             foreach (Agent agent in FoeAgent)
             {
-                Script.CalculateFinalMagicDamage(data.CasterAgent, agent, BaseDamage, DamageType.None);
-                AgentSkillComponent agentComponent= Script.GetActiveComponents(agent);
-                if(agentComponent==null) { return; }
-                agentComponent._beHitCount += 1;
-                agentComponent._beHitTime = TaleWorlds.Library.MathF.Clamp(agentComponent._beHitTime+0.3f,0, 0.3f);
+                AgentSkillComponent agentComponent = Script.GetActiveComponents(agent);
+                if (agentComponent != null&& agentComponent._beHitCount==0)
+                {
+                    Script.CalculateFinalMagicDamage(data.CasterAgent, agent, BaseDamage, DamageType.None);
+                    agentComponent._beHitCount += 1;
+                    agentComponent._beHitTime += 0.3f;
+                }
 
 
             }
 
 
         }
+
     }
 }

@@ -14,9 +14,9 @@
 		<Spells>
 			<Slot1>Fireball</Slot1>
 			<!-- 火球术 -->
-			<Slot2>HuiJianYuanZhen</Slot2>
+			<Slot2>HouYueSheJi</Slot2>
 			<!-- 战士低级被动 -->
-			<Slot3>HuiJianYuanZhen</Slot3>
+			<Slot3>LeiJi</Slot3>
 			<!-- 空槽 -->
 			<Slot4>HuiJianYuanZhen</Slot4>
 			<!-- 治疗术 -->
@@ -27,13 +27,13 @@
 	</Troop>
 	<Troop id="imperial_veteran_infantryman">
 		<!-- 主主动技能 -->
-		<MainActive>HuiJianYuanZhen</MainActive>
+		<MainActive></MainActive>
 
 		<!-- 副主动技能 -->
-		<SubActive>AdrenalineRush</SubActive>
+		<SubActive></SubActive>
 
 		<!-- 被动栏（仅允许一个） -->
-		<Passive>IronWill</Passive>
+		<Passive></Passive>
 
 		<!-- 法术栏（最多4个，可混合法术或低级被动） -->
 		<Spells>

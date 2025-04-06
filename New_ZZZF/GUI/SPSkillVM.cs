@@ -2385,10 +2385,10 @@ namespace New_ZZZF
             /**/
             //bool flag = !this._filters[this._activeFilterIndex].Contains(item.TypeId);
             SkillFactory._skillRegistry.TryGetValue(item.StringId, out SkillBase val);
-            flag = !(val.Type == searchTarget) ||
-            (searchTarget == SkillType.Passive && val.Type == SkillType.Passive_Spell) ||
-            (searchTarget == SkillType.CombatArt && val.Type == SkillType.CombatArt_Spell) ||
-            (searchTarget == SkillType.Spell && val.Type == SkillType.Spell_CombatArt);
+            flag = !(val.Type == searchTarget) &&
+            !(searchTarget == SkillType.Passive && val.Type == SkillType.Passive_Spell)&&
+            !(searchTarget == SkillType.CombatArt && val.Type == SkillType.CombatArt_Spell)&&
+            !(searchTarget == SkillType.Spell && val.Type == SkillType.Spell_CombatArt);
 
             item.IsFiltered = (flag);
         }

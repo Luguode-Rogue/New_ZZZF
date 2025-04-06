@@ -195,6 +195,11 @@ namespace New_ZZZF
             {
                 CombatArtFlag = false;
                 TryActivateSkill(CombatArtSkill);
+                AgentSkillComponent agentSkill= Script.GetActiveComponents(Agent);
+                if(agentSkill != null && agentSkill.StateContainer.HasState("ZhenYinZhanBuff"))
+                {
+                    (agentSkill.MainActiveSkill as ZhenYinZhan).CanUse(Agent);
+                }
             }
         }
 

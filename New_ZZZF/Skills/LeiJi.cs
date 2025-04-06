@@ -6,7 +6,10 @@ using System.Threading.Tasks;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Extensions;
 using TaleWorlds.Core;
+using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
+using TaleWorlds.MountAndBlade.View.Screens;
+using TaleWorlds.ScreenSystem;
 
 namespace New_ZZZF.Skills//（法术）
 {
@@ -30,6 +33,14 @@ namespace New_ZZZF.Skills//（法术）
         public override bool Activate(Agent agent)
         {
             List<Agent> target = FindTarget(agent);
+            MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+            Vec3 lookP = Script.CameraLookPos();
+            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(24) && Agent.Main != null)
+            {
+                Script.AgentListIFF(Agent.Main, Script.FindAgentsWithinSpellRange(lookP, 3), out var friendAgent, out var foeAgent);
+                target = foeAgent;
+            }
+
             if (target != null && target.Count > 0)
             {
                 foreach (var item in target)
@@ -37,6 +48,7 @@ namespace New_ZZZF.Skills//（法术）
                     if (item == null || !item.IsActive()) continue;
                     Script.CalculateFinalMagicDamage(agent, item, 30, DamageType.ELECTRICITY_DAMAGE);
                     item.SetActionChannel(0, ActionIndexCache.Create("act_jump_loop"));
+                    item.PlayParticleEffect("fire_burning");
                 }
                 return true;
             }
@@ -61,7 +73,7 @@ namespace New_ZZZF.Skills//（法术）
         public static void useToAgent(Agent caster, Agent vimAgent)
         {
             SkillSystemBehavior.ActiveComponents.TryGetValue(vimAgent.Index, out var ActiveComponents);
-            if (ActiveComponents ==null|| ActiveComponents._beHitCount <= 5)
+            if (ActiveComponents == null || ActiveComponents._beHitCount <= 5)
             {
 
                 if (vimAgent == null || !vimAgent.IsActive()) return;

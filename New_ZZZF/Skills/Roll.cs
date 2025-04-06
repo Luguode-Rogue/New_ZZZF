@@ -8,7 +8,7 @@ using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 
-namespace New_ZZZF.Skills
+namespace New_ZZZF
 {
     internal class Roll : SkillBase
     {
@@ -144,13 +144,13 @@ namespace New_ZZZF.Skills
     }
     public class RushToPosBuff : AgentBuff
     {
-        private float _damagePerSecond;
+        public float speed;
         private float _timeSinceLastTick;
-        public RushToPosBuff(float duration, float dps, Agent source)
+        public RushToPosBuff(float duration, float speed, Agent source)
         {
             StateId = "RushToPosBuff";
             Duration = duration;
-            _damagePerSecond = 0;
+            speed = speed;
             SourceAgent = source;
             _timeSinceLastTick = 0; // 新增初始化
         }

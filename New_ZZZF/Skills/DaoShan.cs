@@ -25,19 +25,19 @@ namespace New_ZZZF
         {
             if (AgentDaoShan(agent))
             { return true; }
-             return false;
+            return false;
         }
         public bool AgentDaoShan(Agent agent)
         {
-            foreach (var TAgent in Mission.Current.Agents)
+            Script.AgentListIFF(agent, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+            foreach (var TAgent in foeAgent)
             {
-                if ((TAgent.IsActive() && !TAgent.IsFriendOf(agent))||!TAgent.IsHuman)
+
+                if (Script.AgentShotAgent(agent, TAgent) != 0)
                 {
-                    if (Script.AgentShotAgent(agent, TAgent) != 0)
-                    { 
-                        return true;
-                    }
+                    return true;
                 }
+
             }
             return false;
         }

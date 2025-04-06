@@ -20,11 +20,184 @@ using static TaleWorlds.MountAndBlade.Agent;
 using System.Reflection;
 using static TaleWorlds.Core.ItemObject;
 using MathF = TaleWorlds.Library.MathF;
+using TaleWorlds.MountAndBlade.ViewModelCollection;
 
 namespace New_ZZZF
 {
     public class Script
     {
+        public static bool FindTarAgents(Agent castAgent, int selectRannge, out List<Agent> target, Vec3 agentLookPos = default)
+        {
+            ///通用搜寻施法目标的方法
+            ///对于玩家，没有按缩放键时，自动选择视线落点附近的目标，并且选择周围单位最多的一个目标。按下缩放时，获取视线落点处的目标。
+            ///对于英雄，只有自动施法，且获得视线落点附近周围单位最多的目标。必要时调整为全屏获取
+            ///对于非英雄，只有自动施法，只获得视线落点范围的单位。必要时调整为全屏获取
+            MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+            target = new List<Agent>();
+            if (castAgent.IsHero)
+            {
+                if (Agent.Main != null && castAgent.IsMainAgent && missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(24))
+                {
+                    Vec3 lookP = Script.CameraLookPos();
+                    Script.AgentListIFF(Agent.Main, Script.FindAgentsWithinSpellRange(lookP, selectRannge), out var friendAgent, out var foeAgent);
+                    target = foeAgent;
+                    return true;
+                }
+                else
+                {
+                    // 5. 分离友方和敌方代理（AgentListIFF）
+                    Script.AgentListIFF(
+                        Agent.Main,
+                        Mission.Current.Agents,
+                        out var friendAgent,
+                        out var foeAgent
+                    );
+                    Vec3 targetPosition = Vec3.Invalid;
+
+                    // 1. 获取当前角色的视线位置（AgentLookPos）
+                    if (agentLookPos != null && agentLookPos != default)
+                    {
+                        agentLookPos = AgentLookPos(castAgent);
+                    }
+                    if (AgentLookPos == null) return false;
+                    // 2. 计算最优冲突位置（FindOptimalConflictPos）
+                    var optimalConflictPos = FindOptimalConflictPos(
+                        castAgent,
+                        agentLookPos,
+                        selectRannge * 10
+                    );
+                    if (optimalConflictPos == null && FindClosestAgentToCaster(castAgent, foeAgent).Index != castAgent.Index)
+                    {
+                        targetPosition = FindClosestAgentToCaster(castAgent, foeAgent).Position;
+                    }
+                    else if (optimalConflictPos != null)
+                    {
+                        // 3. 提取冲突位置的坐标（Position）
+                        targetPosition = optimalConflictPos.Position;
+                    }
+                    else
+                    { return false; }
+
+                    // 4. 获取指定范围内的所有代理（FindAgentsWithinSpellRange）
+                    var agentsInRadius = Script.FindAgentsWithinSpellRange(
+                        targetPosition,
+                        selectRannge
+                    );
+                    // 5. 分离友方和敌方代理（AgentListIFF）
+                    Script.AgentListIFF(
+                        Agent.Main,
+                        agentsInRadius,
+                        out friendAgent,
+                        out foeAgent
+                    );
+
+                    target = foeAgent;
+                    return true;
+
+                }
+            }
+            else
+            {
+
+                // 1. 获取当前角色的视线位置（AgentLookPos）
+                if (agentLookPos != null && agentLookPos != default|| (agentLookPos.x == 0 && agentLookPos.y == 0 && agentLookPos.z == 0 ))
+                {
+                    agentLookPos = AgentLookPos(castAgent);
+                    if (castAgent.GetTargetAgent()!=null)
+                    {
+                        agentLookPos = castAgent.GetTargetAgent().Position;
+                    }
+                }
+
+
+
+                // 4. 获取指定范围内的所有代理（FindAgentsWithinSpellRange）
+                var agentsInRadius = Script.FindAgentsWithinSpellRange(
+                    agentLookPos,
+                    selectRannge
+                );
+
+                // 5. 分离友方和敌方代理（AgentListIFF）
+                Script.AgentListIFF(
+                    Agent.Main,
+                    agentsInRadius,
+                    out var friendAgent,
+                    out var foeAgent
+                );
+                target = foeAgent;
+                return true;
+
+            }
+
+
+
+            return false;
+
+        }
+        /// <summary>
+        /// onMissionTick里调用的，按下缩放键后的区域显示
+        /// </summary>
+        public static void UpdateProjectileTargets()
+        {
+            MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(24) && Agent.Main != null)
+            {
+                if (SkillSystemBehavior.WoW_Line.Count == 0)
+                {
+                    for (global::System.Int32 i = 0; i < 16; i++)
+                    {
+                        GameEntity gameEntity = GameEntity.CreateEmpty(Mission.Current.Scene);
+                        gameEntity.AddMesh(Mesh.GetFromResource("ballista_projectile_flying"));
+                        SkillSystemBehavior.WoW_Line.Add(i, gameEntity);
+                    }
+                }
+                else
+                {
+                    Vec3 lookP = Script.CameraLookPos();
+                    foreach (var item in SkillSystemBehavior.WoW_Line)
+                    {
+                        MatrixFrame matrixFrame = item.Value.GetFrame();
+                        matrixFrame.origin = lookP;
+                        Vec3 ro = Agent.Main.LookDirection;
+                        ro.RotateAboutZ(22.5f * item.Key * 3.1415f / 180);
+                        ro.RotateAboutZ(10f * 3.1415f / 180);
+                        matrixFrame.origin += Script.MultiplyVectorByScalar(ro, 5);
+                        matrixFrame.rotation = Agent.Main.LookRotation;
+                        matrixFrame.rotation.u = Vec3.Up;
+                        item.Value.SetFrame(ref matrixFrame);
+                        Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+                        foreach (var foe in foeAgent)
+                        {
+                            if (foe.IsActive())
+                            {
+                                float distanceToTarget = lookP.Distance(foe.GetEyeGlobalPosition());
+                                if (distanceToTarget <= 5)
+                                {
+                                    foe.AgentVisuals.SetContourColor(new uint?(new Color(1f, 0f, 0f, 1f).ToUnsignedInteger()), true);//获取agent的视觉表现,并且设置描边以及颜色
+                                }
+                                else
+                                {
+                                    foe.AgentVisuals.SetContourColor(null, true);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(24) && Agent.Main != null)
+            {
+                foreach (var item in SkillSystemBehavior.WoW_Line)
+                {
+                    MatrixFrame matrixFrame = MatrixFrame.Identity;
+                    item.Value.SetFrame(ref matrixFrame);
+                }
+                Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+                foreach (var foe in foeAgent)
+                {
+                    foe.AgentVisuals.SetContourColor(null, true);
+                }
+            }
+        }
         /// <summary>
         /// 玩家报错信息
         /// </summary>
@@ -207,8 +380,8 @@ namespace New_ZZZF
             float Range = 9999f;
             foreach (Agent agent in agentList)
             {
-                if (CasterAgent.Index== agent.Index) continue;
-                if(!agent.IsHuman)continue;
+                if (CasterAgent.Index == agent.Index) continue;
+                if (!agent.IsHuman) continue;
                 Vec2 v2 = CasterAgent.GetCurrentVelocity() - agent.GetCurrentVelocity();
                 if (Range > v2.Length)
                 {
@@ -269,7 +442,7 @@ namespace New_ZZZF
         /// <param name="castAgent"></param>
         /// <param name="spellRange"></param>
         /// <returns></returns>
-        public static List<Agent> FindAgentsInFrontArc(Agent castAgent,int frontArc, int spellRange)
+        public static List<Agent> FindAgentsInFrontArc(Agent castAgent, int frontArc, int spellRange)
         {
             List<Agent> list = new List<Agent>();
             Vec3 vec3 = new Vec3();
@@ -278,13 +451,13 @@ namespace New_ZZZF
                 for (global::System.Int32 j = 0; j <= spellRange; j++)
                 {
                     vec3 = castAgent.Position + Script.MultiplyVectorByScalar(castAgent.LookDirection, j);
-                    vec3.RotateAboutZ(i*30 * (float)Math.PI / 180f);
+                    vec3.RotateAboutZ(i * 30 * (float)Math.PI / 180f);
                     list.AddRange(Script.FindAgentsWithinSpellRange(vec3, 3));
                 }
             }
-            list =list.Distinct<Agent>().ToList();
+            list = list.Distinct<Agent>().ToList();
             return list;
-        
+
         }
         /// <summary>
         ///敌我识别脚本,不获取坐骑
@@ -300,11 +473,16 @@ namespace New_ZZZF
             FoeAgent = new List<Agent>();
             for (int i = 0; i < InputList.Count; i++)
             {
-                if (InputList[i].IsFriendOf(agent) && InputList[i].IsHuman&&!InputList[i].IsEnemyOf(agent))
+                AgentSkillComponent agentSkill = Script.GetActiveComponents(InputList[i]);
+                if (agentSkill != null && agentSkill.StateContainer.HasState("BKBBuff"))
+                {
+                    continue;
+                }
+                if (InputList[i].IsFriendOf(agent) && InputList[i].IsHuman && !InputList[i].IsEnemyOf(agent))
                 {
                     FriendAgent.Add(InputList[i]);
                 }
-                else if (!InputList[i].IsFriendOf(agent) && InputList[i].IsHuman&& InputList[i].IsEnemyOf(agent))
+                else if (!InputList[i].IsFriendOf(agent) && InputList[i].IsHuman && InputList[i].IsEnemyOf(agent))
                 {
                     FoeAgent.Add(InputList[i]);
                 }
@@ -337,7 +515,7 @@ namespace New_ZZZF
             Agent agent = null;
             foreach (Agent agent2 in Mission.Current.Agents)
             {
-                if ((agent2.IsMount && agent2.RiderAgent != null && !agent2.RiderAgent.IsFriendOf(player)&&agent2.RiderAgent.IsEnemyOf(player)) || (!agent2.IsMount && !agent2.IsFriendOf(player) && agent2.IsEnemyOf(player)))
+                if ((agent2.IsMount && agent2.RiderAgent != null && !agent2.RiderAgent.IsFriendOf(player) && agent2.RiderAgent.IsEnemyOf(player)) || (!agent2.IsMount && !agent2.IsFriendOf(player) && agent2.IsEnemyOf(player)))
                 {
                     Vec3 vec2 = agent2.GetChestGlobalPosition() - v;
                     float num3 = vec2.Normalize();
@@ -362,11 +540,12 @@ namespace New_ZZZF
                 return agent.RiderAgent;
             }
             return agent;
-        }/// <summary>
-         /// 获取目视地点
-         /// </summary>
-         /// <param name="agent"></param>
-         /// <returns></returns>
+        }
+        /// <summary>
+        /// 获取目视地点
+        /// </summary>
+        /// <param name="agent"></param>
+        /// <returns></returns>
         public static Vec3 AgentLookPos(Agent agent) //获取目视地点,效果凑合了
         {
             Vec3 vec3 = Vec3.Invalid;
@@ -375,9 +554,25 @@ namespace New_ZZZF
 
             return vec3;
         }
+        /// <summary>
+        /// 获取相机目视地点
+        /// </summary>
+        /// <returns></returns>
+        public static Vec3 CameraLookPos()
+        {
+
+            Vec3 vec3 = Vec3.Invalid;
+            float f = 0f;
+            MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+            Vec3 direction = missionScreen.CombatCamera.Direction;
+            Vec3 position = missionScreen.CombatCamera.Position;
+            Mission.Current.Scene.RayCastForClosestEntityOrTerrain(position, position + MultiplyVectorByScalar(direction, 5000f), out f, out vec3);
+
+            return vec3;
+        }
         public static bool IsRangeWeapon(ItemObject item)
         {
-            if(item==null) { return false; }
+            if (item == null) { return false; }
             return !(item.Type == ItemTypeEnum.Horse || item.Type == ItemTypeEnum.Polearm || item.Type == ItemTypeEnum.Shield || item.Type == ItemTypeEnum.OneHandedWeapon || item.Type == ItemTypeEnum.TwoHandedWeapon);
         }
         /// <summary>
@@ -386,13 +581,13 @@ namespace New_ZZZF
         /// <param name="agent"></param>
         /// <param name="missionWeapon"></param>
         /// <returns></returns>
-        public static bool AgentGetCurrentWeapon(Agent agent,out MissionWeapon missionWeapon)
+        public static bool AgentGetCurrentWeapon(Agent agent, out MissionWeapon missionWeapon)
         {                 // 获取Agent主手中武器的Index索引
             EquipmentIndex mainHandIndex = agent.GetWieldedItemIndex(Agent.HandIndex.MainHand);
             if (mainHandIndex == EquipmentIndex.None)
             {
                 SysOut("无有效武器", agent);
-                missionWeapon =MissionWeapon.Invalid;
+                missionWeapon = MissionWeapon.Invalid;
                 return false;
             }
 
@@ -563,7 +758,7 @@ namespace New_ZZZF
             }
             return missionWeapon;
         }
-        public bool AimShoot(Agent agent)//自瞄步骤1，选择射击目标agent
+        public static bool AimShoot(Agent agent)//自瞄步骤1，选择射击目标agent
         {
             EquipmentIndex mainHandIndex1 = agent.GetWieldedItemIndex(Agent.HandIndex.MainHand);
             if (mainHandIndex1 == EquipmentIndex.None)
@@ -976,7 +1171,7 @@ namespace New_ZZZF
                 MatrixFrame matrixFrame = new MatrixFrame(new Mat3(new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)), new Vec3((float)x, (float)y, (float)z));
                 gameEntity.SetGlobalFrame(matrixFrame);
                 SkillSystemBehavior.WoW_CustomGameEntity.Add(gameEntity);
-                SkillSystemBehavior.WoW_Line.Add(time, gameEntity);
+                SkillSystemBehavior.WoW_Line.Add((int)time, gameEntity);
                 gameEntity.SetLocalPosition(new Vec3((float)x, (float)y, (float)z));
             }
             else
@@ -1001,15 +1196,15 @@ namespace New_ZZZF
         /// <param name="tarPos"></param>
         /// <param name="range"></param>
         /// <returns></returns>
-        public static Agent FindOptimalConflictPos(Agent caster,Vec3 tarPos, int range)
+        public static Agent FindOptimalConflictPos(Agent caster, Vec3 tarPos, int range)
         {
-            List<Agent>l= GetTargetedInRange(caster, tarPos, (int)range);
-            int conut= 0;
-            Agent tarAgent= null;
-            foreach (Agent agent in l )
+            List<Agent> l = GetTargetedInRange(caster, tarPos, (int)range);
+            int conut = 0;
+            Agent tarAgent = null;
+            foreach (Agent agent in l)
             {
-                int c=GetTargetedInRange(caster, agent.Position, (int)3).Count;
-                if (conut< c)
+                int c = GetTargetedInRange(caster, agent.Position, (int)3).Count;
+                if (conut < c)
                 {
                     tarAgent = agent;
                     conut = c;
@@ -1040,13 +1235,13 @@ namespace New_ZZZF
             {
                 if (attackerComponent.StateContainer.HasState("JianQiCiFuBuff"))
                 {
-                   
+
                 }
             }
             float DifHP = Victim.Health;
             DifHP -= BaseDamage;
             Victim.Health = DifHP;
-            InformationManager.DisplayMessage(new InformationMessage("造成了" + BaseDamage.ToString() + "点" + DamageType.ToString() + "伤害"));
+            SysOut("造成了" + BaseDamage.ToString() + "点" + DamageType.ToString() + "伤害", Caster);
 
             if (Victim.Health <= 0)
             {
@@ -1056,8 +1251,12 @@ namespace New_ZZZF
                 //Mission.Current.KillAgentCheat(Victim);
             }
         }
-
-        public static AgentSkillComponent GetActiveComponents(Agent agent )
+        /// <summary>
+        /// 注意判定非空，输入agent，获取对应的扩展信息
+        /// </summary>
+        /// <param name="agent"></param>
+        /// <returns></returns>
+        public static AgentSkillComponent GetActiveComponents(Agent agent)
         {
             AgentSkillComponent agentSkillComponent;
             SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out agentSkillComponent);

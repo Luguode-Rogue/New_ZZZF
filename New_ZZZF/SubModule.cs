@@ -140,11 +140,28 @@ namespace New_ZZZF
 
 
                 }
-                if (Input.IsKeyPressed(InputKey.L))
+                if (Input.IsKeyDown(InputKey.L))
                 {
                     MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+                    SkillFactory.Refresh_skillRegistry();
+                    SkillFactory.SkillToItemObject();
+                    SkillConfigManager.Instance._troopSkillMap.Clear();
+                    if (!(SkillConfigManager.Instance._troopSkillMap != null && SkillConfigManager.Instance._troopSkillMap.Count > 1))
+                    {
+                        try
+                        {
+                            // 初始化技能配置管理器并加载XML
+                            string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
+                            SkillConfigManager.Instance.LoadFromXml(xmlPath);
 
-
+                            // 调试日志
+                            Debug.Print("[New_ZZZF] 技能配置加载完成！");
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.Print($"[New_ZZZF] 配置加载失败: {ex.Message}");
+                        }
+                    }
 
                 }
             }

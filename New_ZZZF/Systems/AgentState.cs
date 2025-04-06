@@ -50,7 +50,7 @@ namespace New_ZZZF
         {
             foreach (var state in _activeStates)
             {
-                if (state.StateId.ToString().Equals(stateId))
+                if (state.StateId !=null&& state.StateId.ToString().Equals(stateId))
                 { return true; }
             }
             return false;

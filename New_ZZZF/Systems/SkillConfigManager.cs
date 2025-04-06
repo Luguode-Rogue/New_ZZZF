@@ -13,7 +13,7 @@ namespace New_ZZZF
     /// <summary>
     /// 兵种技能配置管理器（单例模式）
     /// </summary>
-    
+
     public sealed class SkillConfigManager
     {
         // 单例实例
@@ -117,27 +117,27 @@ namespace New_ZZZF
 
             Debug.Print($"[警告] 未找到兵种 {troopId} 的技能配置，返回默认");
             return null;
-        } 
+        }
         /// <summary>
-         /// 设定指定兵种的技能配置组
-         /// </summary>
+        /// 设定指定兵种的技能配置组
+        /// </summary>
         public void SetSkillSetForTroop(string troopId, SkillSet setSkillSet)
         {
             if (_troopSkillMap.TryGetValue(troopId, out SkillSet skillSet))
             {
                 _troopSkillMap[troopId] = setSkillSet;
             }
-            else if (!_troopSkillMap.TryGetValue(troopId, out SkillSet def)) 
+            else if (!_troopSkillMap.TryGetValue(troopId, out SkillSet def))
             {
                 _troopSkillMap.Add(troopId, setSkillSet);
             }
- 
+
         }
         public static List<string> ToStringList(SkillSet skillSet)
         {
             SkillFactory._skillRegistry.TryGetValue("NullSkill", out SkillBase skillBase);
             List<string> list = new List<string>();
-            list.Add(skillSet.MainActive!=null? skillSet.MainActive.SkillID: skillBase.SkillID);
+            list.Add(skillSet.MainActive != null ? skillSet.MainActive.SkillID : skillBase.SkillID);
             list.Add(skillSet.SubActive != null ? skillSet.SubActive.SkillID : skillBase.SkillID);
             list.Add(skillSet.Passive != null ? skillSet.Passive.SkillID : skillBase.SkillID);
             list.Add(skillSet.CombatArt != null ? skillSet.CombatArt.SkillID : skillBase.SkillID);
@@ -151,15 +151,15 @@ namespace New_ZZZF
         {
 
             SkillSet skillSet = new SkillSet();
-  
-                skillSet.MainActive = SkillConfigManager.Instance.ParseSkill(list[0]);
-                skillSet.SubActive = SkillConfigManager.Instance.ParseSkill(list[1]);
-                skillSet.Passive = SkillConfigManager.Instance.ParseSkill(list[2]);
-                skillSet.CombatArt = SkillConfigManager.Instance.ParseSkill(list[3]);
-                skillSet.Spells[0] = SkillConfigManager.Instance.ParseSkill(list[4]);
-                skillSet.Spells[1] = SkillConfigManager.Instance.ParseSkill(list[5]);
-                skillSet.Spells[2] = SkillConfigManager.Instance.ParseSkill(list[6]);
-                skillSet.Spells[3] = SkillConfigManager.Instance.ParseSkill(list[7]);
+
+            skillSet.MainActive = SkillConfigManager.Instance.ParseSkill(list[0]);
+            skillSet.SubActive = SkillConfigManager.Instance.ParseSkill(list[1]);
+            skillSet.Passive = SkillConfigManager.Instance.ParseSkill(list[2]);
+            skillSet.CombatArt = SkillConfigManager.Instance.ParseSkill(list[3]);
+            skillSet.Spells[0] = SkillConfigManager.Instance.ParseSkill(list[4]);
+            skillSet.Spells[1] = SkillConfigManager.Instance.ParseSkill(list[5]);
+            skillSet.Spells[2] = SkillConfigManager.Instance.ParseSkill(list[6]);
+            skillSet.Spells[3] = SkillConfigManager.Instance.ParseSkill(list[7]);
             return skillSet;
         }
         /// <summary>
@@ -167,7 +167,11 @@ namespace New_ZZZF
         /// </summary>
         private SkillBase ParseSkill(string skillId)
         {
-            if (string.IsNullOrEmpty(skillId)) return null;
+            if (string.IsNullOrEmpty(skillId))
+            {
+                Debug.Print($"[警告] 未知技能ID: {skillId}");
+                return new NullSkill(); // 返回空技能占位
+            }
 
             SkillBase skill = SkillFactory.Create(skillId);
             if (skill == null)
@@ -190,10 +194,10 @@ namespace New_ZZZF
         public SkillBase[] Spells { get; } = new SkillBase[4]; // 法术/低级被动
         public SkillBase CombatArt { get; set; }      // 战技
 
-        public static SkillSet Default => new SkillSet(); 
+        public static SkillSet Default => new SkillSet();
         public SkillSet()
         {
-            SkillFactory._skillRegistry.TryGetValue("NullSkill",out SkillBase skillBase);
+            SkillFactory._skillRegistry.TryGetValue("NullSkill", out SkillBase skillBase);
             MainActive = skillBase;
             SubActive = skillBase;
             Passive = skillBase;

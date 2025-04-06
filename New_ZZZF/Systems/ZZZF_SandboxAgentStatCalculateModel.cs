@@ -22,6 +22,7 @@ using static New_ZZZF.NaGouCiFu;
 using TaleWorlds.InputSystem;
 using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
+using static New_ZZZF.BKB;
 
 namespace New_ZZZF.Systems
 {
@@ -57,7 +58,7 @@ namespace New_ZZZF.Systems
                 MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
                 if (missionScreen.SceneLayer!=null)
                 {
-                    if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyPressed(14))
+                    if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(14) && Agent.Main!=null)
                     {
                         Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 2;
                         Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 2;
@@ -65,7 +66,7 @@ namespace New_ZZZF.Systems
                         resultMain.ChangeStamina(-5);
 
                     }
-                    if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(14))
+                    if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(14) && Agent.Main != null)
                     {
                         Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 1;
                         Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 1;
@@ -157,6 +158,17 @@ namespace New_ZZZF.Systems
                         agent.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 2f;
                         agent.AgentDrivenProperties.AttributeHorseArchery *= 2f;
                         agent.AgentDrivenProperties.AttributeCourage *= 2f;
+                    }
+                }
+                if (result.StateContainer.HasState("BKBBuff"))
+                {
+                    BKBBuff buff = result.StateContainer.GetState("BKBBuff") as BKBBuff;
+                    if (buff != null)
+                    {
+                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
+                        agent.AgentDrivenProperties.TopSpeedReachDuration *= 2f;
+                        agent.AgentDrivenProperties.MaxSpeedMultiplier /= 2f;
+                        agent.AgentDrivenProperties.CombatMaxSpeedMultiplier /= 2f;
                     }
                 }
                 if (result.StateContainer.HasState("NaGouCiFuBuff"))

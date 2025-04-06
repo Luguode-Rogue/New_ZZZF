@@ -177,6 +177,7 @@ namespace New_ZZZF
             foreach (Agent agent in FoeAgent)
             {
                 AgentSkillComponent agentComponent = Script.GetActiveComponents(agent);
+                if(agentComponent == null) { return ; }
                 if (agentComponent._beHitCount <= 4)
                 {
 

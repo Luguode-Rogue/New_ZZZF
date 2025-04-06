@@ -53,30 +53,32 @@ namespace New_ZZZF
                 }
             }
             if (TAgent == null || agent != Agent.Main)
-                foreach (Agent agents in Mission.Current.Agents)
+            {
+                Script.AgentListIFF(agent, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+                foreach (Agent agents in foeAgent)
                 {
-                    if (!agents.IsFriendOf(agent) && agents.IsActive())
+                    if (!SkillSystemBehavior.WoW_AgentRushAgent.ContainsKey(agent.Index))
                     {
-                        if (!SkillSystemBehavior.WoW_AgentRushAgent.ContainsKey(agent.Index))
-                        {
-                            SkillSystemBehavior.WoW_AgentRushAgent.Add(agent.Index, agents);
-                            RushToAgentBuff rushToAgentBuff = new RushToAgentBuff(5f, 0f, agent); // 新实例
-                            rushToAgentBuff.TargetPosition = agents.Position;
-                            // 每次创建新的状态实例
-                            List<AgentBuff> newStates = new List<AgentBuff>
+                        SkillSystemBehavior.WoW_AgentRushAgent.Add(agent.Index, agents);
+                        RushToAgentBuff rushToAgentBuff = new RushToAgentBuff(5f, 0f, agent); // 新实例
+                        rushToAgentBuff.TargetPosition = agents.Position;
+                        // 每次创建新的状态实例
+                        List<AgentBuff> newStates = new List<AgentBuff>
                             {
                                rushToAgentBuff,
                             };
-                            foreach (var state in newStates)
-                            {
-                                state.TargetAgent = agent;
-                                agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                            }
-                            return true;
+                        foreach (var state in newStates)
+                        {
+                            state.TargetAgent = agent;
+                            agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
                         }
-                        else return false;
+                        return true;
                     }
+                    else return false;
+
                 }
+            }
+
             return false;
         }
     }
@@ -145,5 +147,5 @@ namespace New_ZZZF
             }
         }
     }
-    }
+}
 

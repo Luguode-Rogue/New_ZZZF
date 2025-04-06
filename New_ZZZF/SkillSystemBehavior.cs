@@ -38,7 +38,7 @@ namespace New_ZZZF
         public static Dictionary<int, AgentSkillComponent> ActiveComponents = new Dictionary<int, AgentSkillComponent>();
 
 
-        public static Dictionary<float, GameEntity> WoW_Line = new Dictionary<float, GameEntity>()
+        public static Dictionary<int, GameEntity> WoW_Line = new Dictionary<int, GameEntity>()
         {
 
 
@@ -163,23 +163,23 @@ namespace New_ZZZF
             MissionScreen camScreenManager = ScreenManager.TopScreen as MissionScreen;
             if (Mission.Current != null && Mission.MainAgent != null && (Input.IsKeyPressed(InputKey.L)))
             {
-                Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
-                foreach (var item in Mission.Current.Agents)
-                {
-                    if (!item.IsHuman) continue;
+                //Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+                //foreach (var item in Mission.Current.Agents)
+                //{
+                //    if (!item.IsHuman) continue;
 
-                    EquipmentIndex mainHandIndex = item.GetWieldedItemIndex(Agent.HandIndex.MainHand);
-                    if (mainHandIndex == EquipmentIndex.None)
-                    {
-                        continue;
-                    }
-                    // EquipmentIndex转MissionWeapon
-                    MissionWeapon mainHandEquipmentElement = item.Equipment[mainHandIndex];
-                    if (mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.Polearm || mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.TwoHandedWeapon)
-                    {
-                        item.DropItem(mainHandIndex);
-                    }
-                }
+                //    EquipmentIndex mainHandIndex = item.GetWieldedItemIndex(Agent.HandIndex.MainHand);
+                //    if (mainHandIndex == EquipmentIndex.None)
+                //    {
+                //        continue;
+                //    }
+                //    // EquipmentIndex转MissionWeapon
+                //    MissionWeapon mainHandEquipmentElement = item.Equipment[mainHandIndex];
+                //    if (mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.Polearm || mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.TwoHandedWeapon)
+                //    {
+                //        item.DropItem(mainHandIndex);
+                //    }
+                //}
                 //Agent agent =Script.FindClosestAgentToCaster(Agent.Main, Mission.Current.Agents);
 
                 //for (int i = 0; i < 20; i++)
@@ -199,14 +199,14 @@ namespace New_ZZZF
                 //}
             }
 
-            if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyPressed(InputKey.O))
+            if (Mission.Current != null && Mission.MainAgent != null && Input.IsKeyDown(InputKey.O))
             {
                 Mission.Current.Scene.RayCastForClosestEntityOrTerrain(Mission.MainAgent.GetEyeGlobalPosition(),
-                    Mission.MainAgent.GetEyeGlobalPosition()+Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection,50),
+                    Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 50),
                     out var collisionDistance1, out var closestPoint1, out var gameE1, 0.5f);
                 if (Mission.Current.RayCastForClosestAgent(Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 0.5f),
                     Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 50),
-                    out var collisionDistance)!=null)
+                    out var collisionDistance) != null)
                 {
                     Script.SysOut(Mission.Current.RayCastForClosestAgent(Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 0.5f),
                     Mission.MainAgent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(Mission.MainAgent.LookDirection, 50),
@@ -214,8 +214,26 @@ namespace New_ZZZF
                 }
                 if (gameE1 != null)
                 {
+                    gameE1.ApplyLocalImpulseToDynamicBody(Vec3.Zero, Script.MultiplyVectorByScalar(Agent.Main.LookDirection, 50));
+                    if (Input.IsKeyPressed(InputKey.LeftAlt))
+                    {
+                        if (gameE1.Parent != null)
+                        {
+                            gameE1 = gameE1.Parent;
+
+
+                        }
+                        MatrixFrame frame = gameE1.GetGlobalFrame();
+                        frame.origin.z += 10;
+                        gameE1.SetGlobalFrame(frame);
+                        frame.origin.z += 1;
+                        Agent.Main.TeleportToPosition(frame.origin);
+                    }
+
                     Script.SysOut(gameE1.Name, Mission.MainAgent);
                 }
+
+
             }
 
             //测试区↑
@@ -245,6 +263,7 @@ namespace New_ZZZF
                 if (comp.AgentInstance.IsHero)
                 {
                     comp.Tick(dt);
+                    comp.CoolDownTick(dt);
                 }
 
                 if (_tickTimer05 >= TickInterval_05_2)
@@ -252,8 +271,8 @@ namespace New_ZZZF
                     if (!comp.AgentInstance.IsHero)
                     {
                         comp.Tick(TickInterval_05_2);
+                        comp.CoolDownTick(TickInterval_05_2);
                     }
-                    comp.CoolDownTick(TickInterval_05_2);
                 }
             }
 
@@ -295,7 +314,9 @@ namespace New_ZZZF
                 foreach (GameEntity missileEntity in WoW_CustomGameEntity.ToList())
                 {
                     if (!WoW_ProjectileDB.TryGetValue(missileEntity, out ProjectileData data))
+                    {
                         continue;
+                    }
                     // 存在时间检测
                     if (data.Age > data.Lifetime)
                     {
@@ -354,7 +375,6 @@ namespace New_ZZZF
                     }
 
                     // 更新位置和朝向
-                    //Vec3 newPosition = currentPos + newDirection * MoveSpeed * dt;
                     Vec3 newPosition = currentPos + newDirection * data.BaseSpeed * TickInterval_001;
 
                     // 动态速度变化（示例：随时间加速）
@@ -379,9 +399,7 @@ namespace New_ZZZF
                     if (currentPos.Distance(targetPos) < 0.5f)
                     {
                         if (data.Name == "HuiJianYuanZhen") { HuiJianYuanZhen.HuiJianYuanZhenDamage(missileEntity); }
-                        missileEntity.Remove(1);
-                        WoW_ProjectileDB.Remove(missileEntity);
-                        WoW_CustomGameEntity.Remove(missileEntity);
+                        DestroyProjectile(missileEntity);
 
                     }
 
@@ -393,31 +411,26 @@ namespace New_ZZZF
 
                     if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(currentPos, newPosition, out var collisionDistance1, out var closestPoint1, out var gameE1, 1f))
                     {
-                        if (gameE1 != null)
-                        { }
+
                         if (collisionDistance1 < 0.5f)
                         {
-                            missileEntity.Remove(1);
-                            WoW_ProjectileDB.Remove(missileEntity);
-                            WoW_CustomGameEntity.Remove(missileEntity);
+                            Script.SysOut("撞击地面", data.CasterAgent);
+                            DestroyProjectile(missileEntity);
                         }
                     }
                     newPosition.z = 1;
-                    if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(currentPos, newPosition, out var collisionDistance12, out _, out _, 1f))
+                    if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(currentPos, newPosition, out var collisionDistance2, out _, out _, 1f))
                     {
-                        if (gameE1 != null)
-                        { }
-                        if (collisionDistance12 < 0.5f)
+
+                        if (collisionDistance2 < 0.5f)
                         {
-                            missileEntity.Remove(1);
-                            WoW_ProjectileDB.Remove(missileEntity);
-                            WoW_CustomGameEntity.Remove(missileEntity);
-                            InformationManager.DisplayMessage(new InformationMessage("撞击地面"));
+                            Script.SysOut("撞击地面", data.CasterAgent);
+                            DestroyProjectile(missileEntity);
                         }
                     }
                 }//ai
 
-                if (Agent.Main!=null&&false)
+                if (Agent.Main != null && false)
                 {
                     ActiveComponents.TryGetValue(Agent.Main.Index, out var agentMainSkillComponent);
                     Agent house = Agent.Main.MountAgent;
@@ -475,7 +488,7 @@ namespace New_ZZZF
                         //Script.SysOut(agentMainSkillComponent._globalCooldownTimer.ToString(), Agent.Main);
                     }
                 }
-                
+
 
             }
             foreach (AgentSkillComponent agent in _activeComponents)
@@ -516,6 +529,14 @@ namespace New_ZZZF
 
                     float _dashSpeed = 15f; // 速度，单位为米/秒
                     float distanceToMove = _dashSpeed * dt;
+                    if (agent.StateContainer.HasState("RushToPosBuff"))
+                    {
+                        float num = (agent.StateContainer.GetState("RushToPosBuff") as RushToPosBuff).speed;
+                        if (num > 0)
+                        {
+                            _dashSpeed = num;
+                        }
+                    }
                     if (directionToTarget.AsVec2.Length < 1f || !agent.StateContainer.HasState("RushToPosBuff"))
                     {
 
@@ -532,7 +553,6 @@ namespace New_ZZZF
                     else
                     {
                         // 否则，向目标位置移动指定的距离
-
                         Vec3 newPosition = agent.AgentInstance.Position + Script.MultiplyVectorByScalar(directionToTarget.NormalizedCopy(), distanceToMove);
                         agent.AgentInstance.TeleportToPosition(newPosition);
 
@@ -540,7 +560,7 @@ namespace New_ZZZF
                 }
             }
             MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
-            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyPressed(14)&& Agent.Main!=null)
+            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyPressed(14) && Agent.Main != null)
             {
                 Agent.Main.UpdateAgentProperties();
             }
@@ -548,6 +568,7 @@ namespace New_ZZZF
             {
                 Agent.Main.UpdateAgentProperties();
             }
+            Script.UpdateProjectileTargets();
         }
 
         public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow)
@@ -561,7 +582,10 @@ namespace New_ZZZF
                 {
                     _activeComponents.Remove(comp);
                 }
-
+                if (affectorAgent != null)
+                {
+                    affectedAgent.AgentVisuals.SetContourColor(null, true);
+                }
                 ActiveComponents.Remove(affectedAgent.Index);
             }
         }
@@ -772,10 +796,18 @@ namespace New_ZZZF
         }
         private static void DestroyProjectile(GameEntity proj)
         {
+            if (WoW_ProjectileDB.TryGetValue(proj, out ProjectileData data))
+            {
+                if (data.Name != null && data.Name == "LingHunDanMu")
+                {
+                    LingHunDanMu.LingHunDanMuDamage(proj);
+                }
+            }
             proj.Remove(1);
             WoW_CustomGameEntity.Remove(proj);
             WoW_ProjectileDB.Remove(proj);
             // 可添加粒子爆炸效果
+
         }
         private void OnInventoryScreenDone()
         {

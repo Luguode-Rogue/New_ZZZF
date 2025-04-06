@@ -65,6 +65,10 @@ namespace New_ZZZF
                 {
                     native = native * (1 - 0.5f);
                 }
+                if (result.StateContainer.HasState("BKBBuff"))
+                {
+                    native = native * (1 + 1f);
+                }
                 if (result.StateContainer.HasState("FengBaoZhiLiBuff"))
                 {
                     Script.AgentGetCurrentWeapon(agent, out var missionWeapon);
@@ -116,7 +120,7 @@ namespace New_ZZZF
             //            {
             //                //foreach (CharacterAttribute characterAttribute in Attributes.All)
             //                //{ }
-            //                //int zhuanjing=characterObject.GetSkillValue(skillObject);//日了狗这个是获取对应skill熟练度，不是专精
+            //                //int shulian=characterObject.GetSkillValue(skillObject);//日了狗这个是获取对应skill熟练度，不是专精
 
             //                //读取agent对应troop的skill专精等级以及skill对应的属性数值
             //                int shuxing = hero.GetAttributeValue(skillObject.CharacterAttribute);
@@ -592,6 +596,7 @@ namespace New_ZZZF
             Random random = new Random();
             float baseDam = base.CalculateDamage(attackInformation, collisionData, weapon, baseDamage);
             SkillSystemBehavior.ActiveComponents.TryGetValue(attackInformation.AttackerAgent.Index, out var attackerComponent);
+            if(attackInformation.VictimAgent==null) { return baseDam; }
             SkillSystemBehavior.ActiveComponents.TryGetValue(attackInformation.VictimAgent.Index, out var victimComponent);
             if (attackerComponent != null)
             {
