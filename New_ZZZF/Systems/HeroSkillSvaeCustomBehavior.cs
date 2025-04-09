@@ -9,6 +9,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.Library;
 using TaleWorlds.SaveSystem;
 using Bannerlord.ButterLib.SaveSystem.Extensions;
+using TaleWorlds.Core;
 namespace New_ZZZF
 {
     //public class HeroSkillSaveCustomBehavior : CampaignBehaviorBase
@@ -61,10 +62,21 @@ namespace New_ZZZF
     //}
     internal class HeroSkillSaveCustomBehavior : CampaignBehaviorBase
     {
-        public Dictionary<string, SkillSet> troopSkill = SkillConfigManager.Instance._troopSkillMap;
         public Dictionary<string, List<string>> _troopSkillMap = new Dictionary<string, List<string>>();
+        public BasicCharacterObject SavePlayerCharacter ;
+        public CharacterObject SaveChooseHero ;
         public override void SyncData(IDataStore dataStore)
         {
+            if (HeroChangeCampaignBehavior.currecct.PlayerCharacter!=null)
+            {
+                SavePlayerCharacter = HeroChangeCampaignBehavior.currecct.PlayerCharacter;
+            }
+            if (HeroChangeCampaignBehavior.currecct.ChooseHero != null)
+            {
+                SaveChooseHero = HeroChangeCampaignBehavior.currecct.ChooseHero;
+            }
+            dataStore.SyncData("SavePlayerCharacter", ref SavePlayerCharacter);
+            dataStore.SyncData("SaveChooseHero", ref SaveChooseHero);
             if (dataStore.IsSaving)
             {
                 foreach (var item in SkillConfigManager.Instance._troopSkillMap)
@@ -81,6 +93,8 @@ namespace New_ZZZF
                 {
                     SkillConfigManager.Instance._troopSkillMap[item.Key] = SkillConfigManager.ListToSkillSet(item.Value);
                 }
+                HeroChangeCampaignBehavior.currecct.PlayerCharacter = SavePlayerCharacter;
+                HeroChangeCampaignBehavior.currecct.ChooseHero = SaveChooseHero;
 
             }
         }

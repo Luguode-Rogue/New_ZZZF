@@ -18,6 +18,7 @@ using TaleWorlds.CampaignSystem.ComponentInterfaces;
 using StoryMode.GameComponents.CampaignBehaviors;
 using TaleWorlds.Localization;
 using SandBox.GauntletUI.Missions;
+using System.Collections.Generic;
 
 
 namespace New_ZZZF
@@ -78,6 +79,7 @@ namespace New_ZZZF
             // 添加自定义的 MissionBehavior 到当前任务
             mission.AddMissionBehavior(new SkillSystemBehavior());
             mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
+            mission.AddMissionBehavior(new HeroChangeMissionBehavior());
             // 调试日志
             Debug.Print("[New_ZZZF] 技能系统已激活！");
 
@@ -114,9 +116,11 @@ namespace New_ZZZF
                 gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
                 gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
                 gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());
+                gameStarterObject.AddModel(new WOW_DefaultPartySpeedCalculatingModel());
 
                 CampaignGameStarter campaignGameStarter = gameStarterObject as CampaignGameStarter;
                 campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
+                campaignGameStarter.AddBehavior(new HeroChangeCampaignBehavior());
 
             }
         }
@@ -161,6 +165,15 @@ namespace New_ZZZF
                         {
                             Debug.Print($"[New_ZZZF] 配置加载失败: {ex.Message}");
                         }
+                    }
+                    Dictionary<string, List<string>> _troopSkillMap = new Dictionary<string, List<string>>();
+                    foreach (var item in SkillConfigManager.Instance._troopSkillMap)
+                    {
+                        _troopSkillMap[item.Key] = SkillConfigManager.ToStringList(item.Value);
+                    }
+                    foreach (var item in _troopSkillMap)
+                    {
+                        SkillConfigManager.Instance._troopSkillMap[item.Key] = SkillConfigManager.ListToSkillSet(item.Value);
                     }
 
                 }

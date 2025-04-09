@@ -33,7 +33,7 @@ namespace New_ZZZF
         }
         public override bool Activate(Agent agent)
         {
-            agent.SetActionChannel(0, ActionIndexCache.Create("act_ready_overswing_spear"), true, 999UL); //Name = "act_ready_overswing_spear"
+            agent.SetActionChannel(0, ActionIndexCache.Create("act_ready_overswing_spear"), true, 512UL); //Name = "act_ready_overswing_spear"
             agent.SetActionChannel(1, ActionIndexCache.Create("act_jump_forward"), true); //Name = "act_climb_ladder"
             Vec3 tarPos = agent.Position;
             tarPos.z += 15;
@@ -119,7 +119,7 @@ namespace New_ZZZF
             {//差一点的表达效果：直接结束时瞬移，造成伤害
              //好一点的表达效果：增加一段前移，然后再造成伤害。
              // agent.SetActionChannel(0, ActionIndexCache.Create("act_none"), true, 999UL); 
-                agent.SetActionChannel(0, ActionIndexCache.Create("act_none"), true, 600);
+                agent.SetActionChannel(0, ActionIndexCache.Create("act_none"), true, 512UL);
                 agent.SetActionChannel(1, ActionIndexCache.Create("act_quick_release_overswing_spear_left_stance"), true);//Name = "act_quick_release_overswing_spear_left_stance"
                 foreach (var item in tarAgents)
                 {

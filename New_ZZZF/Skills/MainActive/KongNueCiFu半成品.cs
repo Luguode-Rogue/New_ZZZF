@@ -30,7 +30,7 @@ namespace New_ZZZF
         {
 
             // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new KongNueCiFuBuff(3f, agent), }; // 新实例
+            List<AgentBuff> newStates = new List<AgentBuff> { new KongNueCiFuBuff(30f, agent), }; // 新实例
             foreach (var state in newStates)
             {
                 state.TargetAgent = agent;

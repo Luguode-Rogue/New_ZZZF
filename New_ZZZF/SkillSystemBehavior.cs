@@ -1,4 +1,6 @@
 ﻿using New_ZZZF.Skills;
+using SandBox.Missions.MissionLogics;
+using SandBox.View.Missions;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -38,7 +40,13 @@ namespace New_ZZZF
         public static Dictionary<int, AgentSkillComponent> ActiveComponents = new Dictionary<int, AgentSkillComponent>();
 
 
-        public static Dictionary<int, GameEntity> WoW_Line = new Dictionary<int, GameEntity>()
+        public static Dictionary<float, GameEntity> WoW_Line = new Dictionary<float, GameEntity>()
+        {
+
+
+        }
+        ;
+        public static Dictionary<float, GameEntity> WoW_Ring = new Dictionary<float, GameEntity>()
         {
 
 
@@ -147,39 +155,41 @@ namespace New_ZZZF
         public override void OnMissionTick(float dt)
         {
             base.OnMissionTick(dt);
+            //base.Mission.GetMissionBehavior<MissionHideoutCinematicView>();
             if ((Mission.Current.Mode == MissionMode.Deployment || Mission.Current.Mode == MissionMode.Conversation || Mission.Current.Mode == MissionMode.Deployment) && Mission.Current.Mode != MissionMode.Battle) { return; }
             //代码测试区
-            if (Input.IsKeyPressed(InputKey.M))
-            {
-                if (base.Mission.IsInventoryAccessAllowed)
-                {
-                    //InventoryManager.OpenScreenAsInventory(new InventoryManager.DoneLogicExtrasDelegate(this.OnInventoryScreenDone));
-                    SkillInventoryManager.OpenScreenAsInventory(new SkillInventoryManager.DoneLogicExtrasDelegate(this.OnInventoryScreenDone));
-                    return;
-                }
-                InformationManager.DisplayMessage(new InformationMessage(GameTexts.FindText((base.Mission.Mode == MissionMode.Battle || base.Mission.Mode == MissionMode.Duel) ? "str_cannot_reach_inventory_during_battle" : "str_cannot_reach_inventory", null).ToString()));
-                return;
-            }
+            //if (Input.IsKeyPressed(InputKey.M))
+            //{
+            //    if (base.Mission.IsInventoryAccessAllowed)
+            //    {
+            //        //InventoryManager.OpenScreenAsInventory(new InventoryManager.DoneLogicExtrasDelegate(this.OnInventoryScreenDone));
+            //        SkillInventoryManager.OpenScreenAsInventory(new SkillInventoryManager.DoneLogicExtrasDelegate(this.OnInventoryScreenDone));
+            //        return;
+            //    }
+            //    InformationManager.DisplayMessage(new InformationMessage(GameTexts.FindText((base.Mission.Mode == MissionMode.Battle || base.Mission.Mode == MissionMode.Duel) ? "str_cannot_reach_inventory_during_battle" : "str_cannot_reach_inventory", null).ToString()));
+            //    return;
+            //}
             MissionScreen camScreenManager = ScreenManager.TopScreen as MissionScreen;
             if (Mission.Current != null && Mission.MainAgent != null && (Input.IsKeyPressed(InputKey.L)))
             {
-                //Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
-                //foreach (var item in Mission.Current.Agents)
-                //{
-                //    if (!item.IsHuman) continue;
-
-                //    EquipmentIndex mainHandIndex = item.GetWieldedItemIndex(Agent.HandIndex.MainHand);
-                //    if (mainHandIndex == EquipmentIndex.None)
-                //    {
-                //        continue;
-                //    }
-                //    // EquipmentIndex转MissionWeapon
-                //    MissionWeapon mainHandEquipmentElement = item.Equipment[mainHandIndex];
-                //    if (mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.Polearm || mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.TwoHandedWeapon)
-                //    {
-                //        item.DropItem(mainHandIndex);
-                //    }
-                //}
+                Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+                foreach (var item in Mission.Current.Agents)
+                {
+                    if (!item.IsHuman) continue;//||!item.IsFriendOf(Agent.Main)
+                    
+                    EquipmentIndex mainHandIndex = item.GetWieldedItemIndex(Agent.HandIndex.MainHand);
+                    if (mainHandIndex == EquipmentIndex.None)
+                    {
+                        continue;
+                    }
+                    // EquipmentIndex转MissionWeapon
+                    MissionWeapon mainHandEquipmentElement = item.Equipment[mainHandIndex];
+                    if (mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.Polearm)//|| mainHandEquipmentElement.Item.Type != ItemObject.ItemTypeEnum.TwoHandedWeapon
+                    {
+                        item.DropItem(mainHandIndex);
+                    }
+                }
+                Agent.Main.Die(new Blow());
                 //Agent agent =Script.FindClosestAgentToCaster(Agent.Main, Mission.Current.Agents);
 
                 //for (int i = 0; i < 20; i++)
@@ -430,63 +440,67 @@ namespace New_ZZZF
                     }
                 }//ai
 
-                if (Agent.Main != null && false)
+                if (Agent.Main != null)//ShengZhuangWuBu
                 {
                     ActiveComponents.TryGetValue(Agent.Main.Index, out var agentMainSkillComponent);
-                    Agent house = Agent.Main.MountAgent;
-                    if (house != null && Mission.Current != null && Mission.MainAgent != null
-                        && (house.Velocity.Length <= 10 && agentMainSkillComponent._globalCooldownTimer <= 0))
+                    if (agentMainSkillComponent != null&& agentMainSkillComponent.HasSkill("ShengZhuangWuBu"))
                     {
-
-                        Vec2 currentDirection = house.Frame.rotation.f.AsVec2;
-                        Vec3 lookD = camScreenManager.CombatCamera.Direction;
-                        // 计算右向量（注意叉积顺序为 lookD × Up）
-                        Vec3 right = Vec3.CrossProduct(lookD, Vec3.Up).NormalizedCopy();
-                        Vec2 forward = new Vec2(lookD.X, lookD.Y);
-                        Vec3 housePosition = house.Position;
-                        if (false)
+                        Agent house = Agent.Main.MountAgent;
+                        if (house != null && Mission.Current != null && Mission.MainAgent != null
+                            && (house.Velocity.Length <= 10 && agentMainSkillComponent._globalCooldownTimer <= 0))
                         {
-                        }
-                        else if (Input.IsKeyDown(InputKey.A))
-                        {
-                            // 调整位置
-                            float delta = -dt * 3; // 调整量，正=右，负=左
-                            housePosition = housePosition + right * delta;
-                        }
-                        else if (Input.IsKeyDown(InputKey.D))
-                        {
-                            // 调整位置
-                            float delta = dt * 3; // 调整量，正=右，负=左
-                            housePosition = housePosition + right * delta;
-                        }
-                        else if (Input.IsKeyDown(InputKey.W))
-                        {
-                            // 调整位置
-                            float delta = dt * 2; // 调整量，正=右，负=左
-                            housePosition = housePosition + forward.ToVec3() * delta;
-                        }
-                        else if (Input.IsKeyDown(InputKey.S))
-                        {
-                            // 调整位置
-                            //float delta = -dt * 5; // 调整量，正=右，负=左
-                            //housePosition = housePosition + forward.ToVec3() * delta;
-                        }
-                        Vec3 vec3 = new Vec3();
-                        currentDirection = Vec3Extensions.SmoothDamp(currentDirection.ToVec3(), lookD, ref vec3, 0.05f, 10f, dt).AsVec2;
-                        house.SetInitialFrame(housePosition, currentDirection);
 
-                        //Script.SysOut(Agent.Main.MountAgent.GetCurrentAction(0).Name, Agent.Main);
+                            Vec2 currentDirection = house.Frame.rotation.f.AsVec2;
+                            Vec3 lookD = camScreenManager.CombatCamera.Direction;
+                            // 计算右向量（注意叉积顺序为 lookD × Up）
+                            Vec3 right = Vec3.CrossProduct(lookD, Vec3.Up).NormalizedCopy();
+                            Vec2 forward = new Vec2(lookD.X, lookD.Y);
+                            Vec3 housePosition = house.Position;
+                            if (false)
+                            {
+                            }
+                            else if (Input.IsKeyDown(InputKey.A))
+                            {
+                                // 调整位置
+                                float delta = -dt * 3; // 调整量，正=右，负=左
+                                housePosition = housePosition + right * delta;
+                            }
+                            else if (Input.IsKeyDown(InputKey.D))
+                            {
+                                // 调整位置
+                                float delta = dt * 3; // 调整量，正=右，负=左
+                                housePosition = housePosition + right * delta;
+                            }
+                            else if (Input.IsKeyDown(InputKey.W))
+                            {
+                                // 调整位置
+                                float delta = dt * 2; // 调整量，正=右，负=左
+                                housePosition = housePosition + forward.ToVec3() * delta;
+                            }
+                            else if (Input.IsKeyDown(InputKey.S))
+                            {
+                                // 调整位置
+                                //float delta = -dt * 5; // 调整量，正=右，负=左
+                                //housePosition = housePosition + forward.ToVec3() * delta;
+                            }
+                            Vec3 vec3 = new Vec3();
+                            currentDirection = Vec3Extensions.SmoothDamp(currentDirection.ToVec3(), lookD, ref vec3, 0.05f, 10f, dt).AsVec2;
+                            house.SetInitialFrame(housePosition, currentDirection);
 
-                        //Script.SysOut(house.Velocity.Length.ToString(), Agent.Main);
+                            //Script.SysOut(Agent.Main.MountAgent.GetCurrentAction(0).Name, Agent.Main);
+
+                            //Script.SysOut(house.Velocity.Length.ToString(), Agent.Main);
 
 
+                        }
+                        else if (Mission.Current != null && Mission.MainAgent != null
+                            && ((int)agentMainSkillComponent.Speed.speed.Length >= 8 || agentMainSkillComponent._globalCooldownTimer <= 0))
+                        {
+                            agentMainSkillComponent._globalCooldownTimer = MathF.Clamp(agentMainSkillComponent._globalCooldownTimer + 1, 0, 1);
+                            //Script.SysOut(agentMainSkillComponent._globalCooldownTimer.ToString(), Agent.Main);
+                        }
                     }
-                    else if (Mission.Current != null && Mission.MainAgent != null
-                        && ((int)agentMainSkillComponent.Speed.speed.Length >= 8 || agentMainSkillComponent._globalCooldownTimer <= 0))
-                    {
-                        agentMainSkillComponent._globalCooldownTimer = MathF.Clamp(agentMainSkillComponent._globalCooldownTimer + 2, 0, 2);
-                        //Script.SysOut(agentMainSkillComponent._globalCooldownTimer.ToString(), Agent.Main);
-                    }
+                    
                 }
 
 
@@ -569,6 +583,24 @@ namespace New_ZZZF
                 Agent.Main.UpdateAgentProperties();
             }
             Script.UpdateProjectileTargets();
+
+
+            //if (Agent.Main != null )
+            //{
+            //    UsableMissionObject currentlyUsedGameObject = Agent.Main.CurrentlyUsedGameObject;
+            //    GameEntity gameEntity = Agent.Main.GetSteppedEntity();
+            //    RangedSiegeWeapon rangedSiege = null;
+            //    gameEntity = currentlyUsedGameObject?.GameEntity;
+            //    while (gameEntity != null && !gameEntity.HasScriptOfType<RangedSiegeWeapon>())
+            //    {
+            //        gameEntity = gameEntity.Parent;
+            //    }
+            //    if (gameEntity != null)
+            //    {
+            //        rangedSiege = gameEntity.GetFirstScriptOfType<RangedSiegeWeapon>();
+            //    }
+            //    Script.dandaoxianshi(Agent.Main, rangedSiege);
+            //}
         }
 
         public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow)
@@ -598,6 +630,7 @@ namespace New_ZZZF
             //WoW_SmartMisslie.Clear();
             WoW_ProjectileDB.Clear();
             WoW_Line.Clear();
+            WoW_Ring.Clear();
             //WoW_gameEntityOwnedByAgent.Clear();
             WoW_CustomGameEntity.Clear();
             WoW_AgentMissileSpeedData.Clear();
@@ -613,6 +646,7 @@ namespace New_ZZZF
             //WoW_SmartMisslie.Clear();
             WoW_ProjectileDB.Clear();
             WoW_Line.Clear();
+            WoW_Ring.Clear();
             //WoW_gameEntityOwnedByAgent.Clear();
             WoW_CustomGameEntity.Clear();
             WoW_AgentMissileSpeedData.Clear();
@@ -634,7 +668,7 @@ namespace New_ZZZF
                     {
                         if (victimSkillComponent._shieldStrength >= blow.InflictedDamage)
                         {
-                            Script.SysOut("损失" + blow.InflictedDamage.ToString() + "点护盾，并抵消同等伤害", victim);
+                            Script.SysOut("损失" + blow.InflictedDamage.ToString() + "点护盾，并抵消同等伤害"+"剩余"+ victimSkillComponent._shieldStrength.ToString(), victim);
                             victimSkillComponent._shieldStrength -= blow.InflictedDamage;
                             victim.Health = MathF.Clamp(victim.Health + blow.InflictedDamage, 0, victimSkillComponent.MaxHP);
                         }
@@ -673,12 +707,16 @@ namespace New_ZZZF
                         }
                         if (attackerSkillComponent.StateContainer.HasState("ZhanYiBuff"))
                         {
+                            attackerSkillComponent.StateContainer.UpdateStates(attacker, 0f);
                             attacker.Health += (attackerSkillComponent.MaxHP - attacker.Health) * 0.5f;
                         }
                         if (attackerSkillComponent.StateContainer.HasState("KongNueCiFuBuff"))
                         {
                             KongNueCiFuBuff buff = attackerSkillComponent.StateContainer.GetState("KongNueCiFuBuff") as KongNueCiFuBuff;
-                            buff.carnageRankCounter += victim.Character.Level;
+                            if (victim.Character!=null)
+                            {
+                                buff.carnageRankCounter += victim.Character.Level;
+                            }
                             if (buff.carnageRankCounter > 888)
                             {
                                 buff.carnageRankCounter -= 888;

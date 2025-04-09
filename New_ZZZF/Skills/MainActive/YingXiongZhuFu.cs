@@ -1,12 +1,5 @@
 ﻿using New_ZZZF.Systems;
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TaleWorlds.Core;
-using TaleWorlds.Engine;
-using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 
@@ -60,9 +53,9 @@ namespace New_ZZZF
 
             public override void OnApply(Agent agent)
             {
-                SkillSystemBehavior.ActiveComponents.TryGetValue(this.SourceAgent.Index, out var agentSkillComponent);
+                SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
                 agent.Health=agentSkillComponent.MaxHP;
-                agentSkillComponent._lifeResurgenceCount += 1;
+                agentSkillComponent._lifeResurgenceCount=(int)MathF.Clamp(agentSkillComponent._lifeResurgenceCount+1,0,3);
                 agentSkillComponent._shieldStrength += agentSkillComponent.MaxHP;
             }
 

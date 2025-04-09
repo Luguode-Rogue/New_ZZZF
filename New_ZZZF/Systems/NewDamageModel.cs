@@ -460,6 +460,10 @@ namespace New_ZZZF
 
         public override float CalculateDamage(in AttackInformation attackInformation, in AttackCollisionData collisionData, in MissionWeapon weapon, float baseDamage)
         {
+            if (attackInformation.IsFriendlyFire)
+            {
+                return 0f; // Completely disables all friendly fire
+            }
             //做一下护甲的固定数值减伤，最终的伤害，减少护甲15%防御值的伤害。60甲-12的最终伤害，避免重甲被劫匪石头砸死
             int def = (int)(attackInformation.ArmorAmountFloat * 0.1f);
             Random random = new Random();

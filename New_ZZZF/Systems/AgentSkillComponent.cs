@@ -19,7 +19,7 @@ namespace New_ZZZF
     {
         // 添加公共属性以访问基类的Agent
         public Agent AgentInstance => base.Agent;
-        public Agent BaseAgent=> base.Agent;//淦，记不住上面哪个名字
+        public Agent BaseAgent => base.Agent;//淦，记不住上面哪个名字
         public float MaxHP { get; private set; }
         // 新增状态容器
         public AgentBuffContainer StateContainer { get; } = new AgentBuffContainer();
@@ -27,7 +27,7 @@ namespace New_ZZZF
         public SkillBase MainActiveSkill { get; private set; } = new NullSkill();    // 主主动技能
         public SkillBase SubActiveSkill { get; private set; } = new NullSkill();    // 副主动技能
         public SkillBase PassiveSkill { get; private set; } = new NullSkill(); // 被动栏技能
-        public SkillBase[] SpellSlots { get; } = new SkillBase[4] {  new NullSkill() ,  new NullSkill() ,  new NullSkill() ,  new NullSkill()  };// 法术栏（0-3号位）
+        public SkillBase[] SpellSlots { get; } = new SkillBase[4] { new NullSkill(), new NullSkill(), new NullSkill(), new NullSkill() };// 法术栏（0-3号位）
         public SkillBase CombatArtSkill { get; private set; } = new NullSkill();   // 战技
         private bool CombatArtFlag { get; set; } = false;// 是否处于战技准备状态
 
@@ -70,17 +70,17 @@ namespace New_ZZZF
         public AgentSkillComponent(Agent agent) : base(agent)
         {
             MaxHP = agent.Health;
-            Speed =new AgentSpeed(agent);
+            Speed = new AgentSpeed(agent);
         }
 
         public bool HasSkill(string skill)
         {
-            //if (MainActiveSkill==null ) return false;
-            //if (MainActiveSkill.SkillID==skill||SubActiveSkill.SkillID==skill||PassiveSkill.SkillID==skill||CombatArtSkill.SkillID==skill
-            //    || SpellSlots[0].SkillID == skill || SpellSlots[1].SkillID == skill || SpellSlots[2].SkillID == skill || SpellSlots[3].SkillID == skill)
-            //{
-            //    return true;
-            //}
+            if (MainActiveSkill == null) return false;
+            if (MainActiveSkill.SkillID == skill || SubActiveSkill.SkillID == skill || PassiveSkill.SkillID == skill || CombatArtSkill.SkillID == skill
+                || SpellSlots[0].SkillID == skill || SpellSlots[1].SkillID == skill || SpellSlots[2].SkillID == skill || SpellSlots[3].SkillID == skill)
+            {
+                return true;
+            }
             return false;
         }
         /// <summary>
@@ -132,7 +132,7 @@ namespace New_ZZZF
             _currentMana += dt;
             _beHitTime -= dt;
             if (_beHitTime <= 0)
-            { 
+            {
                 _beHitCount = 0;
             }
             UpdateCooldowns(dt);
@@ -195,8 +195,8 @@ namespace New_ZZZF
             {
                 CombatArtFlag = false;
                 TryActivateSkill(CombatArtSkill);
-                AgentSkillComponent agentSkill= Script.GetActiveComponents(Agent);
-                if(agentSkill != null && agentSkill.StateContainer.HasState("ZhenYinZhanBuff"))
+                AgentSkillComponent agentSkill = Script.GetActiveComponents(Agent);
+                if (agentSkill != null && agentSkill.StateContainer.HasState("ZhenYinZhanBuff"))
                 {
                     (agentSkill.MainActiveSkill as ZhenYinZhan).CanUse(Agent);
                 }
@@ -212,14 +212,16 @@ namespace New_ZZZF
         /// </summary>
         private void TryActivateSkill(SkillBase skill)
         {
-            if (skill == null || !CanActivateSkill(skill)) {
+            if (skill == null || !CanActivateSkill(skill))
+            {
                 Script.SysOut("条件不满足", Agent);
-                return; }
+                return;
+            }
 
             // 扣除资源// 触发技能效果
             if (skill.Activate(Agent))
             {
-                if (skill.Type == SkillType.Spell|| skill.Type == SkillType.Spell_CombatArt)
+                if (skill.Type == SkillType.Spell || skill.Type == SkillType.Spell_CombatArt)
                 {
                     Agent.SetActionChannel(1, ActionIndexCache.Create("act_horse_command_follow"), false, 172UL, 0, 1.5f, -0.2f, 0.4f, 0.5f);
                     _currentMana = Math.Max(0, _currentMana - skill.ResourceCost);
@@ -232,7 +234,7 @@ namespace New_ZZZF
 
 
                 // 触发公共CD（仅法术）
-                if (skill.Type == SkillType.Spell|| skill.Type == SkillType.Spell_CombatArt)
+                if (skill.Type == SkillType.Spell || skill.Type == SkillType.Spell_CombatArt)
                     _globalCooldownTimer += 1.0f; // 公共CD设为1秒
 
                 Console.WriteLine($"[技能触发] {skill.SkillID} 剩余法力: {_currentMana}, 耐力: {_currentStamina}");
@@ -267,9 +269,9 @@ namespace New_ZZZF
             // 冷却检查
             bool isOnCooldown = _cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0;
             bool isGCDBlocked = (skill.Type == SkillType.Spell) && _globalCooldownTimer > 0;
-            if (!hasResource) { Script.SysOut("耐力或魔法不足,需要的值为"+ skill.ResourceCost,Agent); }
-            if (isOnCooldown) { Script.SysOut("技能未冷却,当前的冷却剩余"+ remaining.ToString(), Agent); }
-            if (isGCDBlocked) { Script.SysOut("法术公共冷却未结束,当前的冷却剩余"+ _globalCooldownTimer.ToString(), Agent); }
+            if (!hasResource) { Script.SysOut("耐力或魔法不足,需要的值为" + skill.ResourceCost, Agent); }
+            if (isOnCooldown) { Script.SysOut("技能未冷却,当前的冷却剩余" + remaining.ToString(), Agent); }
+            if (isGCDBlocked) { Script.SysOut("法术公共冷却未结束,当前的冷却剩余" + _globalCooldownTimer.ToString(), Agent); }
             return hasResource && !isOnCooldown && !isGCDBlocked;
         }
 
@@ -279,7 +281,7 @@ namespace New_ZZZF
         /// </summary>
         /// <param name="dt"></param>
         /// <param name="skillType"></param>
-        public void UpdateCooldowns(float dt, SkillType skillType= SkillType.None)
+        public void UpdateCooldowns(float dt, SkillType skillType = SkillType.None)
         {
             List<SkillBase> expiredSkills = new List<SkillBase>();
             // 使用临时变量来存储剩余时间，避免直接修改字典
@@ -287,11 +289,11 @@ namespace New_ZZZF
 
             foreach (var entry in timersToUpdate)
             {
-                bool matchedType = ((entry.Key.Type == SkillType.Spell || entry.Key.Type == SkillType.Spell_CombatArt)&& skillType== SkillType.Spell) ||
+                bool matchedType = ((entry.Key.Type == SkillType.Spell || entry.Key.Type == SkillType.Spell_CombatArt) && skillType == SkillType.Spell) ||
                     (entry.Key.Type == SkillType.MainActive && skillType == SkillType.MainActive) ||
                     (entry.Key.Type == SkillType.SubActive && skillType == SkillType.SubActive) ||
-                    ((entry.Key.Type == SkillType.Passive|| entry.Key.Type == SkillType.Passive_Spell) && skillType == SkillType.Passive);
-                if (skillType== SkillType.None|| matchedType)
+                    ((entry.Key.Type == SkillType.Passive || entry.Key.Type == SkillType.Passive_Spell) && skillType == SkillType.Passive);
+                if (skillType == SkillType.None || matchedType)
                 {
                     float remainingTime = entry.Value - dt;
                     if (remainingTime <= 0)
@@ -319,7 +321,7 @@ namespace New_ZZZF
         /// <summary>
         /// （可选）可视化当前选择法术槽
         /// </summary>
-        public  void OnFocusTick(float dt)
+        public void OnFocusTick(float dt)
         {
             if (Agent.IsPlayerControlled)
             {
@@ -333,7 +335,7 @@ namespace New_ZZZF
         private void HandleAIBehaviorOfTick(float dt)
         {
             Random random = new Random();
-            if (MainActiveSkill.CheckCondition(Agent)&& random.NextFloat()>0.5f)
+            if (MainActiveSkill.CheckCondition(Agent) && random.NextFloat() > 0.5f)
             {
                 TryActivateSkill(MainActiveSkill);
             }
@@ -361,7 +363,7 @@ namespace New_ZZZF
             {
                 TryActivateSkill(SpellSlots[3]);
             }
-            
+
         }
     }
 }

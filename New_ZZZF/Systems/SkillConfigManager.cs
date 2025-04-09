@@ -173,7 +173,8 @@ namespace New_ZZZF
                 return new NullSkill(); // 返回空技能占位
             }
 
-            SkillBase skill = SkillFactory.Create(skillId);
+            SkillBase skill;// = SkillFactory.Create(skillId);
+            SkillFactory._skillRegistry.TryGetValue(skillId, out skill);
             if (skill == null)
             {
                 Debug.Print($"[警告] 未知技能ID: {skillId}");

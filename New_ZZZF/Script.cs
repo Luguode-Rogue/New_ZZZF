@@ -21,6 +21,8 @@ using System.Reflection;
 using static TaleWorlds.Core.ItemObject;
 using MathF = TaleWorlds.Library.MathF;
 using TaleWorlds.MountAndBlade.ViewModelCollection;
+using TaleWorlds.MountAndBlade.Launcher.Library;
+using Newtonsoft.Json.Linq;
 
 namespace New_ZZZF
 {
@@ -134,27 +136,33 @@ namespace New_ZZZF
             return false;
 
         }
+
+
         /// <summary>
         /// onMissionTick里调用的，按下缩放键后的区域显示
         /// </summary>
+        private static Dictionary<Agent, uint?> _contourCache = new Dictionary<Agent, uint?>(); // 新增缓存字典
+
         public static void UpdateProjectileTargets()
         {
             MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
             if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(24) && Agent.Main != null)
             {
-                if (SkillSystemBehavior.WoW_Line.Count == 0)
+                if (SkillSystemBehavior.WoW_Ring.Count == 0)
                 {
                     for (global::System.Int32 i = 0; i < 16; i++)
                     {
                         GameEntity gameEntity = GameEntity.CreateEmpty(Mission.Current.Scene);
                         gameEntity.AddMesh(Mesh.GetFromResource("ballista_projectile_flying"));
-                        SkillSystemBehavior.WoW_Line.Add(i, gameEntity);
+                        //gameEntity.SetContourColor(new uint?(4294901760U), true);
+                        SkillSystemBehavior.WoW_Ring.Add(i, gameEntity);
                     }
                 }
                 else
                 {
                     Vec3 lookP = Script.CameraLookPos();
-                    foreach (var item in SkillSystemBehavior.WoW_Line)
+                    Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+                    foreach (var item in SkillSystemBehavior.WoW_Ring)
                     {
                         MatrixFrame matrixFrame = item.Value.GetFrame();
                         matrixFrame.origin = lookP;
@@ -165,37 +173,54 @@ namespace New_ZZZF
                         matrixFrame.rotation = Agent.Main.LookRotation;
                         matrixFrame.rotation.u = Vec3.Up;
                         item.Value.SetFrame(ref matrixFrame);
-                        Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
+
+                        // 优化部分开始
                         foreach (var foe in foeAgent)
                         {
                             if (foe.IsActive())
                             {
-                                float distanceToTarget = lookP.Distance(foe.GetEyeGlobalPosition());
-                                if (distanceToTarget <= 5)
+                                float distanceSq = lookP.DistanceSquared(foe.GetEyeGlobalPosition());
+                                uint? targetColor = distanceSq <= 25 ?
+                                    new Color(1f, 0f, 0f, 1f).ToUnsignedInteger() :
+                                    null;
+
+                                // 通过缓存避免重复设置相同颜色
+                                if (_contourCache.TryGetValue(foe, out var currentColor))
                                 {
-                                    foe.AgentVisuals.SetContourColor(new uint?(new Color(1f, 0f, 0f, 1f).ToUnsignedInteger()), true);//获取agent的视觉表现,并且设置描边以及颜色
+                                    if (currentColor == targetColor) continue;
                                 }
-                                else
-                                {
-                                    foe.AgentVisuals.SetContourColor(null, true);
-                                }
+
+                                foe.AgentVisuals.SetContourColor(targetColor, true);
+                                _contourCache[foe] = targetColor;
                             }
                         }
+                        // 优化部分结束
                     }
                 }
             }
             else if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(24) && Agent.Main != null)
             {
-                foreach (var item in SkillSystemBehavior.WoW_Line)
+                foreach (var item in SkillSystemBehavior.WoW_Ring)
                 {
                     MatrixFrame matrixFrame = MatrixFrame.Identity;
                     item.Value.SetFrame(ref matrixFrame);
                 }
                 Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
-                foreach (var foe in foeAgent)
+
+                // 清理缓存优化
+                var toRemove = new List<Agent>();
+                foreach (var kvp in _contourCache)
                 {
-                    foe.AgentVisuals.SetContourColor(null, true);
+                    if (!foeAgent.Contains(kvp.Key))
+                    {
+                        toRemove.Add(kvp.Key);
+                    }
+                    else
+                    {
+                        kvp.Key.AgentVisuals.SetContourColor(null, true);
+                    }
                 }
+                foreach (var key in toRemove) _contourCache.Remove(key);
             }
         }
         /// <summary>
@@ -468,9 +493,10 @@ namespace New_ZZZF
         /// </summary>
         public static void AgentListIFF(Agent agent, List<Agent> InputList, out List<Agent> FriendAgent, out List<Agent> FoeAgent)
         {
-
+           
             FriendAgent = new List<Agent>();
             FoeAgent = new List<Agent>();
+            if (agent == null) { return; }
             for (int i = 0; i < InputList.Count; i++)
             {
                 AgentSkillComponent agentSkill = Script.GetActiveComponents(InputList[i]);
@@ -1112,8 +1138,65 @@ namespace New_ZZZF
         /// 废弃，弹道显示的效果太差了
         /// </summary>
         /// <param name="agent"></param>
-        public static void dandaoxianshi(Agent agent)
+        public static void dandaoxianshi(Agent agent, RangedSiegeWeapon rangedSiege=null)
         {
+            if (rangedSiege!=null)
+            {
+                RangedSiegeWeapon machine = rangedSiege;
+
+                float ShootingSpeed = 0f;
+                Vec3 ShootingDir =Vec3.Invalid;
+                // 确保传入的对象类型是RangedSiegeWeapon或其子类
+                Type type = machine.GetType();
+
+                // 获取ShootingSpeed属性
+                PropertyInfo shootingSpeedProperty = type.GetProperty("ShootingSpeed", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+                if (shootingSpeedProperty != null)
+                {
+                    // 由于是抽象属性，这里直接获取值可能会失败，需要确保obj是实现了该属性的具体类型实例
+                    ShootingSpeed = (float)shootingSpeedProperty.GetValue(machine);
+                }
+                else
+                {
+
+                }
+
+                // 获取shootingDirection属性
+                PropertyInfo shootingDirection = type.GetProperty("ShootingDirection", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+                if (shootingDirection != null)
+                {
+                    // 由于是抽象属性，这里直接获取值可能会失败，需要确保obj是实现了该属性的具体类型实例
+                    ShootingDir =(Vec3)shootingDirection.GetValue(machine);
+                }
+                else
+                {
+
+                }
+                // 获取GetBallisticErrorAppliedDirection方法
+                Mat3 mat = new Mat3
+                {
+                    f = ShootingDir,
+                    u = Vec3.Up
+                };
+                mat.Orthonormalize();
+                float a = MBRandom.RandomFloat * 6.2831855f;
+                mat.RotateAboutForward(a);
+                float f =0f * MBRandom.RandomFloat;
+                mat.RotateAboutSide(f.ToRadians());
+                ShootingDir = mat.f;
+
+
+                if (machine != null)
+                {
+                    for (float i = 0.0f; i <= 15; i = i + 0.15f)
+                    {
+                        Vec3 v3 = Script.CalculatePositionAtTime(machine.ProjectileEntityCurrentGlobalPosition, ShootingDir, ShootingSpeed, i);
+                        
+                    }
+                }
+
+            }
+            return;
             // 获取Agent主手中武器的Index索引
             EquipmentIndex mainHandIndex = agent.GetWieldedItemIndex(Agent.HandIndex.MainHand);
             if (mainHandIndex == EquipmentIndex.None)
@@ -1140,12 +1223,13 @@ namespace New_ZZZF
             }
             if (mainHandEquipmentElement.CurrentUsageItem.IsRangedWeapon)
             {
-                for (float i = 0.5f; i <= 5; i = i + 0.15f)
+                for (float i = 0.3f; i <= 5; i = i + 0.15f)
                 {
                     Vec3 v3 = Script.CalculatePositionAtTime(Agent.Main.GetEyeGlobalPosition(), Agent.Main.LookDirection, baseSpeed, i);
                 }
 
             }
+
 
             return;
         }
@@ -1162,16 +1246,16 @@ namespace New_ZZZF
             float y = initialPosition.y + direction.y * initialSpeed * time;
             // 对于z坐标，考虑重力影响
             float z = initialPosition.z + direction.z * initialSpeed * time - 0.5f * 9.81f * time * time;
-
             if (SkillSystemBehavior.WoW_Line.Count < 30)
             {
                 GameEntity gameEntity = GameEntity.CreateEmpty(Mission.Current.Scene);
+                gameEntity.SetContourColor(new uint?(4294901760U), true);
                 //gameEntity.AddAllMeshesOfGameEntity(GameEntity.Instantiate(Mission.Current.Scene, "mangonel_mapicon_projectile", true));
                 gameEntity.AddMesh(Mesh.GetFromResource("ballista_projectile_flying"));
                 MatrixFrame matrixFrame = new MatrixFrame(new Mat3(new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)), new Vec3((float)x, (float)y, (float)z));
                 gameEntity.SetGlobalFrame(matrixFrame);
                 SkillSystemBehavior.WoW_CustomGameEntity.Add(gameEntity);
-                SkillSystemBehavior.WoW_Line.Add((int)time, gameEntity);
+                SkillSystemBehavior.WoW_Line.Add(time, gameEntity);
                 gameEntity.SetLocalPosition(new Vec3((float)x, (float)y, (float)z));
             }
             else
@@ -1180,8 +1264,34 @@ namespace New_ZZZF
                 {
                     if (dict.Key == time)
                     {
-                        dict.Value.SetGlobalFrame(new MatrixFrame(new Mat3(new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)), new Vec3((float)x, (float)y, (float)z)));
-                        dict.Value.SetLocalPosition(new Vec3((float)x, (float)y, (float)z));
+                        float f = 0;
+                        Vec3 vec3 = new Vec3((float)x, (float)y, (float)z);
+                        Vec3 vec31= new Vec3((float)x, (float)y, (float)z);
+                        //Mission.Current.Scene.RayCastForClosestEntityOrTerrain(new Vec3((float)x, (float)y, (float)z), new Vec3((float)x, (float)y, (float)z) + MultiplyVectorByScalar(-Vec3.Up, 50f), out f, out vec3);
+                        //if (f <= 50||f==float.NaN)
+                        //{ vec31 = vec3; }
+                        //else
+                        //{  }    
+                        if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(vec3, vec3 + MultiplyVectorByScalar(Vec3.Up, 5000f), out var collisionDistance1, out var closestPoint1, out var gameE1, 1f))
+                        {
+
+                            if (collisionDistance1 <5f||true)
+                            {
+                                vec31 = closestPoint1;
+                                Script.SysOut("撞击地面", Agent.Main);
+                            }
+                        }
+                        //if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(vec3, vec3 + MultiplyVectorByScalar(-Vec3.Up, 5000f), out var collisionDistance2, out _, out _, 1f))
+                        //{
+
+                        //    if (collisionDistance2 < 0.5f)
+                        //    {
+                        //        vec31 = closestPoint1;
+                        //        Script.SysOut("撞击地面", Agent.Main);
+                        //    }
+                        //}
+                        dict.Value.SetGlobalFrame(new MatrixFrame(new Mat3(new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)), vec31));
+                        dict.Value.SetLocalPosition(vec31);
                     }
                 }
             }
@@ -1328,6 +1438,120 @@ namespace New_ZZZF
                 SysOut("该角色无装备", agent);
                 return false;
             }
+        }
+        public static void OnAgentShootMissile(Agent shooterAgent, EquipmentIndex weaponIndex)
+        {
+            //获取自己当前武器的剩余弹药数量
+            int OwnCurrentAmmo = 0;
+            for (EquipmentIndex equipmentIndex = EquipmentIndex.WeaponItemBeginSlot; equipmentIndex < EquipmentIndex.ExtraWeaponSlot; equipmentIndex++)
+            {
+                if (!shooterAgent.Equipment[equipmentIndex].IsEmpty && shooterAgent.Equipment[equipmentIndex].CurrentUsageItem.IsRangedWeapon)
+                {
+                    OwnCurrentAmmo = shooterAgent.Equipment.GetAmmoAmount(equipmentIndex);
+                }
+            }
+            //如果当前武器弹药数量过少
+            if (OwnCurrentAmmo <= 3 )
+            {
+                //遍历自己队伍内的agent，抢过来一些弹药
+                if (shooterAgent.Formation != null)//获取射击者的当前编队
+                {
+                    int maxAmmoAmount = 0;
+                    Agent TAgent = null;
+                    EquipmentIndex TAgentEquipmentIndex = EquipmentIndex.None;
+                    WeaponClass shooterAgentWeaponClass = shooterAgent.Equipment[weaponIndex].CurrentUsageItem.AmmoClass;
+                    //先遍历整个编队，找到弹药最多的agent。然后获取这个agent的弹药进行转移
+                    int jishu = 0;
+                    List<Agent> list = new List<Agent>();
+                    shooterAgent.Formation.ApplyActionOnEachUnit(delegate (Agent agent) //遍历编队agent的函数，非常类似于1代的try_for_agents给感觉，甚至不能中途停下来（也可能是我不知道怎么让他中途停止）
+                    {
+
+                        if (!agent.IsMainAgent && agent != shooterAgent)
+                        {
+
+                            for (EquipmentIndex equipmentIndex = EquipmentIndex.WeaponItemBeginSlot; equipmentIndex < EquipmentIndex.ExtraWeaponSlot; equipmentIndex++)//遍历 物品栏
+                            {
+                                //筛选出当前遍历的agent有没有和射击者agent相同类型的武器，避免弓手拿到弩箭之类的。同时筛选出弹药最多的目标。
+                                if (!agent.Equipment[equipmentIndex].IsEmpty && shooterAgent.Equipment[weaponIndex].CurrentUsageItem.WeaponClass == agent.Equipment[equipmentIndex].CurrentUsageItem.WeaponClass && maxAmmoAmount < agent.Equipment.GetAmmoAmount(equipmentIndex))
+                                {
+                                    maxAmmoAmount = agent.Equipment.GetAmmoAmount(equipmentIndex);
+                                    TAgent = agent;
+                                }
+                            }
+                        }
+
+                        jishu++;
+                        list.Add(agent);
+                    }, null);
+                    int itemAmmoAmount = 0;
+                    //第二轮筛选，拿之前那个弹药最多的目标，找到他身上具体的哪个物品上弹药最多，一会从这个物品上扣弹药
+                    if (maxAmmoAmount > 0 && TAgent != null)
+                    {
+
+                        itemAmmoAmount = 0;
+                        for (EquipmentIndex equipmentIndex = EquipmentIndex.WeaponItemBeginSlot; equipmentIndex < EquipmentIndex.ExtraWeaponSlot; equipmentIndex++)
+                        {
+                            if (TAgent.Equipment[equipmentIndex].CurrentUsageItem != null && shooterAgentWeaponClass == TAgent.Equipment[equipmentIndex].CurrentUsageItem.WeaponClass)
+                            {
+                                if (itemAmmoAmount < TAgent.Equipment[equipmentIndex].Amount)
+                                {
+                                    itemAmmoAmount = TAgent.Equipment[equipmentIndex].Amount;
+                                    TAgentEquipmentIndex = equipmentIndex;
+                                }
+                            }
+                        }
+                        getMissionWeaponFromAgentInventory(shooterAgent, out var threwMeleeWeapon, out var equipmentIndex1);//自己写的一个函数，根据手持的武器，获取一个合适的弹药物品
+                        if (equipmentIndex1 == EquipmentIndex.None)
+                        { return; }
+                        //如果射击者有合适的弹药栏位可以填充，开始用狗屎代码填充那个物品的 数量
+                        int shootAgentMaxAmmo = shooterAgent.Equipment[equipmentIndex1].MaxAmmo;
+                        int agentAmmo = itemAmmoAmount;
+                        if ((agentAmmo - 3) > 0)
+                        {
+                            if (shootAgentMaxAmmo - OwnCurrentAmmo - (agentAmmo - 3) > 0)
+                            {
+                                //射击者把目标的弹药全拿完了(留几根）
+                                //shooterAgent.Equipment.SetAmountOfSlot(equipmentIndex1, (short)(OwnCurrentAmmo + agentAmmo - 3));
+                                //TAgemt.Equipment.SetAmountOfSlot(TAgentEquipmentIndex, 3);
+
+                                if (shooterAgent.Equipment[equipmentIndex1].Amount != OwnCurrentAmmo + agentAmmo - 3 && shooterAgent.Equipment[equipmentIndex1].Amount != 0 && OwnCurrentAmmo + agentAmmo - 3 != 0 && TAgent.Equipment[equipmentIndex1].Amount != 3 && TAgent.Equipment[equipmentIndex1].Amount != 0 && 3 != 0)//别问这是干啥的，问就是为了避免bug
+                                {
+                                    shooterAgent.SetWeaponAmountInSlot(equipmentIndex1, (short)(OwnCurrentAmmo + agentAmmo - 3), false);
+                                    TAgent.SetWeaponAmountInSlot(TAgentEquipmentIndex, (short)(3), false);
+                                    if (shooterAgent.IsFriendOf(Agent.Main))
+                                    {
+                                        InformationManager.DisplayMessage(new InformationMessage($"{shooterAgent.Name}{shooterAgent.Index}抢走了{TAgent.Name}{TAgent.Index}的{OwnCurrentAmmo + agentAmmo - 3}发弹药"));
+                                    }
+                                    shooterAgent.UpdateAgentProperties();
+                                    TAgent.UpdateAgentProperties();
+                                    return;
+                                }
+                            }
+                            else
+                            {
+                                //没拿完的话
+                                //shooterAgent.Equipment.SetAmountOfSlot(equipmentIndex1, (short)(shootAgentMaxAmmo));
+                                //TAgemt.Equipment.SetAmountOfSlot(TAgentEquipmentIndex, (short)(agentAmmo - shootAgentMaxAmmo));
+                                if (shooterAgent.Equipment[equipmentIndex1].Amount != shootAgentMaxAmmo && shooterAgent.Equipment[equipmentIndex1].Amount != 0 && shootAgentMaxAmmo != 0 && TAgent.Equipment[equipmentIndex1].Amount != agentAmmo - shootAgentMaxAmmo && TAgent.Equipment[equipmentIndex1].Amount != 0 && agentAmmo - shootAgentMaxAmmo != 0)//别问这是干啥的，问就是为了避免bug
+                                {
+                                    shooterAgent.SetWeaponAmountInSlot(equipmentIndex1, (short)(shootAgentMaxAmmo), false);
+                                    TAgent.SetWeaponAmountInSlot(TAgentEquipmentIndex, (short)(agentAmmo - shootAgentMaxAmmo), false);
+                                    if (shooterAgent.IsFriendOf(Agent.Main))
+                                    {
+                                        InformationManager.DisplayMessage(new InformationMessage($"{shooterAgent.Name}{shooterAgent.Index}抢走了{TAgent.Name}{TAgent.Index}的{shootAgentMaxAmmo}发弹药"));
+                                    }
+                                    shooterAgent.UpdateAgentProperties();
+                                    TAgent.UpdateAgentProperties();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+
+                }
+
+            }
+
         }
     }
 }

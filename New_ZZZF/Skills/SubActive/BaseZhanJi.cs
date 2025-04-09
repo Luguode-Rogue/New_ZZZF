@@ -12,7 +12,7 @@ using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using static New_ZZZF.GuWu;
 
-namespace New_ZZZF.Skills//（法术）
+namespace New_ZZZF//（法术）
 {
     // 示例：在火球术中附加燃烧状态
     public class BaseZhanJi : SkillBase
