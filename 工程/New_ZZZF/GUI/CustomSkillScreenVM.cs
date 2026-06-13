@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
+using TaleWorlds.ObjectSystem;
 
 namespace New_ZZZF
 {
@@ -748,7 +749,7 @@ namespace New_ZZZF
                 foreach (var clan in Clan.All)
                 {
                     if (clan == null || clan.IsEliminated) continue;
-                    foreach (var hero in clan.Lords)
+                    foreach (var hero in clan.Heroes)
                     {
                         if (hero == null || !hero.IsAlive || hero.Age < 18) continue;
                         LordNPCs.Add(new HeroVM(hero, OnTargetSelected));
