@@ -71,7 +71,8 @@
                  左侧面板：树形角色列表
             ================================================================ -->
             <BrushWidget WidthSizePolicy="Fixed" SuggestedWidth="!Panel.LeftWidth" HeightSizePolicy="StretchToParent"
-                         Brush="Frame1Brush" MarginRight="15">
+                         Brush="Frame1Brush" MarginRight="15"
+                         StackLayout.LayoutMethod="VerticalTopToBottom">
               <Children>
 
                 <!-- 搜索框 -->
@@ -230,8 +231,9 @@
                 </BrushWidget>
 
                 <!-- ===== 技能槽位区域（IsInCatalogView=false时显示） ===== -->
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="420"
-                        IsVisible="@IsShowingSlots" MarginTop="46" MarginLeft="12" MarginRight="12" ClipContents="true">
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="420"
+                             Brush="Frame2Brush"
+                             IsVisible="@IsShowingSlots" MarginTop="46" MarginLeft="12" MarginRight="12" ClipContents="true">
                   <Children>
                     <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
                                      AutoHideScrollBars="true"
@@ -349,11 +351,12 @@
                       </Children>
                     </ScrollablePanel>
                   </Children>
-                </Widget>
+                </BrushWidget>
 
                 <!-- ===== 目录视图区域（IsInCatalogView=true时显示，替代技能槽） ===== -->
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="420"
-                        IsVisible="@IsInCatalogView" MarginTop="46" MarginLeft="12" MarginRight="12" ClipContents="true">
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="420"
+                             Brush="Frame2Brush"
+                             IsVisible="@IsInCatalogView" MarginTop="46" MarginLeft="12" MarginRight="12" ClipContents="true">
                   <Children>
                     <!-- 目录表头 -->
                     <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="26" Brush="Frame2Brush" DoNotAcceptEvents="true">
@@ -430,16 +433,18 @@
                       </Children>
                     </ScrollablePanel>
                   </Children>
-                </Widget>
+                </BrushWidget>
 
                 <!-- ===== 分隔线 ===== -->
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="2"
-                        VerticalAlignment="Top" MarginTop="468"
-                        Sprite="StdAssets\black_background" AlphaFactor="0.3" DoNotAcceptEvents="true" />
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="4"
+                             VerticalAlignment="Top" MarginTop="468"
+                             Brush="Frame2Brush" DoNotAcceptEvents="true" />
 
                 <!-- ===== 下部面板：熟练度 / 目录信息 ===== -->
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                        MarginTop="474" MarginLeft="12" MarginRight="12" MarginBottom="55" ClipContents="true">
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                             Brush="Frame2Brush"
+                             MarginTop="474" MarginLeft="12" MarginRight="12" MarginBottom="55" ClipContents="true"
+                             StackLayout.LayoutMethod="VerticalTopToBottom">
                   <Children>
                     <!-- 页面标题 -->
                     <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="36" Brush="Frame2Brush" DoNotAcceptEvents="true">
@@ -494,7 +499,7 @@
                       </Children>
                     </ScrollablePanel>
                   </Children>
-                </Widget>
+                </BrushWidget>
 
                 <!-- ===== 底部操作栏 ===== -->
                 <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="!Footer.Height"
