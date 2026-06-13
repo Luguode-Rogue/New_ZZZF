@@ -69,70 +69,68 @@
 
             <!-- ================================================================
                  左侧面板：树形角色列表
+                 搜索框 + "队伍成员"标题固定，角色列表可滚动
             ================================================================ -->
-            <!-- 左侧面板：ScrollablePanel 作为整体滚动容器，外框用 Frame1Brush -->
             <BrushWidget WidthSizePolicy="Fixed" SuggestedWidth="!Panel.LeftWidth" HeightSizePolicy="StretchToParent"
-                         Brush="Frame1Brush" MarginRight="15" ClipContents="true">
+                         Brush="Frame1Brush" MarginRight="15" ClipContents="true"
+                         StackLayout.LayoutMethod="VerticalTopToBottom">
               <Children>
+                <!-- 搜索框（固定，不滚动） -->
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="36" Brush="Frame2Brush"
+                             MarginLeft="4" MarginRight="4" MarginTop="4">
+                  <Children>
+                    <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                                Text="搜索角色..." Brush="SPOptions.Description.Text"
+                                FontSize="14" AlphaFactor="0.5"
+                                VerticalAlignment="Center" MarginLeft="12" DoNotAcceptEvents="true" />
+                  </Children>
+                </BrushWidget>
+
+                <!-- "队伍成员" 标题（固定，不滚动） -->
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30"
+                             Brush="Frame2Brush" MarginLeft="4" MarginRight="4" MarginTop="4">
+                  <Children>
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Text="队伍成员" Brush="SPOptions.Title.Text" FontSize="15" Color="#E2BC73FF"
+                                VerticalAlignment="Center" MarginLeft="12" DoNotAcceptEvents="true" />
+                  </Children>
+                </BrushWidget>
+
+                <!-- 可滚动角色列表区域 -->
                 <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                 AutoHideScrollBars="true"
+                                 MarginTop="4" AutoHideScrollBars="true"
                                  ClipRect="LeftViewport" InnerPanel="LeftInnerPanel" VerticalScrollbar="LeftScrollbar">
                   <Children>
                     <Widget Id="LeftViewport" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true" />
 
                     <ListPanel Id="LeftInnerPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
                                StackLayout.LayoutMethod="VerticalTopToBottom" StackLayout.Spacing="0"
-                               MarginLeft="4" MarginRight="4" MarginTop="4">
+                               MarginLeft="4" MarginRight="4" MarginTop="2">
 
                       <Children>
-                        <!-- 搜索框 -->
-                        <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="36" Brush="Frame2Brush"
-                                     MarginBottom="6">
-                          <Children>
-                            <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
-                                        Text="搜索角色..." Brush="SPOptions.Description.Text"
-                                        FontSize="14" AlphaFactor="0.5"
-                                        VerticalAlignment="Center" MarginLeft="12" DoNotAcceptEvents="true" />
-                          </Children>
-                        </BrushWidget>
-
-                        <!-- ===== 分组1: 队伍成员（始终显示） ===== -->
-                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" MarginBottom="8">
-                          <Children>
-                            <!-- 分组标题 -->
-                            <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30" Brush="Frame2Brush">
+                        <!-- ===== 分组1: 成员列表 ===== -->
+                        <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
+                                   DataSource="{Roster}" StackLayout.LayoutMethod="VerticalTopToBottom"
+                                   StackLayout.Spacing="4" MarginTop="4">
+                          <ItemTemplate>
+                            <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                          SuggestedHeight="!Roster.ItemHeight" Brush="ButtonPrimary2Brush"
+                                          Command.Click="ExecuteSelect" ButtonType="Radio" IsSelected="@IsSelected"
+                                          UpdateChildrenStates="true">
                               <Children>
-                                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                            Text="队伍成员" Brush="SPOptions.Title.Text" FontSize="15" Color="#E2BC73FF"
-                                            VerticalAlignment="Center" MarginLeft="12" DoNotAcceptEvents="true" />
+                                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="20"
+                                            Text="@HeroName" Brush="SPOptions.Title.Text" FontSize="15"
+                                            Color="#FFFFFFFF" MarginLeft="16" VerticalAlignment="Top" MarginTop="8" DoNotAcceptEvents="true" />
+                                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="14"
+                                            Text="@Subtitle" Brush="SPOptions.Description.Text" FontSize="12"
+                                            AlphaFactor="0.5" MarginLeft="16" VerticalAlignment="Bottom" MarginBottom="6" DoNotAcceptEvents="true" />
                               </Children>
-                            </BrushWidget>
-
-                            <!-- 成员列表 -->
-                            <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
-                                       DataSource="{Roster}" StackLayout.LayoutMethod="VerticalTopToBottom"
-                                       StackLayout.Spacing="4" MarginTop="6">
-                              <ItemTemplate>
-                                <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
-                                              SuggestedHeight="!Roster.ItemHeight" Brush="ButtonPrimary2Brush"
-                                              Command.Click="ExecuteSelect" ButtonType="Radio" IsSelected="@IsSelected"
-                                              UpdateChildrenStates="true">
-                                  <Children>
-                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="20"
-                                                Text="@HeroName" Brush="SPOptions.Title.Text" FontSize="15"
-                                                Color="#FFFFFFFF" MarginLeft="16" VerticalAlignment="Top" MarginTop="8" DoNotAcceptEvents="true" />
-                                    <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="14"
-                                                Text="@Subtitle" Brush="SPOptions.Description.Text" FontSize="12"
-                                                AlphaFactor="0.5" MarginLeft="16" VerticalAlignment="Bottom" MarginBottom="6" DoNotAcceptEvents="true" />
-                                  </Children>
-                                </ButtonWidget>
-                              </ItemTemplate>
-                            </ListPanel>
-                          </Children>
-                        </Widget>
+                            </ButtonWidget>
+                          </ItemTemplate>
+                        </ListPanel>
 
                         <!-- ===== 分组2: 兵种模板（仅调试模式显示） ===== -->
-                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" IsVisible="@DebugMode" MarginBottom="8">
+                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" IsVisible="@DebugMode" MarginTop="8" MarginBottom="8">
                           <Children>
                             <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30" Brush="Frame2Brush">
                               <Children>
@@ -165,7 +163,7 @@
                         </Widget>
 
                         <!-- ===== 分组3: 领主NPC（仅调试模式显示） ===== -->
-                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" IsVisible="@DebugMode" MarginBottom="8">
+                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" IsVisible="@DebugMode" MarginTop="8" MarginBottom="8">
                           <Children>
                             <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30" Brush="Frame2Brush">
                               <Children>
@@ -232,7 +230,7 @@
 
                 <!-- ===== 技能槽位区域（IsInCatalogView=false时显示） ===== -->
                 <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="420"
-                             Brush="Frame2Brush"
+                             Brush="Frame1Brush"
                              IsVisible="@IsShowingSlots" MarginTop="46" MarginLeft="12" MarginRight="12" ClipContents="true">
                   <Children>
                     <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
@@ -436,13 +434,14 @@
                 </BrushWidget>
 
                 <!-- ===== 分隔线 ===== -->
-                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="40"
-                             VerticalAlignment="Top" MarginTop="468"
-                             Brush="Frame2Brush" DoNotAcceptEvents="true" />
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="2"
+                        Sprite="BlankWhiteSquare_9" Color="#C1A167FF" AlphaFactor="0.4"
+                        VerticalAlignment="Top" MarginTop="466" MarginLeft="12" MarginRight="12"
+                        DoNotAcceptEvents="true" />
 
                 <!-- ===== 下部面板：熟练度 / 目录信息 ===== -->
                 <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                             Brush="Frame2Brush"
+                             Brush="Frame1Brush"
                              MarginTop="474" MarginLeft="12" MarginRight="12" MarginBottom="55" ClipContents="true"
                              StackLayout.LayoutMethod="VerticalTopToBottom">
                   <Children>
