@@ -725,16 +725,12 @@ namespace New_ZZZF
                 foreach (var culture in MBObjectManager.Instance.GetObjectTypeList<CultureObject>())
                 {
                     if (culture == null) continue;
-                    foreach (var troop in culture.BasicTroops)
-                    {
-                        if (troop == null || !addedIds.Add(troop.StringId)) continue;
-                        TroopTemplates.Add(new HeroVM(troop, OnTargetSelected));
-                    }
-                    foreach (var troop in culture.EliteBasicTroops)
-                    {
-                        if (troop == null || !addedIds.Add(troop.StringId)) continue;
-                        TroopTemplates.Add(new HeroVM(troop, OnTargetSelected));
-                    }
+                    var basicTroop = culture.BasicTroop;
+                    if (basicTroop != null && addedIds.Add(basicTroop.StringId))
+                        TroopTemplates.Add(new HeroVM(basicTroop, OnTargetSelected));
+                    var eliteTroop = culture.EliteBasicTroop;
+                    if (eliteTroop != null && addedIds.Add(eliteTroop.StringId))
+                        TroopTemplates.Add(new HeroVM(eliteTroop, OnTargetSelected));
                 }
             }
             catch { /* 静默失败，调试模式数据源可能不完整 */ }
