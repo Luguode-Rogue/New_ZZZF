@@ -17,9 +17,13 @@
     <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent">
       <Children>
 
-        <!-- ===== 全屏半透明遮罩 ===== -->
+        <!-- ===== 全屏不透明深色背景（阻断游戏世界暖色透传） ===== -->
         <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                Sprite="StdAssets\black_background" AlphaFactor="0.8" DoNotAcceptEvents="true" />
+                Sprite="BlankWhiteSquare_9" Color="#131318" DoNotAcceptEvents="true" />
+        
+        <!-- ===== 微妙的噪点纹理叠加（增加质感） ===== -->
+        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                Sprite="StdAssets\black_background" AlphaFactor="0.15" DoNotAcceptEvents="true" />
 
         <!-- ===== 顶部标题栏 ===== -->
         <BrushWidget WidthSizePolicy="Fixed" SuggestedWidth="700" HeightSizePolicy="Fixed"
