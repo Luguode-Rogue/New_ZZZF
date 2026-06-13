@@ -98,7 +98,7 @@
 
                 <!-- 可滚动角色列表区域 -->
                 <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                 MarginTop="4" AutoHideScrollBars="true"
+                                 MarginTop="40" AutoHideScrollBars="true"
                                  ClipRect="LeftViewport" InnerPanel="LeftInnerPanel" VerticalScrollbar="LeftScrollbar">
                   <Children>
                     <Widget Id="LeftViewport" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true" />
@@ -199,12 +199,15 @@
 
                     <!-- 滚动条 -->
                     <ScrollbarWidget Id="LeftScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent"
-                                     HorizontalAlignment="Right" Alignment="Right" Handle="LeftScrollHandle">
+                                     HorizontalAlignment="Right" AlignmentAxis="Vertical"
+                                     Handle="LeftScrollHandle" MaxValue="100" MinValue="0">
                       <Children>
-                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                Sprite="StdAssets\black_background" AlphaFactor="0.2" DoNotAcceptEvents="true" />
-                        <Widget Id="LeftScrollHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
-                                SuggestedHeight="40" Brush="Scrollbar.Vertical.Handle" />
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4"
+                                HorizontalAlignment="Center"
+                                Sprite="BlankWhiteSquare_9" AlphaFactor="0.2" Color="#5a4033FF" DoNotAcceptEvents="true" />
+                        <ImageWidget Id="LeftScrollHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                     SuggestedWidth="8" SuggestedHeight="10" HorizontalAlignment="Center"
+                                     Brush="FaceGen.Scrollbar.Handle" />
                       </Children>
                     </ScrollbarWidget>
                   </Children>
@@ -230,7 +233,7 @@
 
                 <!-- ===== 技能槽位区域（IsInCatalogView=false时显示） ===== -->
                 <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="420"
-                             Brush="Frame1Brush"
+                             Brush="Frame1.Border"
                              IsVisible="@IsShowingSlots" MarginTop="46" MarginLeft="12" MarginRight="12" ClipContents="true">
                   <Children>
                     <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
@@ -338,12 +341,15 @@
                         </ListPanel>
 
                         <ScrollbarWidget Id="SkillScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent"
-                                         HorizontalAlignment="Right" Alignment="Right" Handle="SkillScrollHandle">
+                                         HorizontalAlignment="Right" AlignmentAxis="Vertical"
+                                         Handle="SkillScrollHandle" MaxValue="100" MinValue="0">
                           <Children>
-                            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                    Sprite="StdAssets\black_background" AlphaFactor="0.2" DoNotAcceptEvents="true" />
-                            <Widget Id="SkillScrollHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
-                                    SuggestedHeight="40" Brush="Scrollbar.Vertical.Handle" />
+                            <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4"
+                                    HorizontalAlignment="Center"
+                                    Sprite="BlankWhiteSquare_9" AlphaFactor="0.2" Color="#5a4033FF" DoNotAcceptEvents="true" />
+                            <ImageWidget Id="SkillScrollHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                         SuggestedWidth="8" SuggestedHeight="10" HorizontalAlignment="Center"
+                                         Brush="FaceGen.Scrollbar.Handle" />
                           </Children>
                         </ScrollbarWidget>
                       </Children>
@@ -420,12 +426,15 @@
                         </ListPanel>
 
                         <ScrollbarWidget Id="CatScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent"
-                                         HorizontalAlignment="Right" Alignment="Right" Handle="CatScrollHandle">
+                                         HorizontalAlignment="Right" AlignmentAxis="Vertical"
+                                         Handle="CatScrollHandle" MaxValue="100" MinValue="0">
                           <Children>
-                            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                    Sprite="StdAssets\black_background" AlphaFactor="0.2" DoNotAcceptEvents="true" />
-                            <Widget Id="CatScrollHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
-                                    SuggestedHeight="40" Brush="Scrollbar.Vertical.Handle" />
+                            <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4"
+                                    HorizontalAlignment="Center"
+                                    Sprite="BlankWhiteSquare_9" AlphaFactor="0.2" Color="#5a4033FF" DoNotAcceptEvents="true" />
+                            <ImageWidget Id="CatScrollHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                         SuggestedWidth="8" SuggestedHeight="10" HorizontalAlignment="Center"
+                                         Brush="FaceGen.Scrollbar.Handle" />
                           </Children>
                         </ScrollbarWidget>
                       </Children>
@@ -441,7 +450,7 @@
 
                 <!-- ===== 下部面板：熟练度 / 目录信息 ===== -->
                 <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                             Brush="Frame1Brush"
+                             Brush="Frame1.Border"
                              MarginTop="474" MarginLeft="12" MarginRight="12" MarginBottom="55" ClipContents="true"
                              StackLayout.LayoutMethod="VerticalTopToBottom">
                   <Children>
@@ -487,12 +496,15 @@
                         </ListPanel>
 
                         <ScrollbarWidget Id="ProfScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent"
-                                         HorizontalAlignment="Right" Alignment="Right" Handle="ProfScrollHandle">
+                                         HorizontalAlignment="Right" AlignmentAxis="Vertical"
+                                         Handle="ProfScrollHandle" MaxValue="100" MinValue="0">
                           <Children>
-                            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                    Sprite="StdAssets\black_background" AlphaFactor="0.2" DoNotAcceptEvents="true" />
-                            <Widget Id="ProfScrollHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
-                                    SuggestedHeight="40" Brush="Scrollbar.Vertical.Handle" />
+                            <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4"
+                                    HorizontalAlignment="Center"
+                                    Sprite="BlankWhiteSquare_9" AlphaFactor="0.2" Color="#5a4033FF" DoNotAcceptEvents="true" />
+                            <ImageWidget Id="ProfScrollHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                         SuggestedWidth="8" SuggestedHeight="10" HorizontalAlignment="Center"
+                                         Brush="FaceGen.Scrollbar.Handle" />
                           </Children>
                         </ScrollbarWidget>
                       </Children>
