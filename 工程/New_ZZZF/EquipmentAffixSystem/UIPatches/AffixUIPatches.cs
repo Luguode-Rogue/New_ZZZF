@@ -26,7 +26,7 @@ namespace New_ZZZF
                 if (item == null) return;
                 var behavior = AffixCampaignBehavior.Current;
                 if (behavior == null) return;
-                var affix = behavior.GetAffixByItemId(item.StringId);
+                var affix = behavior.GetAffixByBaseItemId(item.StringId);
                 if (affix != null && affix.HasAnyAffix)
                     __result = affix.BuildFullName(item.Name.ToString());
             }
@@ -48,7 +48,7 @@ namespace New_ZZZF
             {
                 var behavior = AffixCampaignBehavior.Current;
                 if (behavior == null) return;
-                var affix = behavior.GetAffixByItemId(item.Item.StringId);
+                var affix = behavior.GetAffixByBaseItemId(item.Item.StringId);
                 if (affix != null && affix.HasAnyAffix)
                     __instance.ItemName = affix.BuildFullName(item.Item.Name.ToString());
             }

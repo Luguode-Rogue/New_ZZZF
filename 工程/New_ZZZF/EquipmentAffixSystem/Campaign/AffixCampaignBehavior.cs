@@ -11,24 +11,24 @@ namespace New_ZZZF
     /// <summary>
     /// 词缀系统战役行为。
     /// 职责：
-    /// 1. 管理全部物品的 AffixInstance 字典（与存档同步）
+    /// 1. 管理全部物品的 AffixedItemRecord 实例表（与存档同步）
     /// 2. 监听掉落/商店购买事件，触发词缀生成
-    /// 3. 提供查询接口给 UI 层
+    /// 3. 提供查询接口给 UI 层和战斗层
     /// </summary>
     public class AffixCampaignBehavior : CampaignBehaviorBase
     {
         // ========== 单例访问 ==========
         public static AffixCampaignBehavior? Current { get; private set; }
 
-        // ========== 存档数据 ==========
+        // ========== 实例记录表 ==========
 
         /// <summary>
-        /// 物品词缀字典。
-        /// Key: AffixInstance.InstanceId（唯一标识）
-        /// Value: 对应的词缀实例
+        /// 物品实例记录表（替代旧 ItemAffixMap）。
+        /// Key: AffixedItemRecord.InstanceId（唯一标识）
+        /// Value: 物品实例记录（含基础物品ID、词缀、来源、堆叠数等）
         /// 不直接存档（Dictionary 泛型序列化需 TypeDefiner，改用 _serializedAffixData）。
         /// </summary>
-        public Dictionary<string, AffixInstance> ItemAffixMap = new Dictionary<string, AffixInstance>();
+        public Dictionary<string, AffixedItemRecord> ItemRecordMap = new Dictionary<string, AffixedItemRecord>();
 
         /// <summary>系统是否已初始化</summary>
         public bool IsInitialized;
@@ -68,8 +68,8 @@ namespace New_ZZZF
         {
             if (dataStore.IsSaving)
             {
-                // 存档：将字典序列化为字符串列表
-                _serializedAffixData = SerializeAffixMap();
+                // 存档：将实例记录表序列化为字符串列表
+                _serializedAffixData = SerializeRecordMap();
                 _serializedIsInitialized = IsInitialized;
             }
 
@@ -79,23 +79,21 @@ namespace New_ZZZF
             if (dataStore.IsSaving)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[装备词缀系统] 存档完成，共 {ItemAffixMap.Count} 件词缀物品"));
+                    $"[装备词缀系统] 存档完成，共 {ItemRecordMap.Count} 件词缀物品"));
             }
             if (dataStore.IsLoading)
             {
                 IsInitialized = _serializedIsInitialized;
-                // 读档：反序列化字符串列表为字典
-                ItemAffixMap = DeserializeAffixMap(_serializedAffixData);
+                // 读档：反序列化字符串列表为实例记录表
+                ItemRecordMap = DeserializeRecordMap(_serializedAffixData);
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[装备词缀系统] 读档完成，共 {ItemAffixMap.Count} 件词缀物品"));
+                    $"[装备词缀系统] 读档完成，共 {ItemRecordMap.Count} 件词缀物品"));
                 // 读档后重建 [NonSerialized] 缓存
                 var db = AffixDatabase.Instance;
                 db.Initialize();
-                foreach (var instanceId in ItemAffixMap.Keys.ToList())
+                foreach (var record in ItemRecordMap.Values)
                 {
-                    var instance = ItemAffixMap[instanceId];
-                    instance.ResolveDefinitions(db);
-                    ItemAffixMap[instanceId] = instance;
+                    record.Affix.ResolveDefinitions(db);
                 }
             }
         }
@@ -113,7 +111,7 @@ namespace New_ZZZF
         {
             Initialize();
             InformationManager.DisplayMessage(new InformationMessage(
-                $"[装备词缀系统] 游戏加载完成，共 {ItemAffixMap.Count} 件词缀物品"));
+                $"[装备词缀系统] 游戏加载完成，共 {ItemRecordMap.Count} 件词缀物品"));
         }
 
         /// <summary>
@@ -128,8 +126,8 @@ namespace New_ZZZF
             {
                 if (itemElement.EquipmentElement.Item != null)
                 {
-                    // 为新获得的物品生成词缀
-                    AffixItemIfNeeded(itemElement.EquipmentElement.Item, "PlayerInventory");
+                    // 为新获得的物品创建实例记录（生成词缀）
+                    CreateAffixedRecord(itemElement.EquipmentElement.Item, amount, "PlayerInventory");
                 }
             }
         }
@@ -147,35 +145,33 @@ namespace New_ZZZF
         }
 
         /// <summary>
-        /// 检查物品是否需要生成词缀，如果需要则生成并存入字典。
-        /// 返回该物品的词缀实例（有则返回，无则 null）。
+        /// 为物品创建实例记录并生成词缀（替代旧 AffixItemIfNeeded）。
+        /// 返回 AffixedItemRecord（包含 InstanceId + 词缀）；无词缀时返回 null。
         /// </summary>
-        public AffixInstance? AffixItemIfNeeded(ItemObject item, string source)
+        public AffixedItemRecord? CreateAffixedRecord(ItemObject item, int stackCount = 1, string source = "")
         {
             if (item == null) return null;
 
-            string itemId = item.StringId;
-
-            // 检查是否已有词缀实例（通过 BaseItemId 匹配）
-            foreach (var kv in ItemAffixMap)
-            {
-                if (kv.Value.BaseItemId == itemId)
-                    return kv.Value; // 已生成过，直接返回
-            }
-
-            // 需要生成新词缀
+            // 不检查是否已有同 BaseItemId 记录 —— 每次调用都创建新实例
             string itemType = ClassifyItemType(item);
             int itemLevel = CalculateItemLevel(item);
 
-            AffixInstance instance = AffixGenerator.Generate(itemId, itemType, itemLevel);
-
-            // 只有有词缀的才记录（普通物品不记录，节省存储空间）
-            if (instance.HasAnyAffix)
+            var record = new AffixedItemRecord
             {
-                ItemAffixMap[instance.InstanceId] = instance;
+                BaseItemId = item.StringId,
+                StackCount = stackCount,
+                Source = source
+            };
+
+            int seed = record.InstanceId.GetHashCode();
+            record.Affix = AffixGenerator.GenerateSeeded(item.StringId, itemType, itemLevel, seed);
+
+            if (record.Affix.HasAnyAffix)
+            {
+                ItemRecordMap[record.InstanceId] = record;
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[装备词缀系统] [{source}] 生成词缀物品: {instance.BuildFullName(item.Name.ToString())} ({instance.Rarity})"));
-                return instance;
+                    $"[装备词缀系统] [{source}] 生成词缀物品: {record.Affix.BuildFullName(item.Name.ToString())} ({record.Affix.Rarity})"));
+                return record;
             }
 
             return null;
@@ -183,38 +179,50 @@ namespace New_ZZZF
 
         /// <summary>
         /// 强制为物品生成词缀（Debug/测试用），跳过Normal判定，必定带词缀。
+        /// 返回 AffixedItemRecord。
         /// </summary>
-        public AffixInstance ForceAffixItem(ItemObject item, string source)
+        public AffixedItemRecord ForceAffixItem(ItemObject item, string source)
         {
             if (item == null) return null;
 
             string itemId = item.StringId;
             string itemType = ClassifyItemType(item);
             int itemLevel = CalculateItemLevel(item);
-            int seed = (int)(DateTime.UtcNow.Ticks % int.MaxValue);
 
-            AffixInstance instance = AffixGenerator.GenerateForceAffix(itemId, itemType, itemLevel, seed);
+            var record = new AffixedItemRecord
+            {
+                BaseItemId = itemId,
+                StackCount = 1,
+                Source = source
+            };
 
-            ItemAffixMap[instance.InstanceId] = instance;
+            int seed = record.InstanceId.GetHashCode();
+            record.Affix = AffixGenerator.GenerateForceAffix(itemId, itemType, itemLevel, seed);
+
+            ItemRecordMap[record.InstanceId] = record;
             InformationManager.DisplayMessage(new InformationMessage(
-                $"[装备词缀系统] [{source}] 强制生成词缀: {instance.BuildFullName(item.Name.ToString())} ({instance.Rarity})"));
-            return instance;
+                $"[装备词缀系统] [{source}] 强制生成词缀: {record.Affix.BuildFullName(item.Name.ToString())} ({record.Affix.Rarity})"));
+            return record;
         }
 
         /// <summary>
-        /// 重随物品词缀——生成全新前后缀替换旧的，保留同一物品。
+        /// 重随物品词缀——生成全新前后缀替换旧的。
+        /// 搜索 ItemRecordMap 中首个 BaseItemId 匹配的记录，删除后重建。
         /// 返回新的词缀实例；物品上没有词缀时返回 null。
         /// </summary>
         public AffixInstance? RerollAffix(ItemObject item)
         {
             if (item == null) return null;
 
-            var oldAffix = GetAffixByItemId(item.StringId);
-            if (oldAffix == null) return null;
+            // 搜索首个 BaseItemId 匹配的记录
+            var oldRecord = ItemRecordMap.Values
+                .FirstOrDefault(r => r.BaseItemId == item.StringId);
+            if (oldRecord == null) return null;
 
             // 删除旧记录，创建新词缀
-            ItemAffixMap.Remove(oldAffix.InstanceId);
-            return ForceAffixItem(item, "Reroll");
+            ItemRecordMap.Remove(oldRecord.InstanceId);
+            var newRecord = ForceAffixItem(item, "Reroll");
+            return newRecord?.Affix;
         }
 
         /// <summary>
@@ -222,19 +230,22 @@ namespace New_ZZZF
         /// </summary>
         public AffixInstance? GetAffixByInstanceId(string instanceId)
         {
-            ItemAffixMap.TryGetValue(instanceId, out var instance);
-            return instance;
+            if (ItemRecordMap.TryGetValue(instanceId, out var record))
+                return record.Affix;
+            return null;
         }
 
         /// <summary>
-        /// 根据物品ID查找词缀实例（可能有多个，返回第一个匹配的）
+        /// 过渡方法：根据 BaseItemId 搜索首个匹配实例记录的词缀。
+        /// 仅用于仅有 ItemObject 无法获取 InstanceId 的场景（UI/战斗/调试）。
+        /// 未来应逐步迁移到按 InstanceId 查询。
         /// </summary>
-        public AffixInstance? GetAffixByItemId(string itemId)
+        public AffixInstance? GetAffixByBaseItemId(string baseItemId)
         {
-            foreach (var kv in ItemAffixMap)
+            foreach (var record in ItemRecordMap.Values)
             {
-                if (kv.Value.BaseItemId == itemId)
-                    return kv.Value;
+                if (record.BaseItemId == baseItemId)
+                    return record.Affix;
             }
             return null;
         }
@@ -244,7 +255,7 @@ namespace New_ZZZF
         /// </summary>
         public string GetItemDisplayName(ItemObject item)
         {
-            var affix = GetAffixByItemId(item.StringId);
+            var affix = GetAffixByBaseItemId(item.StringId);
             if (affix != null)
                 return affix.BuildFullName(item.Name.ToString());
             return item.Name.ToString();
@@ -257,7 +268,7 @@ namespace New_ZZZF
         public static float GetAffixDamageMultiplier(ItemObject item, string statKey)
         {
             if (Current == null || item == null) return 1f;
-            var affix = Current.GetAffixByItemId(item.StringId);
+            var affix = Current.GetAffixByBaseItemId(item.StringId);
             if (affix == null || !affix.HasAnyAffix) return 1f;
             if (!affix.FinalStatModifiers.TryGetValue(statKey, out float bonus) || bonus == 0f)
                 return 1f;
@@ -355,73 +366,105 @@ namespace New_ZZZF
             return 80;
         }
 
-        // ========== 序列化辅助（List<string> 格式存档，避免 Dictionary<自定义类型> 序列化问题） ==========
+        // ========== 序列化辅助 ==========
 
-        /// <summary>将 ItemAffixMap 编码为字符串列表，每行格式：
-        /// InstanceId|BaseItemId|ItemLevel|Rarity|prefixId,prefixId|suffixId,suffixId|statKey=statVal;statKey=statVal
+        /// <summary>将 ItemRecordMap 编码为字符串列表，每行格式：
+        /// InstanceId|BaseItemId|ItemLevel|Rarity|Source|StackCount|IsEquipped|prefixId,prefixId|suffixId,suffixId|statKey=statVal;statKey=statVal
         /// </summary>
-        private List<string> SerializeAffixMap()
+        private List<string> SerializeRecordMap()
         {
-            var result = new List<string>(ItemAffixMap.Count);
-            foreach (var kv in ItemAffixMap)
+            var result = new List<string>(ItemRecordMap.Count);
+            foreach (var record in ItemRecordMap.Values)
             {
-                var affix = kv.Value;
+                var affix = record.Affix;
                 string prefixStr = string.Join(",", affix.PrefixIds);
                 string suffixStr = string.Join(",", affix.SuffixIds);
                 string statStr = string.Join(";", System.Linq.Enumerable.Select(
                     affix.FinalStatModifiers, s => $"{s.Key}={s.Value}"));
-                result.Add($"{affix.InstanceId}|{affix.BaseItemId}|{affix.ItemLevel}|{affix.Rarity}|{prefixStr}|{suffixStr}|{statStr}");
+                result.Add($"{affix.InstanceId}|{affix.BaseItemId}|{affix.ItemLevel}|{affix.Rarity}|{record.Source}|{record.StackCount}|{record.IsEquipped}|{prefixStr}|{suffixStr}|{statStr}");
             }
             return result;
         }
 
-        /// <summary>从字符串列表还原 ItemAffixMap</summary>
-        private Dictionary<string, AffixInstance> DeserializeAffixMap(List<string> lines)
+        /// <summary>从字符串列表还原 ItemRecordMap</summary>
+        private Dictionary<string, AffixedItemRecord> DeserializeRecordMap(List<string> lines)
         {
-            var result = new Dictionary<string, AffixInstance>();
+            var result = new Dictionary<string, AffixedItemRecord>();
             if (lines == null) return result;
 
             foreach (string line in lines)
             {
                 if (string.IsNullOrEmpty(line)) continue;
                 string[] parts = line.Split('|');
-                if (parts.Length < 7) continue;
+                // v2 格式：10 个字段 (含 Source/StackCount/IsEquipped)
+                // v1 兼容：7 个字段 (旧格式仅有 AffixInstance 数据)
+                bool isV2Format = parts.Length >= 10;
 
-                var instance = new AffixInstance();
-                instance.InstanceId = parts[0];
-                instance.BaseItemId = parts[1];
+                var affix = new AffixInstance();
+                affix.InstanceId = parts[0];
+                affix.BaseItemId = parts[1];
                 int.TryParse(parts[2], out int level);
-                instance.ItemLevel = level;
-                instance.Rarity = parts[3];
+                affix.ItemLevel = level;
+                affix.Rarity = parts[3];
+
+                int sourceIndex = 4;
+                string source = "", stackStr = "", isEquippedStr = "";
+                int prefixIndex, suffixIndex, statIndex;
+
+                if (isV2Format)
+                {
+                    source = parts[4];      // Source
+                    stackStr = parts[5];    // StackCount
+                    isEquippedStr = parts[6]; // IsEquipped
+                    prefixIndex = 7;
+                    suffixIndex = 8;
+                    statIndex = 9;
+                }
+                else
+                {
+                    prefixIndex = 4;
+                    suffixIndex = 5;
+                    statIndex = 6;
+                }
 
                 // 前缀列表
-                if (!string.IsNullOrEmpty(parts[4]))
-                    instance.PrefixIds = new List<string>(parts[4].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
+                if (prefixIndex < parts.Length && !string.IsNullOrEmpty(parts[prefixIndex]))
+                    affix.PrefixIds = new List<string>(parts[prefixIndex].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
                 else
-                    instance.PrefixIds = new List<string>();
+                    affix.PrefixIds = new List<string>();
 
                 // 后缀列表
-                if (!string.IsNullOrEmpty(parts[5]))
-                    instance.SuffixIds = new List<string>(parts[5].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
+                if (suffixIndex < parts.Length && !string.IsNullOrEmpty(parts[suffixIndex]))
+                    affix.SuffixIds = new List<string>(parts[suffixIndex].Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
                 else
-                    instance.SuffixIds = new List<string>();
+                    affix.SuffixIds = new List<string>();
 
                 // 属性修正
-                instance.FinalStatModifiers = new Dictionary<string, float>();
-                if (!string.IsNullOrEmpty(parts[6]))
+                affix.FinalStatModifiers = new Dictionary<string, float>();
+                if (statIndex < parts.Length && !string.IsNullOrEmpty(parts[statIndex]))
                 {
-                    foreach (string pair in parts[6].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                    foreach (string pair in parts[statIndex].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
                     {
                         int eqIndex = pair.IndexOf('=');
                         if (eqIndex > 0 && eqIndex < pair.Length - 1
                             && float.TryParse(pair.Substring(eqIndex + 1), out float val))
                         {
-                            instance.FinalStatModifiers[pair.Substring(0, eqIndex)] = val;
+                            affix.FinalStatModifiers[pair.Substring(0, eqIndex)] = val;
                         }
                     }
                 }
 
-                result[instance.InstanceId] = instance;
+                var record = new AffixedItemRecord
+                {
+                    InstanceId = affix.InstanceId,
+                    BaseItemId = affix.BaseItemId,
+                    Source = isV2Format ? source : "",
+                    StackCount = isV2Format && int.TryParse(stackStr, out int sc) ? sc : 1,
+                    IsEquipped = isV2Format && bool.TryParse(isEquippedStr, out bool ie) && ie,
+                    Affix = affix
+                };
+
+                result[record.InstanceId] = record;
             }
             return result;
         }
