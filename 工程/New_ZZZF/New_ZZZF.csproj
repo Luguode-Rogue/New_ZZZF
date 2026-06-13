@@ -1,0 +1,585 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Version>0.0.1</Version>
+    <TargetFrameworks>net472;net6</TargetFrameworks>
+    <Platforms>x64</Platforms>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <BuildForWindows>false</BuildForWindows>
+    <BuildForWindowsStore>false</BuildForWindowsStore>
+    <ModuleId>$(MSBuildProjectName)</ModuleId>
+    <ModuleName>$(MSBuildProjectName)</ModuleName>
+    <ModuleUrl></ModuleUrl>
+	  <GameFolder>E:\SteamLibrary\steamapps\common\Mount &amp; Blade II Bannerlord</GameFolder>
+    <GameBinariesFolder Condition="Exists('$(GameFolder)\bin\Win64_Shipping_Client\Bannerlord.exe')">Win64_Shipping_Client</GameBinariesFolder>
+    <GameBinariesFolder Condition="Exists('$(GameFolder)\bin\Gaming.Desktop.x64_Shipping_Client\Bannerlord.exe')">Gaming.Desktop.x64_Shipping_Client</GameBinariesFolder>
+    <Configurations>Debug;Release;_RGL_KEEP_ASSERTS</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(TargetFramework) == 'net472'">
+    <BuildForWindows>true</BuildForWindows>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(TargetFramework) == 'net6'">
+    <BuildForWindowsStore>false</BuildForWindowsStore>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net6|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net472|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net6|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net472|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='_RGL_KEEP_ASSERTS|net472|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='_RGL_KEEP_ASSERTS|net6|x64'" />
+
+  <ItemGroup>
+    <Reference Include="$(GameFolder)\bin\$(GameBinariesFolder)\Newtonsoft.Json.dll">
+      <HintPath>%(Identity)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\0Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.0.0">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.0.0.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.0.1">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.0.1.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.0.2">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.0.2.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.0.3">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.0.3.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.0">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.0.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.1">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.1.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.2">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.2.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.3">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.3.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.4">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.4.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.5">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.5.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.1.6">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.1.6.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.10">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.10.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.11">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.11.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.12">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.12.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.4">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.4.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.5">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.5.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.6">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.6.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.7">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.7.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.8">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.8.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.2.9">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.2.9.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.3.4">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.3.4.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.3.5">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.3.5.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.3.6">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.3.6.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.3.7">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.3.7.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.3.8">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.3.8.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.ButterLib.Implementation.1.3.9">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Bannerlord.ButterLib.Implementation.1.3.9.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.Harmony">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\Bannerlord.Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.0.0">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.0.0.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.0.1">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.0.1.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.0.2">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.0.2.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.0.3">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.0.3.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.1.0">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.1.0.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.1.1">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.1.1.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.1.2">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.1.2.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.1.3">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.1.3.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.1.4">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.1.4.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.1.5">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.1.5.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.1.6">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.1.6.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.10">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.10.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.11">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.11.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.12">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.12.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.4">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.4.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.5">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.5.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.6">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.6.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.7">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.7.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.8">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.8.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.2.9">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.2.9.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.3.4">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.3.4.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.3.5">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.3.5.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen.v1.3.6">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.3.6.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.MBOptionScreen">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.ModuleLoader.Bannerlord.MBOptionScreen.dll</HintPath>
+    </Reference>
+    <Reference Include="Bannerlord.UIExtenderEx">
+      <HintPath>..\..\..\Bannerlord.UIExtenderEx\bin\Win64_Shipping_Client\Bannerlord.UIExtenderEx.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Models">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Models.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Renderer.Html">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Renderer.Html.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Renderer.ImGui">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Renderer.ImGui.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Renderer.WinForms">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Renderer.WinForms.dll</HintPath>
+    </Reference>
+    <Reference Include="BUTR.CrashReport.Renderer.Zip">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\BUTR.CrashReport.Renderer.Zip.dll</HintPath>
+    </Reference>
+    <Reference Include="MCM.UI.Adapter.MCMv5">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\MCM.UI.Adapter.MCMv5.dll</HintPath>
+    </Reference>
+    <Reference Include="MCMv5">
+      <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\MCMv5.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Bcl.HashCode">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Bcl.HashCode.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.DependencyInjection">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.DependencyInjection.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.Logging.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.Logging.Abstractions.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Options">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.Options.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Primitives">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Microsoft.Extensions.Primitives.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\Mono.Cecil.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil.Mdb">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\Mono.Cecil.Mdb.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil.Pdb">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\Mono.Cecil.Pdb.dll</HintPath>
+    </Reference>
+    <Reference Include="Mono.Cecil.Rocks">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\Mono.Cecil.Rocks.dll</HintPath>
+    </Reference>
+    <Reference Include="MonoMod.Backports">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\MonoMod.Backports.dll</HintPath>
+    </Reference>
+    <Reference Include="MonoMod.Core">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\MonoMod.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="MonoMod.Iced">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\MonoMod.Iced.dll</HintPath>
+    </Reference>
+    <Reference Include="MonoMod.ILHelpers">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\MonoMod.ILHelpers.dll</HintPath>
+    </Reference>
+    <Reference Include="MonoMod.Utils">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\MonoMod.Utils.dll</HintPath>
+    </Reference>
+    <Reference Include="NavalDLC">
+      <HintPath>..\..\..\NavalDLC\bin\Win64_Shipping_Client\NavalDLC.dll</HintPath>
+    </Reference>
+    <Reference Include="NavalDLC.CustomBattle">
+      <HintPath>..\..\..\NavalDLC\bin\Win64_Shipping_Client\NavalDLC.CustomBattle.dll</HintPath>
+    </Reference>
+    <Reference Include="NavalDLC.GauntletUI">
+      <HintPath>..\..\..\NavalDLC\bin\Win64_Shipping_Client\NavalDLC.GauntletUI.dll</HintPath>
+    </Reference>
+    <Reference Include="NavalDLC.GauntletUI.AutoGenerated">
+      <HintPath>..\..\..\NavalDLC\bin\Win64_Shipping_Client\NavalDLC.GauntletUI.AutoGenerated.dll</HintPath>
+    </Reference>
+    <Reference Include="NavalDLC.GauntletUI.Widgets">
+      <HintPath>..\..\..\NavalDLC\bin\Win64_Shipping_Client\NavalDLC.GauntletUI.Widgets.dll</HintPath>
+    </Reference>
+    <Reference Include="NavalDLC.View">
+      <HintPath>..\..\..\NavalDLC\bin\Win64_Shipping_Client\NavalDLC.View.dll</HintPath>
+    </Reference>
+    <Reference Include="NavalDLC.ViewModelCollection">
+      <HintPath>..\..\..\NavalDLC\bin\Win64_Shipping_Client\NavalDLC.ViewModelCollection.dll</HintPath>
+    </Reference>
+    <Reference Include="SandBox">
+      <HintPath>..\..\..\SandBox\bin\Win64_Shipping_Client\SandBox.dll</HintPath>
+    </Reference>
+    <Reference Include="SandBox.GauntletUI">
+      <HintPath>..\..\..\SandBox\bin\Win64_Shipping_Client\SandBox.GauntletUI.dll</HintPath>
+    </Reference>
+    <Reference Include="SandBox.GauntletUI.AutoGenerated.0">
+      <HintPath>..\..\..\SandBox\bin\Win64_Shipping_Client\SandBox.GauntletUI.AutoGenerated.0.dll</HintPath>
+    </Reference>
+    <Reference Include="SandBox.GauntletUI.AutoGenerated.1">
+      <HintPath>..\..\..\SandBox\bin\Win64_Shipping_Client\SandBox.GauntletUI.AutoGenerated.1.dll</HintPath>
+    </Reference>
+    <Reference Include="SandBox.View">
+      <HintPath>..\..\..\SandBox\bin\Win64_Shipping_Client\SandBox.View.dll</HintPath>
+    </Reference>
+    <Reference Include="SandBox.ViewModelCollection">
+      <HintPath>..\..\..\SandBox\bin\Win64_Shipping_Client\SandBox.ViewModelCollection.dll</HintPath>
+    </Reference>
+    <Reference Include="Serilog">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Serilog.dll</HintPath>
+    </Reference>
+    <Reference Include="Serilog.Extensions.Logging">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Serilog.Extensions.Logging.dll</HintPath>
+    </Reference>
+    <Reference Include="Serilog.Sinks.File">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\Serilog.Sinks.File.dll</HintPath>
+    </Reference>
+    <Reference Include="StoryMode">
+      <HintPath>..\..\..\StoryMode\bin\Win64_Shipping_Client\StoryMode.dll</HintPath>
+    </Reference>
+    <Reference Include="StoryMode.GauntletUI">
+      <HintPath>..\..\..\StoryMode\bin\Win64_Shipping_Client\StoryMode.GauntletUI.dll</HintPath>
+    </Reference>
+    <Reference Include="StoryMode.GauntletUI.AutoGenerated">
+      <HintPath>..\..\..\StoryMode\bin\Win64_Shipping_Client\StoryMode.GauntletUI.AutoGenerated.dll</HintPath>
+    </Reference>
+    <Reference Include="StoryMode.View">
+      <HintPath>..\..\..\StoryMode\bin\Win64_Shipping_Client\StoryMode.View.dll</HintPath>
+    </Reference>
+    <Reference Include="StoryMode.ViewModelCollection">
+      <HintPath>..\..\..\StoryMode\bin\Win64_Shipping_Client\StoryMode.ViewModelCollection.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Collections.Immutable.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reflection.Metadata">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Reflection.Metadata.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>..\..\..\Bannerlord.ButterLib\bin\Win64_Shipping_Client\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.ValueTuple">
+      <HintPath>..\..\..\Bannerlord.Harmony\bin\Win64_Shipping_Client\System.ValueTuple.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.AchievementSystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.AchievementSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.ActivitySystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.ActivitySystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.CampaignSystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.CampaignSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.CampaignSystem.ViewModelCollection">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.CampaignSystem.ViewModelCollection.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Core">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Core.ViewModelCollection">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Core.ViewModelCollection.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Diamond">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Diamond.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Diamond.AccessProvider.Epic">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Diamond.AccessProvider.Epic.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Diamond.AccessProvider.GDK">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Diamond.AccessProvider.GDK.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Diamond.AccessProvider.GOG">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Diamond.AccessProvider.GOG.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Diamond.AccessProvider.Steam">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Diamond.AccessProvider.Steam.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Diamond.AccessProvider.Test">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Diamond.AccessProvider.Test.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Diamond.ChatSystem.Library">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Diamond.ChatSystem.Library.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.DotNet">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.DotNet.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.DotNet.AutoGenerated">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.DotNet.AutoGenerated.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Engine">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Engine.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Engine.AutoGenerated">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Engine.AutoGenerated.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Engine.GauntletUI">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Engine.GauntletUI.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.GauntletUI">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.GauntletUI.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.GauntletUI.CodeGenerator">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.GauntletUI.CodeGenerator.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.GauntletUI.Data">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.GauntletUI.Data.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.GauntletUI.ExtraWidgets">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.GauntletUI.ExtraWidgets.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.GauntletUI.PrefabSystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.GauntletUI.PrefabSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.GauntletUI.TooltipExtensions">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.GauntletUI.TooltipExtensions.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.InputSystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.InputSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Library">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Library.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.LinQuick">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.LinQuick.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Localization">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Localization.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.ModuleManager">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.ModuleManager.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.AutoGenerated">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.AutoGenerated.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.Diamond">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.Diamond.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.GauntletUI">
+      <HintPath>..\..\..\Native\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.GauntletUI.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.GauntletUI.AutoGenerated.0">
+      <HintPath>..\..\..\Native\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.GauntletUI.AutoGenerated.0.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.GauntletUI.AutoGenerated.1">
+      <HintPath>..\..\..\Native\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.GauntletUI.AutoGenerated.1.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.GauntletUI.Widgets">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.GauntletUI.Widgets.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.Helpers">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.Helpers.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.Launcher.Library">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.Launcher.Library.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.Launcher.Steam">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.Launcher.Steam.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.Multiplayer.Test">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.Multiplayer.Test.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.Platform.PC">
+      <HintPath>..\..\..\Native\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.Platform.PC.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.View">
+      <HintPath>..\..\..\Native\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.View.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.MountAndBlade.ViewModelCollection">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.MountAndBlade.ViewModelCollection.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.NavigationSystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.NavigationSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Network">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Network.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.ObjectSystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.ObjectSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.PlatformService">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.PlatformService.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.PlatformService.Epic">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.PlatformService.Epic.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.PlatformService.GOG">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.PlatformService.GOG.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.PlatformService.Steam">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.PlatformService.Steam.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.PlayerServices">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.PlayerServices.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.PSAI">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.PSAI.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.SaveSystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.SaveSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.ScreenSystem">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.ScreenSystem.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.ServiceDiscovery.Client">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.ServiceDiscovery.Client.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.Starter.Library">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.Starter.Library.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.TwoDimension">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.TwoDimension.dll</HintPath>
+    </Reference>
+    <Reference Include="TaleWorlds.TwoDimension.Standalone">
+      <HintPath>..\..\..\..\bin\Win64_Shipping_Client\TaleWorlds.TwoDimension.Standalone.dll</HintPath>
+    </Reference>
+    <Reference Include="$(GameFolder)\bin\$(GameBinariesFolder)\TaleWorlds.*.dll" Exclude="$(GameFolder)\bin\$(GameBinariesFolder)\TaleWorlds.Native.dll">
+      <HintPath>%(Identity)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="$(GameFolder)\Modules\Native\bin\$(GameBinariesFolder)\*.dll">
+      <HintPath>%(Identity)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="$(GameFolder)\Modules\SandBox\bin\$(GameBinariesFolder)\*.dll">
+      <HintPath>%(Identity)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="$(GameFolder)\Modules\SandBoxCore\bin\$(GameBinariesFolder)\*.dll">
+      <HintPath>%(Identity)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="$(GameFolder)\Modules\StoryMode\bin\$(GameBinariesFolder)\*.dll">
+      <HintPath>%(Identity)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="$(GameFolder)\Modules\CustomBattle\bin\$(GameBinariesFolder)\*.dll">
+      <HintPath>%(Identity)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="$(GameFolder)\Modules\BirthAndDeath\bin\$(GameBinariesFolder)\*.dll">
+      <HintPath>%(Identity)</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="_Module\Prefabs\prefabs.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="_Module\ModuleData\project.mbproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nullable" Version="1.3.1" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="IsExternalInit" Version="1.0.3" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="Bannerlord.BuildResources" Version="1.1.0.104" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="Bannerlord.Lib.Harmony" Version="2.2.2" IncludeAssets="compile" />
+    <PackageReference Include="Harmony.Extensions" Version="3.2.0.77" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="BUTR.Harmony.Analyzer" Version="1.0.1.50" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="_Module\Prefabs\" />
+  </ItemGroup>
+
+
+</Project>

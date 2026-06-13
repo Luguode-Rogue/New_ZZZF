@@ -1,0 +1,6 @@
+Code Source: [https://www.nexusmods.com/mountandblade2bannerlord/mods/1229]
+Author: [WelcomeToHell]
+
+
+
+新的相机参考案例：游戏的近战锁定系统。可以从这里入手TaleWorlds.MountAndBlade.View.MissionViews.MissionMainAgentController.LockedAgent : Agent，使用dnspy查看是谁调用了他，然后逐步分析对相机进行了什么修改

@@ -1,0 +1,21 @@
+强化自身类buff参考ZhanYi类以及其下的ZhanYiBuff，
+技能说明：开启后获得战意状态，每秒回复5耐力，并且击杀敌方单位后，恢复50%自身已损失血量。按当前耐力值增加等量的伤害加成与速度加成。基础持续8秒，每次击杀敌方单位后，持续时间重置为8秒。如果持续时间大于8秒时造成击杀，则持续时间加1秒。消耗耐力：0。冷却时间：60秒。");
+分步骤进行功能实现。
+每秒触发：回耐力，增加速度。
+正常来说都在buff类的OnUpdate中实现，比如dot伤害。
+不过这个的修改因为涉及使用agent.AgentDrivenProperties的修改，所以调整为在新建的处理agent.AgentDrivenProperties的类中完成功能的实现（ public class ZZZF_SandboxAgentStatCalculateModel: SandboxAgentStatCalculateModel）
+然后在OnUpdate中调用agent.UpdateAgentProperties();来触发ZZZF_SandboxAgentStatCalculateModel中的UpdateAgentStats来完成对自己代码（UpdateHumanStats）的触发
+
+攻击命中触发：增加伤害。
+增加伤害的逻辑直接在重写的伤害计算代码里进行实现（WOW_SandboxAgentStatCalculateModel中GetWeaponDamageMultiplier）
+实现没什么难度，不过不知道重写这部分逻辑的可能会比较麻烦。
+然后要说明一点，战役模式和自定义战斗不是同一个类中完成的伤害逻辑，自定义战斗在CustomBattleAgentStatCalculateModel中实现，并且没有英雄技能加成，只有最基础的和小兵一样的熟练度加成。
+
+击杀触发：修改buff事件，额外增加耐力，回血。
+击杀的触发基于攻击命中来实现，攻击命中触发器在继承了MissionBehavior的类中有（ public class SkillSystemBehavior : MissionLogic）
+具体来说就是OnMeleeHit和OnMissileHit，不过这两个触发器的触发时间在完成了伤害扣血死亡判定之后，所以后期考虑调整为使用其他的触发器。
+这个触发器在结算完伤害后才会调用一个近战一个远程。为了不至于一个代码写两遍，所以新建一个方法统一进行处理（private void ExecuteHitEvents(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)）
+因为以及进行了死亡判定，所以受击对象会为空值null，依次来判定目标死亡
+
+最后别忘记结束后清除一下buff的加成，也就是在OnRemove中再调用一遍agent.UpdateAgentProperties();让他只执行一次原版的属性加成逻辑，
+自己的逻辑则依靠if (result.StateContainer.HasState("ZhanYiBuff"))来避免被触发。

@@ -1,0 +1,1 @@
+入口：SkillInventoryManager中的OpenScreenAsInventory。在需要打开技能ui时，直接调用此函数即可。

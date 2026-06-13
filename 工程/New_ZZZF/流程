@@ -1,0 +1,7 @@
+1.遇到一个新的类，需要知道他能干什么，该怎么干（ItemObject类）
+  查看api：：https://apidoc.bannerlord.com/v/1.2.9/class_tale_worlds_1_1_core_1_1_item_object.html
+    简单了解有哪些函数/方法
+  查看反编译dnSpy
+    怎么创建该类物品
+    怎么调用该类物品
+    （特殊类型的入手点：反序列化方法）

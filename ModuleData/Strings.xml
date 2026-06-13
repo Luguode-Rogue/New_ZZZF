@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<strings>
+	<string
+		id="str_weapon_usage.TwoHandedBladedPolearm"
+		text="{=ZZZF0013}双手剑枪" />
+	<string
+		id="str_weapon_usage.OneHandedBladedPolearm"
+		text="{=ZZZF0014}单手剑枪" />
+</strings>

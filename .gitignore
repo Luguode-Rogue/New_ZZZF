@@ -1,0 +1,16 @@
+# 编译产物
+*.dll
+*.pdb
+*.cache
+
+# 临时文件
+*.tmp
+*.log
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# .git
+.git/

@@ -1,0 +1,152 @@
+<Prefab>
+  <Constants>
+    <Constant Name="Popup.Width" Value="640" />
+    <Constant Name="Popup.Height" Value="520" />
+    <Constant Name="SearchBox.Height" Value="40" />
+    <Constant Name="TitleBar.Height" Value="46" />
+    <Constant Name="Footer.Height" Value="46" />
+    <Constant Name="Item.Height" Value="74" />
+  </Constants>
+
+  <Window>
+    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+            IsVisible="@IsVisible">
+      <Children>
+
+        <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                      Command.Click="ExecuteClose"
+                      Sprite="BlankWhiteSquare_9" Color="#00000088"
+                      UpdateChildrenStates="false">
+          <Children>
+            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                    DoNotAcceptEvents="true" />
+          </Children>
+        </ButtonWidget>
+
+        <BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                     SuggestedWidth="!Popup.Width" SuggestedHeight="!Popup.Height"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Brush="Frame1Brush">
+          <Children>
+
+            <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                       StackLayout.LayoutMethod="VerticalTopToBottom">
+              <Children>
+
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="!TitleBar.Height">
+                  <Children>
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28"
+                                Text="@Title" Brush="SPOptions.Title.Text" FontSize="20" Color="#E2BC73FF"
+                                MarginLeft="20" MarginTop="12" DoNotAcceptEvents="true" />
+
+                    <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                  SuggestedWidth="32" SuggestedHeight="32"
+                                  HorizontalAlignment="Right" VerticalAlignment="Center"
+                                  MarginRight="16"
+                                  Command.Click="ExecuteClose"
+                                  Brush="SPOptions.CloseButton" />
+                  </Children>
+                </Widget>
+
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                             SuggestedHeight="!SearchBox.Height"
+                             MarginLeft="18" MarginRight="18" MarginTop="4"
+                             Brush="SaveLoad.Search.Button">
+                  <Children>
+                    <EditableTextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                        MarginLeft="10" MarginRight="10" MarginTop="5" MarginBottom="5"
+                                        Brush="SaveLoad.Search.InputText"
+                                        DefaultSearchText="搜索战志铭文..." Text="@SearchText" />
+                  </Children>
+                </BrushWidget>
+
+                <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                 InnerPanel.HeightSizePolicy="CoverChildren"
+                                 MarginLeft="18" MarginRight="18" MarginTop="10" MarginBottom="10"
+                                 AutoHideScrollBars="true" ClipContents="true">
+                  <Children>
+                    <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
+                               DataSource="{FilteredSkills}"
+                               StackLayout.LayoutMethod="VerticalTopToBottom" StackLayout.Spacing="6">
+                      <ItemTemplate>
+                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="!Item.Height">
+                          <Children>
+                            
+                            <Widget WidthSizePolicy="Fixed" SuggestedWidth="4" HeightSizePolicy="StretchToParent"
+                                    Sprite="BlankWhiteSquare_9" Color="#FFD270FF"
+                                    HorizontalAlignment="Left" IsVisible="@IsHighlighted" DoNotAcceptEvents="true" />
+
+                            <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                          Command.Click="ExecuteSelect" UpdateChildrenStates="true">
+                              <Children>
+                                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="20"
+                                            Text="@SkillName" Brush="SPOptions.Title.Text" FontSize="16" Color="#FFFFFFFF"
+                                            MarginLeft="16" MarginTop="8" DoNotAcceptEvents="true" />
+
+                                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="18"
+                                            Text="@TypeText" Brush="SPOptions.Description.Text" FontSize="13" Color="#C1A167FF"
+                                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                                            MarginRight="16" MarginTop="10" DoNotAcceptEvents="true" />
+
+                                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="18"
+                                            Text="@CooldownLabel" Brush="SPOptions.Description.Text" FontSize="12" AlphaFactor="0.7"
+                                            MarginLeft="16" MarginTop="34" DoNotAcceptEvents="true" />
+
+                                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="18"
+                                            Text="@CostLabel" Brush="SPOptions.Description.Text" FontSize="12" Color="#E2BC73FF"
+                                            MarginLeft="116" MarginTop="34" DoNotAcceptEvents="true" />
+
+                                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="18"
+                                            Text="@Description" Brush="SPOptions.Description.Text" FontSize="11" AlphaFactor="0.5"
+                                            MarginLeft="16" MarginRight="16" MarginTop="54" DoNotAcceptEvents="true" />
+                              </Children>
+                            </ButtonWidget>
+                          </Children>
+                        </Widget>
+                      </ItemTemplate>
+                    </ListPanel>
+                  </Children>
+                </ScrollablePanel>
+
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="!Footer.Height">
+                  <Children>
+                    
+                    <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                                Text="↑↓ 导航  |  Enter 确认  |  ESC 取消"
+                                Brush="SPOptions.Description.Text" FontSize="12" AlphaFactor="0.6"
+                                VerticalAlignment="Center" MarginLeft="20" DoNotAcceptEvents="true" />
+
+                    <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="32"
+                               HorizontalAlignment="Right" VerticalAlignment="Center" MarginRight="20"
+                               StackLayout.LayoutMethod="HorizontalRightToLeft" StackLayout.Spacing="10">
+                      <Children>
+                        <ButtonWidget WidthSizePolicy="Fixed" SuggestedWidth="96" HeightSizePolicy="StretchToParent"
+                                      Command.Click="ExecuteClose" Brush="ButtonPrimary1Brush">
+                          <Children>
+                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                        Text="取消" Brush="SPOptions.Title.Text" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" DoNotAcceptEvents="true" />
+                          </Children>
+                        </ButtonWidget>
+
+                        <ButtonWidget WidthSizePolicy="Fixed" SuggestedWidth="96" HeightSizePolicy="StretchToParent"
+                                      Command.Click="ExecuteSelectCurrentSkill" Brush="ButtonPrimary1Brush">
+                          <Children>
+                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                        Text="确认" Brush="SPOptions.Title.Text" FontSize="14" Color="#E2BC73FF" HorizontalAlignment="Center" VerticalAlignment="Center" DoNotAcceptEvents="true" />
+                          </Children>
+                        </ButtonWidget>
+                      </Children>
+                    </ListPanel>
+
+                  </Children>
+                </Widget>
+
+              </Children>
+            </ListPanel>
+          </Children>
+        </BrushWidget>
+
+      </Children>
+    </Widget>
+  </Window>
+</Prefab>

@@ -1,0 +1,25 @@
+ ai使用技能的核心在于复写skillbase类的CheckCondition方法。这个方法会在missiontick中被调用。当CheckCondition中的条件满足返回为true并且技能的消耗冷却等也满足时，ai便可以使用出此技能。
+ public override bool CheckCondition(Agent caster)
+        {
+            SkillSystemBehavior.ActiveComponents.TryGetValue(caster.Index, out var agentSkill);
+            if (agentSkill == null) { return false; }
+            if (caster.Health/ agentSkill.MaxHP<=0.5f)
+            {
+                return true;
+            }
+            List<Agent> FoeList = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 30);
+            List<Agent> FriendList = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 30,true);
+            if (FoeList.Count>0)
+            {
+                if (FoeList.Count > 5)
+                {
+                    return true;
+                }
+                else if (FoeList.Count>2&&FriendList.Count>0)
+                { 
+                    return true;
+                }
+            }
+            // 默认条件：Agent存活且非坐骑
+            return false;
+        }
