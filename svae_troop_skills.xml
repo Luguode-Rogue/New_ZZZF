@@ -30,18 +30,6 @@
     <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>
     <Spells>
-      <Slot1>lingmashaodi</Slot1>
-      <Slot2>NullSkill</Slot2>
-      <Slot3>NullSkill</Slot3>
-      <Slot4>NullSkill</Slot4>
-    </Spells>
-  </Troop>
-  <Troop id="battanian_volunteer">
-    <MainActive>ConeOfArrows</MainActive>
-    <SubActive>NullSkill</SubActive>
-    <Passive>NullSkill</Passive>
-    <CombatArt>NullSkill</CombatArt>
-    <Spells>
       <Slot1>NullSkill</Slot1>
       <Slot2>NullSkill</Slot2>
       <Slot3>NullSkill</Slot3>

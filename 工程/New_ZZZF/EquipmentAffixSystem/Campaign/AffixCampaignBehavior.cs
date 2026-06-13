@@ -4,6 +4,7 @@ using System.Linq;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
+using TaleWorlds.ObjectSystem;
 using TaleWorlds.SaveSystem;
 
 namespace New_ZZZF
@@ -30,6 +31,13 @@ namespace New_ZZZF
         /// </summary>
         public Dictionary<string, AffixedItemRecord> ItemRecordMap = new Dictionary<string, AffixedItemRecord>();
 
+        /// <summary>
+        /// 运行时绑定表。记录"哪件词缀物品现在在谁手里、在哪个槽位"。
+        /// Key: OwnerId:SlotIndex（如 "hero_123:4"）
+        /// Value: 绑定记录
+        /// </summary>
+        public Dictionary<string, AffixBinding> BindingMap = new Dictionary<string, AffixBinding>();
+
         /// <summary>系统是否已初始化</summary>
         public bool IsInitialized;
 
@@ -42,6 +50,10 @@ namespace New_ZZZF
         /// <summary>IsInitialized 存档副本</summary>
         [SaveableField(2)]
         private bool _serializedIsInitialized;
+
+        /// <summary>绑定表的序列化形式</summary>
+        [SaveableField(3)]
+        private List<string> _serializedBindingData = new List<string>();
 
         public AffixCampaignBehavior()
         {
@@ -68,26 +80,29 @@ namespace New_ZZZF
         {
             if (dataStore.IsSaving)
             {
-                // 存档：将实例记录表序列化为字符串列表
+                // 存档：将实例记录表 + 绑定表序列化为字符串列表
                 _serializedAffixData = SerializeRecordMap();
+                _serializedBindingData = SerializeBindingMap();
                 _serializedIsInitialized = IsInitialized;
             }
 
             dataStore.SyncData<List<string>>("_serializedAffixData", ref _serializedAffixData);
+            dataStore.SyncData<List<string>>("_serializedBindingData", ref _serializedBindingData);
             dataStore.SyncData<bool>("_serializedIsInitialized", ref _serializedIsInitialized);
 
             if (dataStore.IsSaving)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[装备词缀系统] 存档完成，共 {ItemRecordMap.Count} 件词缀物品"));
+                    $"[装备词缀系统] 存档完成，共 {ItemRecordMap.Count} 件词缀物品，{BindingMap.Count} 条绑定"));
             }
             if (dataStore.IsLoading)
             {
                 IsInitialized = _serializedIsInitialized;
-                // 读档：反序列化字符串列表为实例记录表
+                // 读档：反序列化字符串列表为实例记录表 + 绑定表
                 ItemRecordMap = DeserializeRecordMap(_serializedAffixData);
+                BindingMap = DeserializeBindingMap(_serializedBindingData);
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[装备词缀系统] 读档完成，共 {ItemRecordMap.Count} 件词缀物品"));
+                    $"[装备词缀系统] 读档完成，共 {ItemRecordMap.Count} 件词缀物品，{BindingMap.Count} 条绑定"));
                 // 读档后重建 [NonSerialized] 缓存
                 var db = AffixDatabase.Instance;
                 db.Initialize();
@@ -238,8 +253,9 @@ namespace New_ZZZF
         /// <summary>
         /// 过渡方法：根据 BaseItemId 搜索首个匹配实例记录的词缀。
         /// 仅用于仅有 ItemObject 无法获取 InstanceId 的场景（UI/战斗/调试）。
-        /// 未来应逐步迁移到按 InstanceId 查询。
+        /// 应逐步迁移到按 InstanceId 查询。
         /// </summary>
+        [Obsolete("使用 GetAffixByInstanceId 替代。此方法为模板级回退，无法区分同模板不同实例。")]
         public AffixInstance? GetAffixByBaseItemId(string baseItemId)
         {
             foreach (var record in ItemRecordMap.Values)
@@ -250,9 +266,62 @@ namespace New_ZZZF
             return null;
         }
 
+        // ========== 实例绑定（装备槽 → InstanceId） ==========
+
         /// <summary>
-        /// 获取物品的完整显示名称（含前后缀）
+        /// 将物品实例绑定到角色的装备槽。
+        /// 应在角色装备物品时调用。
         /// </summary>
+        public void BindEquipment(Hero hero, EquipmentIndex slotIndex, string instanceId)
+        {
+            if (hero == null) return;
+            string key = $"{hero.StringId}:{(int)slotIndex}";
+            BindingMap[key] = new AffixBinding
+            {
+                InstanceId = instanceId,
+                OwnerType = AffixOwnerType.Equipment,
+                OwnerId = hero.StringId,
+                SlotIndex = (int)slotIndex
+            };
+
+            if (ItemRecordMap.TryGetValue(instanceId, out var record))
+                record.IsEquipped = true;
+        }
+
+        /// <summary>
+        /// 将物品实例从角色的装备槽解绑。
+        /// 应在角色卸下装备时调用。
+        /// </summary>
+        public void UnbindEquipment(Hero hero, EquipmentIndex slotIndex)
+        {
+            if (hero == null) return;
+            string key = $"{hero.StringId}:{(int)slotIndex}";
+            if (BindingMap.TryGetValue(key, out var binding))
+            {
+                if (ItemRecordMap.TryGetValue(binding.InstanceId, out var record))
+                    record.IsEquipped = false;
+                BindingMap.Remove(key);
+            }
+        }
+
+        /// <summary>
+        /// 根据角色和装备槽索引，获取已绑定的 InstanceId。
+        /// 未绑定时返回 null。
+        /// </summary>
+        public string? GetEquippedInstanceId(Hero hero, EquipmentIndex slotIndex)
+        {
+            if (hero == null) return null;
+            string key = $"{hero.StringId}:{(int)slotIndex}";
+            if (BindingMap.TryGetValue(key, out var binding))
+                return binding.InstanceId;
+            return null;
+        }
+
+        /// <summary>
+        /// 获取物品的完整显示名称（含前后缀）—— 模板回退版本。
+        /// 仅用于仅有 ItemObject 无 InstanceId 的过渡场景。
+        /// </summary>
+        [Obsolete("使用 GetItemDisplayName(string instanceId) 替代。")]
         public string GetItemDisplayName(ItemObject item)
         {
             var affix = GetAffixByBaseItemId(item.StringId);
@@ -262,9 +331,29 @@ namespace New_ZZZF
         }
 
         /// <summary>
-        /// 获取词缀对指定属性的伤害倍率（战斗用）。
+        /// 按实例ID获取完整显示名称（含前后缀）。
+        /// 实例优先路径。
+        /// </summary>
+        public string GetItemDisplayName(string instanceId)
+        {
+            if (ItemRecordMap.TryGetValue(instanceId, out var record))
+            {
+                ItemObject? item = MBObjectManager.Instance.GetObject<ItemObject>(record.BaseItemId);
+                if (item != null)
+                {
+                    return record.Affix.HasAnyAffix
+                        ? record.Affix.BuildFullName(item.Name.ToString())
+                        : item.Name.ToString();
+                }
+            }
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// 获取词缀对指定属性的伤害倍率（战斗用）—— 模板回退版本。
         /// 返回 1.0 + 百分比加成，如 +15 伤害 → 1.15
         /// </summary>
+        [Obsolete("使用 GetAffixDamageMultiplier(string?, ItemObject, string) 替代。")]
         public static float GetAffixDamageMultiplier(ItemObject item, string statKey)
         {
             if (Current == null || item == null) return 1f;
@@ -273,6 +362,31 @@ namespace New_ZZZF
             if (!affix.FinalStatModifiers.TryGetValue(statKey, out float bonus) || bonus == 0f)
                 return 1f;
             return 1f + bonus * 0.01f;
+        }
+
+        /// <summary>
+        /// 获取词缀对指定属性的伤害倍率（实例优先）。
+        /// instanceId 非空时走实例路径，为空或未找到时回退到模板查找。
+        /// </summary>
+        public static float GetAffixDamageMultiplier(string? instanceId, ItemObject item, string statKey)
+        {
+            if (Current == null || item == null) return 1f;
+
+            if (!string.IsNullOrEmpty(instanceId))
+            {
+                var affix = Current.GetAffixByInstanceId(instanceId);
+                if (affix != null && affix.HasAnyAffix)
+                {
+                    if (!affix.FinalStatModifiers.TryGetValue(statKey, out float bonus) || bonus == 0f)
+                        return 1f;
+                    return 1f + bonus * 0.01f;
+                }
+            }
+
+            // 回退到模板查找
+#pragma warning disable CS0618 // 过渡回退
+            return GetAffixDamageMultiplier(item, statKey);
+#pragma warning restore CS0618
         }
 
         /// <summary>
@@ -465,6 +579,46 @@ namespace New_ZZZF
                 };
 
                 result[record.InstanceId] = record;
+            }
+            return result;
+        }
+
+        // ========== BindingMap 序列化辅助 ==========
+
+        /// <summary>将 BindingMap 编码为字符串列表，每行格式：InstanceId|OwnerType|OwnerId|SlotIndex</summary>
+        private List<string> SerializeBindingMap()
+        {
+            var result = new List<string>(BindingMap.Count);
+            foreach (var binding in BindingMap.Values)
+            {
+                result.Add($"{binding.InstanceId}|{(int)binding.OwnerType}|{binding.OwnerId}|{binding.SlotIndex}");
+            }
+            return result;
+        }
+
+        /// <summary>从字符串列表还原 BindingMap</summary>
+        private Dictionary<string, AffixBinding> DeserializeBindingMap(List<string> lines)
+        {
+            var result = new Dictionary<string, AffixBinding>();
+            if (lines == null) return result;
+
+            foreach (string line in lines)
+            {
+                if (string.IsNullOrEmpty(line)) continue;
+                string[] parts = line.Split('|');
+                if (parts.Length < 4) continue;
+
+                var binding = new AffixBinding
+                {
+                    InstanceId = parts[0],
+                    OwnerType = (AffixOwnerType)(int.TryParse(parts[1], out int ot) ? ot : 0),
+                    OwnerId = parts[2],
+                    SlotIndex = int.TryParse(parts[3], out int si) ? si : 0
+                };
+
+                // Key 格式：OwnerId:SlotIndex
+                string key = $"{binding.OwnerId}:{binding.SlotIndex}";
+                result[key] = binding;
             }
             return result;
         }

@@ -10,28 +10,28 @@ namespace New_ZZZF
     public sealed class AffixedItemRecord
     {
         /// <summary>生成时的唯一标识（Guid字符串）</summary>
-        [SaveableProperty(1)]
-        public string InstanceId { get; set; } = string.Empty;
+        [SaveableField(1)]
+        public string InstanceId = string.Empty;
 
         /// <summary>基础物品的 ItemObject.StringId</summary>
-        [SaveableProperty(2)]
-        public string BaseItemId { get; set; } = string.Empty;
+        [SaveableField(2)]
+        public string BaseItemId = string.Empty;
 
         /// <summary>来源描述（掉落/商店/调试等）</summary>
-        [SaveableProperty(3)]
-        public string Source { get; set; } = string.Empty;
+        [SaveableField(3)]
+        public string Source = string.Empty;
 
         /// <summary>堆叠数量</summary>
-        [SaveableProperty(4)]
-        public int StackCount { get; set; } = 1;
+        [SaveableField(4)]
+        public int StackCount = 1;
 
         /// <summary>绑定的词缀实例</summary>
-        [SaveableProperty(5)]
-        public AffixInstance Affix { get; set; } = new AffixInstance();
+        [SaveableField(5)]
+        public AffixInstance Affix = new AffixInstance();
 
         /// <summary>是否已被装备到角色身上</summary>
-        [SaveableProperty(6)]
-        public bool IsEquipped { get; set; }
+        [SaveableField(6)]
+        public bool IsEquipped;
 
         public AffixedItemRecord()
         {

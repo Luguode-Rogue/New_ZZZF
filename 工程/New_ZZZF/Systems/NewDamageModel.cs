@@ -165,6 +165,7 @@ namespace New_ZZZF
             }
 
             float result = base.CalculateStrikeMagnitudeForMissile(attackInformation, collisionData, weapon, missileSpeed);//如果字典里没有，说明是游戏源代码生成 的，所以直接输出原来acd里的mtd 
+            // TODO: 词缀实例分离 - 需要从 Agent 装备槽获取 instanceId，目前走模板回退
             result *= AffixCampaignBehavior.GetAffixDamageMultiplier(weapon.Item, "MissileDamage");
             return result;
 
@@ -215,6 +216,7 @@ namespace New_ZZZF
                 PerkHelper.AddPerkBonusForCharacter(DefaultPerks.Crafting.SharpenedEdge, characterObject, true, ref explainedNumber2);
                 num = explainedNumber2.ResultNumber;
             }
+            // TODO: 词缀实例分离 - 需要从 Agent 装备槽获取 instanceId，目前走模板回退
             num *= AffixCampaignBehavior.GetAffixDamageMultiplier(item, "SwingDamage");
             return num;
         }
@@ -267,6 +269,7 @@ namespace New_ZZZF
                 PerkHelper.AddPerkBonusForCharacter(DefaultPerks.Crafting.SharpenedTip, characterObject, true, ref explainedNumber2);
                 num = explainedNumber2.ResultNumber;
             }
+            // TODO: 词缀实例分离 - 需要从 Agent 装备槽获取 instanceId，目前走模板回退
             num *= AffixCampaignBehavior.GetAffixDamageMultiplier(item, "ThrustDamage");
             return num;
         }
@@ -301,6 +304,7 @@ namespace New_ZZZF
             }
 
             float result = base.CalculateStrikeMagnitudeForMissile(attackInformation, collisionData, weapon, missileSpeed);//如果字典里没有，说明是游戏源代码生成 的，所以直接输出原来acd里的mtd 
+            // TODO: 词缀实例分离 - 需要从 Agent 装备槽获取 instanceId，目前走模板回退
             result *= AffixCampaignBehavior.GetAffixDamageMultiplier(weapon.Item, "MissileDamage");
             return result;
 
