@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
@@ -62,7 +63,8 @@ namespace New_ZZZF
             Character = character ?? throw new ArgumentNullException(nameof(character));
             _heroId = character.StringId ?? string.Empty;
             _heroName = character.Name?.ToString() ?? _heroId;
-            _subtitle = character.IsBasicTroop ? "基础兵种" : "升级兵种";
+            string cultureId = character.Culture?.StringId ?? "";
+            _subtitle = !string.IsNullOrEmpty(cultureId) ? $"T{character.Tier} {cultureId}" : $"T{character.Tier}";
             _isSelected = false;
             _onSelect = onSelect;
         }
@@ -714,43 +716,39 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>v2: 填充兵种模板列表（调试模式）</summary>
+        /// <summary>v2: 填充兵种模板列表（调试模式，获取全部已加载兵种）</summary>
         private void PopulateTroopTemplates()
         {
             TroopTemplates.Clear();
             try
             {
-                // 收集所有文化的基础兵种和升级兵种
-                var addedIds = new HashSet<string>();
-                foreach (var culture in MBObjectManager.Instance.GetObjectTypeList<CultureObject>())
-                {
-                    if (culture == null) continue;
-                    var basicTroop = culture.BasicTroop;
-                    if (basicTroop != null && addedIds.Add(basicTroop.StringId))
-                        TroopTemplates.Add(new HeroVM(basicTroop, OnTargetSelected));
-                    var eliteTroop = culture.EliteBasicTroop;
-                    if (eliteTroop != null && addedIds.Add(eliteTroop.StringId))
-                        TroopTemplates.Add(new HeroVM(eliteTroop, OnTargetSelected));
-                }
+                var allTroops = MBObjectManager.Instance
+                    .GetObjectTypeList<CharacterObject>()
+                    .Where(x => x != null && !x.IsHero && !x.IsPlayerCharacter)
+                    .OrderBy(x => x.Tier)
+                    .ThenBy(x => x.Culture?.StringId ?? "")
+                    .ToList();
+
+                foreach (var troop in allTroops)
+                    TroopTemplates.Add(new HeroVM(troop, OnTargetSelected));
             }
             catch { /* 静默失败，调试模式数据源可能不完整 */ }
         }
 
-        /// <summary>v2: 填充领主NPC列表（调试模式）</summary>
+        /// <summary>v2: 填充领主NPC列表（调试模式，获取全部存活领主）</summary>
         private void PopulateLordNPCs()
         {
             LordNPCs.Clear();
             try
             {
-                foreach (var clan in Clan.All)
-                {
-                    if (clan == null || clan.IsEliminated) continue;
-                    foreach (var hero in clan.Heroes)
-                    {
-                        if (hero == null || !hero.IsAlive || hero.Age < 18) continue;
-                        LordNPCs.Add(new HeroVM(hero, OnTargetSelected));
-                    }
-                }
+                var lords = Hero.AllAliveHeroes
+                    .Where(h => h != null && h.IsLord && h.Clan != null)
+                    .OrderBy(h => h.Clan?.StringId ?? "")
+                    .ThenBy(h => h.Level)
+                    .ToList();
+
+                foreach (var lord in lords)
+                    LordNPCs.Add(new HeroVM(lord, OnTargetSelected));
             }
             catch { /* 静默失败 */ }
         }
