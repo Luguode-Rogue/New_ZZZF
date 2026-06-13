@@ -7,36 +7,66 @@ using TaleWorlds.Library;
 namespace New_ZZZF
 {
     // =========================================================================
-    // 任务二：视图模型编写 (ViewModel)
+    // v2 视图模型架构
     //
-    // HeroVM        — 队伍列表中的单个英雄项
-    // SkillSlotVM   — 单个技能槽位（绑定到 Gauntlet XML）
-    // CustomSkillScreenVM — 主界面 ViewModel，管理 Roster + Skills + 英雄切换
+    // HeroVM            — 目标列表项（队伍成员/兵种模板/领主NPC通用）
+    // SkillSlotVM       — 单个技能槽位（不变）
+    // CustomSkillScreenVM — 主界面 ViewModel
+    //
+    // v2 新增：
+    //   - TargetType 三模式切换（队伍/兵种/领主）
+    //   - DebugMode（F12切换，解锁兵种模板+领主NPC）
+    //   - 熟练度面板 MBBindingList<SkillProficiencyVM>
+    //   - 原位技能目录 MBBindingList<SkillItemVM>（替代弹窗）
+    //   - IsInCatalogView 显隐切换
     //
     // 不依赖 InventoryLogic，不与物品系统耦合。
     // =========================================================================
 
 
     /// <summary>
-    /// 队伍成员列表项 ViewModel。
-    /// 对应 Gauntlet XML 中 Roster 列表的 ItemTemplate。
+    /// 目标列表项 ViewModel —— 通用角色选择器。
+    /// v2 扩展：支持 Hero（队伍成员/领主NPC）和 CharacterObject（兵种模板）两种来源。
     /// </summary>
     public class HeroVM : ViewModel
     {
         private string _heroId;
         private string _heroName;
+        private string _subtitle;           // v2: 等级/类型标注
         private bool _isSelected;
         private readonly Action<HeroVM> _onSelect;
 
+        /// <summary>关联的 Hero（队伍成员/领主NPC时非null）</summary>
+        public readonly Hero Hero;
+
+        /// <summary>关联的 CharacterObject（兵种模板时非null）</summary>
+        public readonly BasicCharacterObject Character;
+
+        // ---- 队伍成员/领主NPC 构造函数 ----
         public HeroVM(Hero hero, Action<HeroVM> onSelect)
         {
+            Hero = hero ?? throw new ArgumentNullException(nameof(hero));
+            Character = hero.CharacterObject;
             _heroId = hero.CharacterObject?.StringId ?? hero.Name?.ToString() ?? string.Empty;
             _heroName = hero.Name?.ToString() ?? hero.CharacterObject?.Name?.ToString() ?? _heroId;
+            _subtitle = $"Lv.{hero.Level}";
             _isSelected = false;
             _onSelect = onSelect;
         }
 
-        /// <summary>英雄标识（CharacterObject.StringId）</summary>
+        // ---- 兵种模板构造函数 (v2) ----
+        public HeroVM(CharacterObject character, Action<HeroVM> onSelect)
+        {
+            Hero = null;
+            Character = character ?? throw new ArgumentNullException(nameof(character));
+            _heroId = character.StringId ?? string.Empty;
+            _heroName = character.Name?.ToString() ?? _heroId;
+            _subtitle = character.IsBasicTroop ? "基础兵种" : "升级兵种";
+            _isSelected = false;
+            _onSelect = onSelect;
+        }
+
+        /// <summary>目标标识（CharacterObject.StringId）</summary>
         [DataSourceProperty]
         public string HeroId
         {
@@ -51,7 +81,7 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>英雄显示名称</summary>
+        /// <summary>目标显示名称</summary>
         [DataSourceProperty]
         public string HeroName
         {
@@ -62,6 +92,21 @@ namespace New_ZZZF
                 {
                     _heroName = value;
                     OnPropertyChangedWithValue(value, nameof(HeroName));
+                }
+            }
+        }
+
+        /// <summary>v2: 副标题（等级/兵种类型）</summary>
+        [DataSourceProperty]
+        public string Subtitle
+        {
+            get => _subtitle;
+            set
+            {
+                if (value != _subtitle)
+                {
+                    _subtitle = value;
+                    OnPropertyChangedWithValue(value, nameof(Subtitle));
                 }
             }
         }
@@ -81,7 +126,7 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>点击选择此英雄（由 Gauntlet ButtonWidget.Command.Click 触发）</summary>
+        /// <summary>点击选择此目标（由 Gauntlet ButtonWidget.Command.Click 触发）</summary>
         public void ExecuteSelect()
         {
             _onSelect?.Invoke(this);
@@ -92,6 +137,7 @@ namespace New_ZZZF
     /// <summary>
     /// 技能槽位 ViewModel —— 表示 MainActive / SubActive / Passive / CombatArt / Spell 等槽位。
     /// 每个槽位可以装备一个 SkillUIData（或空）。
+    /// v2: 新增 IsActiveSlot 属性（目录视图打开时标识当前编辑的槽位）。
     /// </summary>
     public class SkillSlotVM : ViewModel
     {
@@ -99,10 +145,9 @@ namespace New_ZZZF
         private string _slotLabel;
         private SkillUIData _skill;
         private Action<SkillSlotVM> _onClickSlot;
+        private bool _isActiveSlot;
 
-        /// <summary>
-        /// 槽位标识符，如 "MainActive", "Spell2"
-        /// </summary>
+        /// <summary>槽位标识符，如 "MainActive", "Spell2"</summary>
         [DataSourceProperty]
         public string SlotId
         {
@@ -137,10 +182,7 @@ namespace New_ZZZF
         public string SkillName
         {
             get => _skill?.SkillName ?? string.Empty;
-            set
-            {
-                // 只读，但需要 setter 满足 DataSourceProperty 模式
-            }
+            set { /* 只读，setter 满足 DataSourceProperty 模式 */ }
         }
 
         /// <summary>图标物品 ID，供 SpriteWidget 使用</summary>
@@ -158,6 +200,10 @@ namespace New_ZZZF
             get => _skill == null || _skill.IsEmpty;
             set { }
         }
+
+        /// <summary>此槽位是否已装备技能（= !IsEmpty，供XML绑定）</summary>
+        [DataSourceProperty]
+        public bool IsEquipped => _skill != null && !_skill.IsEmpty;
 
         /// <summary>冷却时间文本（如 "3.0s" 或 "-"）</summary>
         [DataSourceProperty]
@@ -185,6 +231,21 @@ namespace New_ZZZF
             set { }
         }
 
+        /// <summary>v2: 是否为当前编辑中的槽位（目录视图打开时高亮）</summary>
+        [DataSourceProperty]
+        public bool IsActiveSlot
+        {
+            get => _isActiveSlot;
+            set
+            {
+                if (value != _isActiveSlot)
+                {
+                    _isActiveSlot = value;
+                    OnPropertyChangedWithValue(value, nameof(IsActiveSlot));
+                }
+            }
+        }
+
         /// <summary>槽位对应的技能类型（用于过滤可选技能列表）</summary>
         public SPSkillType SlotFilterType { get; private set; } = SPSkillType.None;
 
@@ -194,10 +255,6 @@ namespace New_ZZZF
         /// <summary>
         /// 创建一个技能槽位
         /// </summary>
-        /// <param name="slotId">槽位标识符（如 "MainActive"）</param>
-        /// <param name="slotLabel">显示标签（如 "主主动"）</param>
-        /// <param name="filterType">此槽位接受的技能类型</param>
-        /// <param name="onClickSlot">点击回调</param>
         public SkillSlotVM(string slotId, string slotLabel, SPSkillType filterType, Action<SkillSlotVM> onClickSlot)
         {
             _slotId = slotId ?? string.Empty;
@@ -205,18 +262,17 @@ namespace New_ZZZF
             SlotFilterType = filterType;
             _onClickSlot = onClickSlot;
             _skill = SkillUIData.Empty;
+            _isActiveSlot = false;
         }
 
-        /// <summary>
-        /// 设置槽位中的技能（并刷新绑定属性）
-        /// </summary>
+        /// <summary>设置槽位中的技能（并刷新绑定属性）</summary>
         public void SetSkill(SkillUIData skillData)
         {
             _skill = skillData ?? SkillUIData.Empty;
             OnPropertyChangedWithValue(_skill.SkillName, nameof(SkillName));
             OnPropertyChangedWithValue(_skill.IconItemId, nameof(SkillIcon));
             OnPropertyChangedWithValue(_skill.IsEmpty, nameof(IsEmpty));
-            // 冷却和消耗文本
+            OnPropertyChangedWithValue(!_skill.IsEmpty, nameof(IsEquipped));
             float cd = _skill.Cooldown;
             string cdText = (_skill.IsEmpty || cd <= 0f) ? "-" : cd.ToString("F1") + "s";
             OnPropertyChangedWithValue(cdText, nameof(CooldownText));
@@ -240,27 +296,35 @@ namespace New_ZZZF
 
 
     /// <summary>
-    /// 技能界面主 ViewModel。
+    /// 技能界面主 ViewModel (v2)。
     /// 
     /// 数据绑定关系：
     ///   CustomSkillScreen (Gauntlet XML)
-    ///     ├── DataSource="{Roster}"    → MBBindingList&lt;HeroVM&gt;
-    ///     └── DataSource="{Skills}"    → MBBindingList&lt;SkillSlotVM&gt;
+    ///     ├── DataSource="{Roster}"           → MBBindingList&lt;HeroVM&gt;  (当前目标类型的列表)
+    ///     ├── DataSource="{TroopTemplates}"   → MBBindingList&lt;HeroVM&gt;  (兵种模板，调试模式)
+    ///     ├── DataSource="{LordNPCs}"         → MBBindingList&lt;HeroVM&gt;  (领主NPC，调试模式)
+    ///     ├── DataSource="{Skills}"           → MBBindingList&lt;SkillSlotVM&gt;
+    ///     ├── DataSource="{Proficiencies}"    → MBBindingList&lt;SkillProficiencyVM&gt;
+    ///     └── DataSource="{CatalogItems}"     → MBBindingList&lt;SkillItemVM&gt; (原位目录)
     /// 
     /// 生命周期：
-    ///   构造 → 加载 SkillCatalog → 填充 Roster → 创建技能槽 → 选中默认英雄
-    ///   切换英雄 → LoadSkillsForHero(heroId) → 刷新各 SkillSlotVM
+    ///   构造 → 加载 SkillCatalog → 填充 Roster/TroopTemplates/LordNPCs →
+    ///   创建技能槽 → 选中默认目标 → 加载技能+熟练度
+    ///   切换目标 → SelectTarget() → LoadSkillsForTarget() + LoadProficiencies()
+    ///   点击槽位 → 打开目录视图 → IsInCatalogView = true
     /// </summary>
     public class CustomSkillScreenVM : ViewModel
     {
-        // ---- 绑定属性 ----
+        // =====================================================================
+        // 绑定属性 (v1.1 保留)
+        // =====================================================================
 
         private MBBindingList<HeroVM> _roster;
         private MBBindingList<SkillSlotVM> _skills;
         private HeroVM _currentHero;
         private string _currentHeroId;
 
-        /// <summary>队伍成员列表</summary>
+        /// <summary>当前目标类型的角色列表</summary>
         [DataSourceProperty]
         public MBBindingList<HeroVM> Roster
         {
@@ -275,7 +339,7 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>当前英雄的技能槽位列表（8个槽位）</summary>
+        /// <summary>当前目标的技能槽位列表（8个槽位）</summary>
         [DataSourceProperty]
         public MBBindingList<SkillSlotVM> Skills
         {
@@ -290,7 +354,7 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>当前选中的英雄 VM</summary>
+        /// <summary>当前选中的目标 VM</summary>
         [DataSourceProperty]
         public HeroVM CurrentHero
         {
@@ -305,7 +369,7 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>当前英雄 ID（便捷属性）</summary>
+        /// <summary>当前目标 ID（便捷属性）</summary>
         [DataSourceProperty]
         public string CurrentHeroId
         {
@@ -320,7 +384,7 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>是否有未保存的更改（控制"应用"按钮可用性）</summary>
+        /// <summary>是否有未保存的更改</summary>
         [DataSourceProperty]
         public bool IsDirty
         {
@@ -335,105 +399,371 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>技能选择弹窗 ViewModel（为 null 时弹窗不显示）</summary>
-        private SkillSelectionVM _skillSelectionPopup;
+        // =====================================================================
+        // v2 新增绑定属性
+        // =====================================================================
+
+        private bool _debugMode;
+        private TargetType _currentTargetType = TargetType.PartyMember;
+        private MBBindingList<SkillProficiencyVM> _proficiencies;
+        private MBBindingList<SkillItemVM> _catalogItems;
+        private bool _isInCatalogView;
+        private SkillSlotVM _activeSlot;
+        private MBBindingList<HeroVM> _troopTemplates;
+        private MBBindingList<HeroVM> _lordNPCs;
+        private string _searchText = string.Empty;
+        private int _catalogSelectedIndex = -1;
+        private int _catalogGridColumns = 4;
+
+        /// <summary>v2: 调试模式（F12切换，解锁兵种模板+领主NPC）</summary>
         [DataSourceProperty]
-        public SkillSelectionVM SkillSelectionPopup
+        public bool DebugMode
         {
-            get => _skillSelectionPopup;
+            get => _debugMode;
             set
             {
-                if (value != _skillSelectionPopup)
+                if (value != _debugMode)
                 {
-                    // SkillDebug.Log($"[CSVM] SkillSelectionPopup 变更: 旧值={(_skillSelectionPopup != null)}, 新值={(value != null)}");
-                    _skillSelectionPopup = value;
-                    OnPropertyChangedWithValue(value, nameof(SkillSelectionPopup));
+                    _debugMode = value;
+                    OnPropertyChangedWithValue(value, nameof(DebugMode));
+                    // 切换调试模式时刷新左侧列表
+                    RefreshTargetLists();
                 }
             }
         }
 
-        // ---- 非绑定字段 ----
+        /// <summary>v2: 当前目标类型（Tab循环）</summary>
+        [DataSourceProperty]
+        public int CurrentTargetTypeInt
+        {
+            get => (int)_currentTargetType;
+            set
+            {
+                var newType = (TargetType)value;
+                if (newType != _currentTargetType && (newType == TargetType.PartyMember || _debugMode))
+                {
+                    _currentTargetType = newType;
+                    OnPropertyChangedWithValue(value, nameof(CurrentTargetTypeInt));
+                    SwitchTargetType(_currentTargetType);
+                }
+            }
+        }
 
-        /// <summary>全技能目录（供技能选择列表使用）</summary>
+        /// <summary>当前目标类型（C#枚举，非绑定）</summary>
+        public TargetType CurrentTargetType
+        {
+            get => _currentTargetType;
+            private set
+            {
+                if (value != _currentTargetType)
+                {
+                    _currentTargetType = value;
+                    OnPropertyChangedWithValue((int)value, nameof(CurrentTargetTypeInt));
+                }
+            }
+        }
+
+        /// <summary>v2: 目标类型显示文本</summary>
+        [DataSourceProperty]
+        public string TargetTypeText
+        {
+            get => _currentTargetType switch
+            {
+                TargetType.PartyMember => "队伍成员",
+                TargetType.TroopTemplate => "兵种模板",
+                TargetType.LordNPC => "领主NPC",
+                _ => "未知"
+            };
+        }
+
+        /// <summary>v2: 原生技能熟练度列表</summary>
+        [DataSourceProperty]
+        public MBBindingList<SkillProficiencyVM> Proficiencies
+        {
+            get => _proficiencies;
+            set
+            {
+                if (value != _proficiencies)
+                {
+                    _proficiencies = value;
+                    OnPropertyChangedWithValue(value, nameof(Proficiencies));
+                }
+            }
+        }
+
+        /// <summary>v2: 技能目录项列表（原位网格视图）</summary>
+        [DataSourceProperty]
+        public MBBindingList<SkillItemVM> CatalogItems
+        {
+            get => _catalogItems;
+            set
+            {
+                if (value != _catalogItems)
+                {
+                    _catalogItems = value;
+                    OnPropertyChangedWithValue(value, nameof(CatalogItems));
+                }
+            }
+        }
+
+        /// <summary>v2: 是否在技能目录视图（原位切换，替代弹窗）</summary>
+        [DataSourceProperty]
+        public bool IsInCatalogView
+        {
+            get => _isInCatalogView;
+            set
+            {
+                if (value != _isInCatalogView)
+                {
+                    _isInCatalogView = value;
+                    OnPropertyChangedWithValue(value, nameof(IsInCatalogView));
+                    // 同步逆属性（用于XML显隐绑定：GauntletUI不支持!@否定语法）
+                    OnPropertyChangedWithValue(!value, nameof(IsShowingSlots));
+                }
+            }
+        }
+
+        /// <summary>v2: 是否显示技能槽视图（= !IsInCatalogView，供XML绑定）</summary>
+        [DataSourceProperty]
+        public bool IsShowingSlots => !_isInCatalogView;
+
+        /// <summary>v2: 当前编辑中的技能槽位（目录视图的上下文）</summary>
+        [DataSourceProperty]
+        public SkillSlotVM ActiveSlot
+        {
+            get => _activeSlot;
+            set
+            {
+                if (value != _activeSlot)
+                {
+                    // 取消旧槽位的高亮
+                    if (_activeSlot != null)
+                        _activeSlot.IsActiveSlot = false;
+                    _activeSlot = value;
+                    // 高亮新槽位
+                    if (_activeSlot != null)
+                        _activeSlot.IsActiveSlot = true;
+                    OnPropertyChangedWithValue(value, nameof(ActiveSlot));
+                }
+            }
+        }
+
+        /// <summary>v2: 兵种模板列表（调试模式显示）</summary>
+        [DataSourceProperty]
+        public MBBindingList<HeroVM> TroopTemplates
+        {
+            get => _troopTemplates;
+            set
+            {
+                if (value != _troopTemplates)
+                {
+                    _troopTemplates = value;
+                    OnPropertyChangedWithValue(value, nameof(TroopTemplates));
+                }
+            }
+        }
+
+        /// <summary>v2: 领主NPC列表（调试模式显示）</summary>
+        [DataSourceProperty]
+        public MBBindingList<HeroVM> LordNPCs
+        {
+            get => _lordNPCs;
+            set
+            {
+                if (value != _lordNPCs)
+                {
+                    _lordNPCs = value;
+                    OnPropertyChangedWithValue(value, nameof(LordNPCs));
+                }
+            }
+        }
+
+        /// <summary>v2: 搜索文本（目录过滤）</summary>
+        [DataSourceProperty]
+        public string SearchText
+        {
+            get => _searchText;
+            set
+            {
+                if (value != _searchText)
+                {
+                    _searchText = value;
+                    OnPropertyChangedWithValue(value, nameof(SearchText));
+                    FilterCatalog();
+                }
+            }
+        }
+
+        /// <summary>v2: 目录视图下键盘导航高亮索引</summary>
+        public int CatalogSelectedIndex => _catalogSelectedIndex;
+
+        /// <summary>v2: 目录网格列数（供XML布局参考）</summary>
+        [DataSourceProperty]
+        public int CatalogGridColumns
+        {
+            get => _catalogGridColumns;
+            set
+            {
+                if (value != _catalogGridColumns)
+                {
+                    _catalogGridColumns = value;
+                    OnPropertyChangedWithValue(value, nameof(CatalogGridColumns));
+                }
+            }
+        }
+
+        // =====================================================================
+        // 废弃属性 (v2: 不再使用弹窗，保留属性避免XML绑定报错)
+        // =====================================================================
+
+        [DataSourceProperty]
+        public object SkillSelectionPopup
+        {
+            get => null;
+            set { /* v2: 弹窗已废弃 */ }
+        }
+
+        /// <summary>v2: 兼容旧接口，始终为false</summary>
+        public bool IsPopupOpen => false;
+
+        // =====================================================================
+        // 非绑定字段
+        // =====================================================================
+
+        /// <summary>全技能目录</summary>
         public readonly SkillCatalog Catalog;
 
-        /// <summary>当前英雄的技能配置（可编辑副本）</summary>
+        /// <summary>当前目标的技能配置（可编辑副本）</summary>
         private HeroSkillData _currentHeroSkillData;
 
-        /// <summary>是否有未保存的更改（脏标记）</summary>
+        /// <summary>脏标记</summary>
         private bool _isDirty;
 
-        /// <summary>关闭回调（由 Screen 注入）</summary>
+        /// <summary>关闭回调</summary>
         private Action _onClose;
 
         /// <summary>槽位ID → SkillSlotVM 快速查找</summary>
         private readonly Dictionary<string, SkillSlotVM> _slotMap = new Dictionary<string, SkillSlotVM>();
 
-        // ---- 构造函数 ----
+        /// <summary>所有可用技能的 SkillItemVM 缓存（避免重复创建）</summary>
+        private readonly List<SkillItemVM> _allSkillItemVMs = new List<SkillItemVM>();
+
+        // =====================================================================
+        // 构造函数
+        // =====================================================================
 
         public CustomSkillScreenVM()
         {
-            // 一次性加载全技能目录
             Catalog = SkillCatalog.LoadFromFactory();
 
             Roster = new MBBindingList<HeroVM>();
             Skills = new MBBindingList<SkillSlotVM>();
+            Proficiencies = new MBBindingList<SkillProficiencyVM>();
+            CatalogItems = new MBBindingList<SkillItemVM>();
+            TroopTemplates = new MBBindingList<HeroVM>();
+            LordNPCs = new MBBindingList<HeroVM>();
+
+            // 预创建所有技能项 VM（复用，不每次重建）
+            BuildAllSkillItemVMs();
 
             // 创建固定槽位
             CreateSkillSlots();
 
-            // 填充队伍列表
+            // 填充所有目标列表
             PopulateRoster();
-
-            // SkillDebug.Log($"[CSVM] 构造完成: Catalog技能总数={Catalog?.AllSkills?.Count}, Roster.Count={Roster.Count}, Skills.Count={Skills.Count}");
+            PopulateTroopTemplates();
+            PopulateLordNPCs();
         }
 
-        // ---- 初始化方法 ----
+        // =====================================================================
+        // 初始化方法
+        // =====================================================================
 
-        /// <summary>
-        /// 从玩家部队填充 Roster 列表
-        /// </summary>
+        /// <summary>预创建所有技能的 SkillItemVM</summary>
+        private void BuildAllSkillItemVMs()
+        {
+            _allSkillItemVMs.Clear();
+            if (Catalog?.AllSkills == null) return;
+            foreach (var skill in Catalog.AllSkills)
+            {
+                _allSkillItemVMs.Add(new SkillItemVM(skill, OnCatalogSkillSelected));
+            }
+        }
+
+        /// <summary>从玩家部队填充 Roster 列表</summary>
         private void PopulateRoster()
         {
             Roster.Clear();
-
             var playerClan = Clan.PlayerClan;
             if (playerClan == null) return;
 
-            // 玩家部队中的英雄（包含同伴、家族成员等）
             int comeOfAge = Campaign.Current.Models?.AgeModel?.HeroComesOfAge ?? 18;
-
             foreach (var hero in playerClan.Heroes)
             {
                 if (hero == null) continue;
-
-                // 严格过滤：存活 + 成年 + 行动自由（排除婴儿/死者/被俘/经商/总督）
                 if (!hero.IsAlive) continue;
                 if (hero.Age < comeOfAge) continue;
                 if (hero.HeroState != Hero.CharacterStates.Active && hero != Hero.MainHero) continue;
-
-                Roster.Add(new HeroVM(hero, OnHeroSelected));
+                Roster.Add(new HeroVM(hero, OnTargetSelected));
             }
 
-            // 默认选中第一个
             if (Roster.Count > 0)
             {
-                SelectHero(Roster[0]);
+                SelectTarget(Roster[0]);
             }
-
-            // SkillDebug.Log($"[CSVM] PopulateRoster 完成: Clan={playerClan?.Name}, 过滤后Roster.Count={Roster.Count}");
         }
 
-        /// <summary>
-        /// 创建8个技能槽位 ViewModel：
-        ///   MainActive / SubActive / Passive / CombatArt / Spell0~3
-        /// </summary>
+        /// <summary>v2: 填充兵种模板列表（调试模式）</summary>
+        private void PopulateTroopTemplates()
+        {
+            TroopTemplates.Clear();
+            try
+            {
+                // 收集所有文化的基础兵种和升级兵种
+                var addedIds = new HashSet<string>();
+                foreach (var culture in MBObjectManager.Instance.GetObjectTypeList<CultureObject>())
+                {
+                    if (culture == null) continue;
+                    foreach (var troop in culture.BasicTroops)
+                    {
+                        if (troop == null || !addedIds.Add(troop.StringId)) continue;
+                        TroopTemplates.Add(new HeroVM(troop, OnTargetSelected));
+                    }
+                    foreach (var troop in culture.EliteBasicTroops)
+                    {
+                        if (troop == null || !addedIds.Add(troop.StringId)) continue;
+                        TroopTemplates.Add(new HeroVM(troop, OnTargetSelected));
+                    }
+                }
+            }
+            catch { /* 静默失败，调试模式数据源可能不完整 */ }
+        }
+
+        /// <summary>v2: 填充领主NPC列表（调试模式）</summary>
+        private void PopulateLordNPCs()
+        {
+            LordNPCs.Clear();
+            try
+            {
+                foreach (var clan in Clan.All)
+                {
+                    if (clan == null || clan.IsEliminated) continue;
+                    foreach (var hero in clan.Lords)
+                    {
+                        if (hero == null || !hero.IsAlive || hero.Age < 18) continue;
+                        LordNPCs.Add(new HeroVM(hero, OnTargetSelected));
+                    }
+                }
+            }
+            catch { /* 静默失败 */ }
+        }
+
+        /// <summary>创建8个技能槽位</summary>
         private void CreateSkillSlots()
         {
             Skills.Clear();
             _slotMap.Clear();
 
-            // 定义槽位配置：(slotId, slotLabel, filterType)
             var slotDefs = new (string id, string label, SPSkillType filterType)[]
             {
                 ("MainActive",  "主主动",   SPSkillType.MainActive),
@@ -454,140 +784,199 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>
-        /// 设置关闭回调（由 Screen 注入）
-        /// </summary>
+        /// <summary>设置关闭回调</summary>
         public void SetCloseAction(Action onClose)
         {
             _onClose = onClose;
         }
 
-        // ---- 英雄选择逻辑 ----
+        // =====================================================================
+        // v2: 目标类型切换
+        // =====================================================================
 
-        /// <summary>
-        /// 选中指定英雄（由 HeroVM.ExecuteSelect 回调触发）
-        /// </summary>
-        private void OnHeroSelected(HeroVM selectedHero)
+        /// <summary>F12 切换调试模式</summary>
+        public void ExecuteToggleDebug()
         {
-            if (selectedHero == null) return;
+            DebugMode = !DebugMode;
+        }
 
-            // 取消之前选中的高亮
+        /// <summary>Tab 循环目标类型</summary>
+        public void ExecuteCycleTargetType()
+        {
+            if (!DebugMode)
+            {
+                // 非调试模式只有队伍成员
+                CurrentTargetTypeInt = (int)TargetType.PartyMember;
+                return;
+            }
+
+            int next = ((int)_currentTargetType + 1) % 3;
+            CurrentTargetTypeInt = next;
+        }
+
+        /// <summary>刷新目标列表显示（响应DebugMode变化）</summary>
+        private void RefreshTargetLists()
+        {
+            // 重新填充列表（构造时已经填充好，这里触发属性通知让XML显隐生效）
+            OnPropertyChangedWithValue(TroopTemplates, nameof(TroopTemplates));
+            OnPropertyChangedWithValue(LordNPCs, nameof(LordNPCs));
+
+            // 如果当前模式是非调试专属模式且退出调试，回到PartyMember
+            if (!DebugMode && _currentTargetType != TargetType.PartyMember)
+            {
+                SwitchTargetType(TargetType.PartyMember);
+            }
+        }
+
+        /// <summary>切换到指定目标类型</summary>
+        private void SwitchTargetType(TargetType targetType)
+        {
+            // 更新类型字段并通知绑定（必须在此处更新，确保 TargetTypeText 正确）
+            _currentTargetType = targetType;
+            OnPropertyChangedWithValue((int)targetType, nameof(CurrentTargetTypeInt));
+            OnPropertyChangedWithValue(TargetTypeText, nameof(TargetTypeText));
+
+            // 清空当前选中
             if (CurrentHero != null)
                 CurrentHero.IsSelected = false;
 
-            SelectHero(selectedHero);
+            IsInCatalogView = false;
+            ActiveSlot = null;
+
+            // 选择对应列表的第一个
+            MBBindingList<HeroVM> targetList = GetTargetList(targetType);
+            if (targetList != null && targetList.Count > 0)
+            {
+                SelectTarget(targetList[0]);
+            }
         }
 
-        private void SelectHero(HeroVM hero)
+        /// <summary>获取当前目标类型的列表</summary>
+        private MBBindingList<HeroVM> GetTargetList(TargetType targetType)
         {
-            // 切换英雄时丢弃当前英雄的未保存更改
-            IsDirty = false;
-
-            CurrentHero = hero;
-            CurrentHeroId = hero.HeroId;
-            hero.IsSelected = true;
-            LoadSkillsForHero(hero.HeroId);
+            return targetType switch
+            {
+                TargetType.PartyMember => Roster,
+                TargetType.TroopTemplate => TroopTemplates,
+                TargetType.LordNPC => LordNPCs,
+                _ => Roster
+            };
         }
 
-        // ---- 键盘导航：英雄列表 ----
+        /// <summary>获取当前目标类型的列表（对于Roster绑定）</summary>
+        private MBBindingList<HeroVM> GetCurrentTargetList()
+        {
+            return GetTargetList(_currentTargetType);
+        }
 
-        /// <summary>
-        /// 键盘 ↓ —— 选择下一个英雄
-        /// </summary>
+        // =====================================================================
+        // 目标选择逻辑
+        // =====================================================================
+
+        /// <summary>选中指定目标（由 HeroVM.ExecuteSelect 回调触发）</summary>
+        private void OnTargetSelected(HeroVM selectedTarget)
+        {
+            if (selectedTarget == null) return;
+            if (CurrentHero != null)
+                CurrentHero.IsSelected = false;
+
+            // 关闭目录视图
+            IsInCatalogView = false;
+            ActiveSlot = null;
+
+            SelectTarget(selectedTarget);
+        }
+
+        private void SelectTarget(HeroVM target)
+        {
+            IsDirty = false;
+            CurrentHero = target;
+            CurrentHeroId = target.HeroId;
+            target.IsSelected = true;
+
+            // 同步 Roster 绑定到当前目标列表
+            var currentList = GetCurrentTargetList();
+            if (Roster != currentList)
+            {
+                Roster = currentList;
+            }
+
+            LoadSkillsForTarget(target.HeroId);
+            LoadProficiencies(target);
+        }
+
+        // =====================================================================
+        // 键盘导航：目标列表
+        // =====================================================================
+
         public void SelectNextHero()
         {
-            if (Roster == null || Roster.Count <= 1) return;
-
+            var list = GetCurrentTargetList();
+            if (list == null || list.Count <= 1) return;
             int currentIndex = GetCurrentHeroIndex();
-            int nextIndex = currentIndex + 1;
-            if (nextIndex >= Roster.Count)
-                nextIndex = 0;
-
+            int nextIndex = (currentIndex + 1) % list.Count;
             if (CurrentHero != null)
                 CurrentHero.IsSelected = false;
-
-            SelectHero(Roster[nextIndex]);
+            SelectTarget(list[nextIndex]);
         }
 
-        /// <summary>
-        /// 键盘 ↑ —— 选择上一个英雄
-        /// </summary>
         public void SelectPrevHero()
         {
-            if (Roster == null || Roster.Count <= 1) return;
-
+            var list = GetCurrentTargetList();
+            if (list == null || list.Count <= 1) return;
             int currentIndex = GetCurrentHeroIndex();
             int prevIndex = currentIndex - 1;
-            if (prevIndex < 0)
-                prevIndex = Roster.Count - 1;
-
+            if (prevIndex < 0) prevIndex = list.Count - 1;
             if (CurrentHero != null)
                 CurrentHero.IsSelected = false;
-
-            SelectHero(Roster[prevIndex]);
+            SelectTarget(list[prevIndex]);
         }
 
         private int GetCurrentHeroIndex()
         {
-            if (CurrentHero == null || Roster == null) return -1;
-            for (int i = 0; i < Roster.Count; i++)
+            if (CurrentHero == null) return -1;
+            var list = GetCurrentTargetList();
+            if (list == null) return -1;
+            for (int i = 0; i < list.Count; i++)
             {
-                if (Roster[i] == CurrentHero)
-                    return i;
+                if (list[i] == CurrentHero) return i;
             }
             return -1;
         }
 
-        // ---- 键盘导航：技能槽位 ----
+        // =====================================================================
+        // 键盘导航：技能槽位
+        // =====================================================================
 
-        /// <summary>
-        /// 键盘 1~8 —— 直接打开对应槽位的技能选择弹窗
-        /// </summary>
-        /// <param name="index">0-based 槽位索引 (0=主主动, 1=副主动, ..., 7=法术④)</param>
+        /// <summary>键盘 1~8 —— 直接打开对应槽位的技能目录视图</summary>
         public void SelectSlotByIndex(int index)
         {
             if (Skills == null || index < 0 || index >= Skills.Count) return;
             OnSlotClicked(Skills[index]);
         }
 
-        // ---- 弹窗键盘导航委托 ----
+        // =====================================================================
+        // v2: 废弃弹窗相关方法（保留空壳兼容旧调用）
+        // =====================================================================
 
-        /// <summary>弹窗是否打开</summary>
-        public bool IsPopupOpen => SkillSelectionPopup != null;
+        public void PopupSelectNextSkill() { /* v2: 弹窗已废弃 */ }
+        public void PopupSelectPrevSkill() { /* v2: 弹窗已废弃 */ }
+        public void PopupSelectCurrentSkill() { /* v2: 弹窗已废弃 */ }
 
-        /// <summary>弹窗内键盘 ↓</summary>
-        public void PopupSelectNextSkill()
+        // =====================================================================
+        // 技能加载与配置
+        // =====================================================================
+
+        /// <summary>从 SkillConfigManager 加载指定目标的技能配置</summary>
+        private void LoadSkillsForTarget(string targetId)
         {
-            SkillSelectionPopup?.SelectNextSkill();
-        }
+            _currentHeroSkillData = HeroSkillData.LoadForHero(targetId);
 
-        /// <summary>弹窗内键盘 ↑</summary>
-        public void PopupSelectPrevSkill()
-        {
-            SkillSelectionPopup?.SelectPrevSkill();
-        }
-
-        /// <summary>弹窗内键盘 Enter</summary>
-        public void PopupSelectCurrentSkill()
-        {
-            SkillSelectionPopup?.ExecuteSelectCurrentSkill();
-        }
-
-        /// <summary>
-        /// 从 SkillConfigManager 加载指定英雄的技能配置，填充到各 SkillSlotVM
-        /// </summary>
-        private void LoadSkillsForHero(string heroId)
-        {
-            _currentHeroSkillData = HeroSkillData.LoadForHero(heroId);
-            // SkillDebug.Log($"[CSVM] LoadSkillsForHero: heroId={heroId}, _currentHeroSkillData={(_currentHeroSkillData != null)}");
-
-            // 非法术槽位
             SetSlotSkill("MainActive", _currentHeroSkillData.MainActive);
-            SetSlotSkill("SubActive",  _currentHeroSkillData.SubActive);
-            SetSlotSkill("Passive",    _currentHeroSkillData.Passive);
-            SetSlotSkill("CombatArt",  _currentHeroSkillData.CombatArt);
+            SetSlotSkill("SubActive", _currentHeroSkillData.SubActive);
+            SetSlotSkill("Passive", _currentHeroSkillData.Passive);
+            SetSlotSkill("CombatArt", _currentHeroSkillData.CombatArt);
 
-            // 4个法术槽位
             for (int i = 0; i < 4; i++)
             {
                 if (i < _currentHeroSkillData.Spells.Length)
@@ -603,82 +992,204 @@ namespace New_ZZZF
             }
         }
 
-        // ---- 技能槽操作 ----
+        /// <summary>v2: 加载当前目标的原生技能熟练度</summary>
+        private void LoadProficiencies(HeroVM target)
+        {
+            Proficiencies.Clear();
+            if (target == null) return;
+
+            List<SkillProficiencyVM> profs = null;
+            if (target.Hero != null)
+            {
+                profs = SkillProficiencyVM.GetProficiencies(target.Hero);
+            }
+            else if (target.Character != null)
+            {
+                profs = SkillProficiencyVM.GetProficiencies(target.Character);
+            }
+
+            if (profs != null)
+            {
+                foreach (var p in profs)
+                    Proficiencies.Add(p);
+            }
+        }
+
+        // =====================================================================
+        // v2: 原位技能目录视图（替代弹窗）
+        // =====================================================================
 
         /// <summary>
-        /// 点击技能槽位（由 SkillSlotVM.ExecuteClick 触发）。
-        /// 打开技能选择弹窗，选择后分配到槽位。
+        /// 点击技能槽位 —— 打开原位技能目录视图。
+        /// v2: 不再创建弹窗，改为设置 ActiveSlot + 切换 IsInCatalogView。
         /// </summary>
         private void OnSlotClicked(SkillSlotVM slotVM)
         {
-            if (slotVM == null) return;
-            if (Catalog == null) return;
+            if (slotVM == null || Catalog == null) return;
 
-            // SkillDebug.Log($"[CSVM] 槽位点击: {slotVM.SlotId} (类型: {slotVM.SlotFilterType})");
+            // 设置当前编辑槽位
+            ActiveSlot = slotVM;
 
-            // 创建技能选择弹窗 ViewModel
-            var skillSelectionVM = new SkillSelectionVM(
-                Catalog,
-                slotVM.SlotFilterType,
-                // 选择回调：将选中的技能分配到槽位
-                selectedSkill =>
-                {
-                    AssignSkillToSlot(slotVM, selectedSkill);
-                    SkillSelectionPopup = null; // 关闭弹窗
-                },
-                // 关闭回调：取消选择
-                () =>
-                {
-                    SkillSelectionPopup = null; // 关闭弹窗
-                }
-            );
+            // 过滤 + 填充目录项
+            PopulateCatalogForSlot(slotVM);
 
-            // 显示弹窗
-            SkillSelectionPopup = skillSelectionVM;
-            // SkillDebug.Log($"[CSVM] OnSlotClicked 完成: SkillSelectionPopup 已设置, FilteredSkills.Count={skillSelectionVM.FilteredSkills?.Count}, IsVisible={skillSelectionVM.IsVisible}");
+            // 切换到目录视图
+            IsInCatalogView = true;
+            _catalogSelectedIndex = -1;
         }
 
-        /// <summary>
-        /// 将指定技能分配给槽位并保存
-        /// </summary>
+        /// <summary>根据当前槽位过滤并填充目录项列表</summary>
+        private void PopulateCatalogForSlot(SkillSlotVM slotVM)
+        {
+            CatalogItems.Clear();
+            if (slotVM == null) return;
+
+            var filterType = slotVM.SlotFilterType;
+            string searchLower = (_searchText ?? string.Empty).Trim().ToLower();
+
+            foreach (var itemVM in _allSkillItemVMs)
+            {
+                // 类型过滤
+                if (itemVM.SkillData.Type != filterType && filterType != SPSkillType.None)
+                    continue;
+
+                // 搜索过滤
+                if (!string.IsNullOrEmpty(searchLower))
+                {
+                    if (!itemVM.SkillName.ToLower().Contains(searchLower) &&
+                        !itemVM.Description.ToLower().Contains(searchLower))
+                        continue;
+                }
+
+                CatalogItems.Add(itemVM);
+            }
+        }
+
+        /// <summary>搜索过滤目录</summary>
+        private void FilterCatalog()
+        {
+            if (ActiveSlot == null) return;
+            PopulateCatalogForSlot(ActiveSlot);
+            _catalogSelectedIndex = -1;
+        }
+
+        /// <summary>在目录中选择技能（由 SkillItemVM 点击触发）</summary>
+        private void OnCatalogSkillSelected(SkillUIData skillData)
+        {
+            if (ActiveSlot == null) return;
+            AssignSkillToSlot(ActiveSlot, skillData);
+            IsInCatalogView = false;
+            ActiveSlot = null;
+        }
+
+        /// <summary>键盘 Enter：选择当前高亮的目录项</summary>
+        public void ExecuteSelectFromCatalog()
+        {
+            if (CatalogItems == null || _catalogSelectedIndex < 0 || _catalogSelectedIndex >= CatalogItems.Count)
+                return;
+
+            var item = CatalogItems[_catalogSelectedIndex];
+            if (item != null)
+                OnCatalogSkillSelected(item.SkillData);
+        }
+
+        /// <summary>键盘 Esc：关闭目录视图（返回技能槽视图）</summary>
+        public void ExecuteCloseCatalog()
+        {
+            IsInCatalogView = false;
+            ActiveSlot = null;
+            _catalogSelectedIndex = -1;
+        }
+
+        /// <summary>目录键盘 ↓ —— 选择下一项</summary>
+        public void SelectNextCatalogItem()
+        {
+            if (CatalogItems == null || CatalogItems.Count == 0) return;
+            _catalogSelectedIndex = (_catalogSelectedIndex + 1) % CatalogItems.Count;
+            RefreshCatalogHighlight();
+        }
+
+        /// <summary>目录键盘 ↑ —— 选择上一项</summary>
+        public void SelectPrevCatalogItem()
+        {
+            if (CatalogItems == null || CatalogItems.Count == 0) return;
+            _catalogSelectedIndex--;
+            if (_catalogSelectedIndex < 0) _catalogSelectedIndex = CatalogItems.Count - 1;
+            RefreshCatalogHighlight();
+        }
+
+        /// <summary>目录键盘 ← —— 选择上一列项（左移一列）</summary>
+        public void SelectPrevCatalogRow()
+        {
+            if (CatalogItems == null || CatalogItems.Count == 0) return;
+            int cols = Math.Max(1, _catalogGridColumns);
+            _catalogSelectedIndex -= cols;
+            if (_catalogSelectedIndex < 0)
+            {
+                // 循环：跳到当前列的最后
+                int col = (CatalogItems.Count % cols + cols) % cols;
+                _catalogSelectedIndex = CatalogItems.Count - 1 - ((CatalogItems.Count - 1) % cols + col) % cols;
+                if (_catalogSelectedIndex < 0) _catalogSelectedIndex = CatalogItems.Count - 1;
+            }
+            RefreshCatalogHighlight();
+        }
+
+        /// <summary>目录键盘 → —— 选择下一列项（右移一列）</summary>
+        public void SelectNextCatalogRow()
+        {
+            if (CatalogItems == null || CatalogItems.Count == 0) return;
+            int cols = Math.Max(1, _catalogGridColumns);
+            _catalogSelectedIndex += cols;
+            if (_catalogSelectedIndex >= CatalogItems.Count)
+            {
+                // 循环：跳到下一列的第一个
+                _catalogSelectedIndex = (_catalogSelectedIndex - CatalogItems.Count) % cols;
+            }
+            RefreshCatalogHighlight();
+        }
+
+        /// <summary>刷新目录项的高亮状态</summary>
+        private void RefreshCatalogHighlight()
+        {
+            for (int i = 0; i < CatalogItems.Count; i++)
+            {
+                CatalogItems[i].IsHighlighted = (i == _catalogSelectedIndex);
+            }
+        }
+
+        // =====================================================================
+        // 技能分配与保存
+        // =====================================================================
+
+        /// <summary>将指定技能分配给槽位</summary>
         public void AssignSkillToSlot(SkillSlotVM slotVM, SkillUIData skillData)
         {
             if (slotVM == null) return;
-
-            // SkillDebug.Log($"[CSVM] AssignSkillToSlot: slot={slotVM.SlotId}, skill={skillData?.SkillName ?? "(空)"}, skillId={skillData?.SkillId ?? "(空)"}");
             slotVM.SetSkill(skillData);
 
-            // 同步到 HeroSkillData
             if (_currentHeroSkillData != null)
             {
                 switch (slotVM.SlotId)
                 {
                     case "MainActive": _currentHeroSkillData.MainActive = skillData; break;
-                    case "SubActive":  _currentHeroSkillData.SubActive  = skillData; break;
-                    case "Passive":    _currentHeroSkillData.Passive    = skillData; break;
-                    case "CombatArt":  _currentHeroSkillData.CombatArt  = skillData; break;
-                    case "Spell0":     if (_currentHeroSkillData.Spells.Length > 0) _currentHeroSkillData.Spells[0] = skillData; break;
-                    case "Spell1":     if (_currentHeroSkillData.Spells.Length > 1) _currentHeroSkillData.Spells[1] = skillData; break;
-                    case "Spell2":     if (_currentHeroSkillData.Spells.Length > 2) _currentHeroSkillData.Spells[2] = skillData; break;
-                    case "Spell3":     if (_currentHeroSkillData.Spells.Length > 3) _currentHeroSkillData.Spells[3] = skillData; break;
+                    case "SubActive": _currentHeroSkillData.SubActive = skillData; break;
+                    case "Passive": _currentHeroSkillData.Passive = skillData; break;
+                    case "CombatArt": _currentHeroSkillData.CombatArt = skillData; break;
+                    case "Spell0": if (_currentHeroSkillData.Spells.Length > 0) _currentHeroSkillData.Spells[0] = skillData; break;
+                    case "Spell1": if (_currentHeroSkillData.Spells.Length > 1) _currentHeroSkillData.Spells[1] = skillData; break;
+                    case "Spell2": if (_currentHeroSkillData.Spells.Length > 2) _currentHeroSkillData.Spells[2] = skillData; break;
+                    case "Spell3": if (_currentHeroSkillData.Spells.Length > 3) _currentHeroSkillData.Spells[3] = skillData; break;
                 }
             }
 
-            // 标记脏数据，等待用户点击"应用"确认
             IsDirty = true;
         }
 
-        /// <summary>
-        /// 清空指定槽位
-        /// </summary>
         public void ClearSkillSlot(SkillSlotVM slotVM)
         {
             AssignSkillToSlot(slotVM, SkillUIData.Empty);
         }
 
-        /// <summary>
-        /// 保存当前英雄的技能配置到 SkillConfigManager
-        /// </summary>
         public void SaveCurrentHeroSkills()
         {
             if (_currentHeroSkillData != null)
@@ -687,69 +1198,53 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>
-        /// 应用更改：将脏数据持久化到 SkillConfigManager（由"确认应用"按钮触发）
-        /// </summary>
         public void ExecuteApply()
         {
             if (!_isDirty) return;
-
             SaveCurrentHeroSkills();
             IsDirty = false;
         }
 
-        /// <summary>
-        /// 撤销当前英雄的所有未保存更改，恢复为配置中的原始状态
-        /// </summary>
         public void ExecuteUndoChanges()
         {
             if (!_isDirty) return;
-
             if (CurrentHero != null)
-                LoadSkillsForHero(CurrentHero.HeroId);
-
+                LoadSkillsForTarget(CurrentHero.HeroId);
             IsDirty = false;
         }
 
-        // ---- 刷新与关闭 ----
+        // =====================================================================
+        // 刷新与关闭
+        // =====================================================================
 
-        /// <summary>
-        /// 刷新队伍列表（英雄增删后调用）
-        /// </summary>
+        /// <summary>刷新队伍列表</summary>
         public void RefreshRoster()
         {
             string previouslySelectedId = CurrentHeroId;
             PopulateRoster();
-
-            // 尝试恢复之前的选中
             if (!string.IsNullOrEmpty(previouslySelectedId))
             {
-                foreach (var hero in Roster)
+                foreach (var target in Roster)
                 {
-                    if (hero.HeroId == previouslySelectedId)
+                    if (target.HeroId == previouslySelectedId)
                     {
-                        SelectHero(hero);
+                        SelectTarget(target);
                         return;
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// 关闭技能界面
-        /// </summary>
         public void ExecuteClose()
         {
             _onClose?.Invoke();
         }
 
-        /// <summary>
-        /// 清理资源
-        /// </summary>
         public void OnFinalize()
         {
             _onClose = null;
             _currentHeroSkillData = null;
+            _allSkillItemVMs.Clear();
         }
     }
 }
