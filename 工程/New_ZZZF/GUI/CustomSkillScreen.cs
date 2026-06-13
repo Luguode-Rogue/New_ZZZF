@@ -1,3 +1,4 @@
+using TaleWorlds.Core;
 using TaleWorlds.Engine.GauntletUI;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
@@ -63,6 +64,9 @@ namespace New_ZZZF
             // 加载自定义 XML 预制件
             _movie = _gauntletLayer.LoadMovie("CustomSkillScreen", _dataSource);
             // SkillDebug.Log($"[CSS] OnInitialize 完成: _movie={(_movie != null)}, _dataSource.Roster.Count={_dataSource?.Roster?.Count}, _dataSource.Skills.Count={_dataSource?.Skills?.Count}");
+
+            // 暂停大地图时间推进（参考 BarberScreen/SaveLoadScreen 的标准做法）
+            Game.Current.GameStateManager.RegisterActiveStateDisableRequest(this);
         }
 
         protected override void OnFrameTick(float dt)
@@ -219,6 +223,9 @@ namespace New_ZZZF
 
         protected override void OnFinalize()
         {
+            // 恢复大地图时间推进
+            Game.Current.GameStateManager.UnregisterActiveStateDisableRequest(this);
+
             // SkillDebug.Log("[CSS] OnFinalize 开始");
             base.OnFinalize();
 

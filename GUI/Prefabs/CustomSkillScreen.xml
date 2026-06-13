@@ -98,11 +98,11 @@
             </BrushWidget>
 
             <!-- ===== 中间主面板：技能槽位配置 ===== -->
-            <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Brush="Frame1Brush">
+            <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Brush="Frame1Brush" ClipContents="true">
               <Children>
 
                 <!-- 表头 -->
-                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="40" Brush="Frame2Brush" DoNotAcceptEvents="true">
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="40" VerticalAlignment="Top" Brush="Frame2Brush" DoNotAcceptEvents="true">
                   <Children>
                     <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
                                 Text="已配置战志技能" Brush="SPOptions.Title.Text" FontSize="16" Color="#E2BC73FF"
@@ -110,87 +110,95 @@
                   </Children>
                 </BrushWidget>
 
-                <!-- 技能滚动区域 -->
-                <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                 MarginTop="46" MarginBottom="60" MarginLeft="12" MarginRight="12"
-                                 AutoHideScrollBars="true"
-                                 ClipRect="SkillViewport" InnerPanel="SkillInnerPanel" VerticalScrollbar="SkillScrollbar">
+                <!-- 技能滚动区域（外层Clip容器，防止滚动内容覆盖表头和底栏） -->
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        MarginTop="46" MarginBottom="60" MarginLeft="12" MarginRight="12" ClipContents="true">
                   <Children>
-                    <Widget Id="SkillViewport" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true" />
+                    <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                     AutoHideScrollBars="true"
+                                     ClipRect="SkillViewport" InnerPanel="SkillInnerPanel" VerticalScrollbar="SkillScrollbar">
+                      <Children>
+                        <Widget Id="SkillViewport" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true" />
 
-                    <ListPanel Id="SkillInnerPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
-                               DataSource="{Skills}" StackLayout.LayoutMethod="VerticalTopToBottom" StackLayout.Spacing="10">
-                      <ItemTemplate>
-                        <!-- 技能槽位：使用原生次级按钮画刷代替底层色块 -->
-                        <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
-                                      SuggestedHeight="!Skill.CardHeight" Brush="ButtonPrimary2Brush"
-                                      Command.Click="ExecuteClick" UpdateChildrenStates="true">
-                          <Children>
-                            <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="20"
-                                        Text="@SlotLabel" Brush="SPOptions.Title.Text" FontSize="14" Color="#C1A167FF"
-                                        MarginLeft="18" MarginTop="12" DoNotAcceptEvents="true" />
-
-                            <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="20"
-                                        IsVisible="@IsEmpty" Text="[ 未装备 ]" Brush="SPOptions.Description.Text"
-                                        FontSize="14" AlphaFactor="0.6" HorizontalAlignment="Right" MarginRight="18" MarginTop="12" DoNotAcceptEvents="true" />
-                            
-                            <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="20"
-                                        IsVisible="!@IsEmpty" Text="@SkillName" Brush="SPOptions.Title.Text"
-                                        FontSize="14" Color="#FFD270FF" HorizontalAlignment="Right" MarginRight="18" MarginTop="12" DoNotAcceptEvents="true" />
-
-                            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="18" MarginRight="18" MarginTop="36" MarginBottom="12" DoNotAcceptEvents="true">
+                        <ListPanel Id="SkillInnerPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
+                                   DataSource="{Skills}" StackLayout.LayoutMethod="VerticalTopToBottom" StackLayout.Spacing="10">
+                          <ItemTemplate>
+                            <!-- 技能槽位：使用原生次级按钮画刷代替底层色块 -->
+                            <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                          SuggestedHeight="!Skill.CardHeight" Brush="ButtonPrimary2Brush"
+                                          UpdateChildrenStates="true">
                               <Children>
-                                <!-- 技能图标框 (使用原生微缩边框) -->
-                                <BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="56" SuggestedHeight="56"
-                                             VerticalAlignment="Center" Brush="Frame1Brush" DoNotAcceptEvents="true">
-                                  <Children>
-                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                                                Text="技能" Brush="SPOptions.Description.Text" FontSize="12" AlphaFactor="0.6"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center" DoNotAcceptEvents="true" />
-                                  </Children>
-                                </BrushWidget>
+                                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="20"
+                                            Text="@SlotLabel" Brush="SPOptions.Title.Text" FontSize="14" Color="#C1A167FF"
+                                            MarginLeft="18" MarginTop="12" DoNotAcceptEvents="true" />
 
-                                <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="72" MarginRight="140" StackLayout.LayoutMethod="VerticalTopToBottom" VerticalAlignment="Center" DoNotAcceptEvents="true">
-                                  <Children>
-                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
-                                                IsVisible="!@IsEmpty" Text="@SkillName" Brush="SPOptions.Title.Text" FontSize="16" Color="#FFFFFFFF" DoNotAcceptEvents="true" />
-                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
-                                                Text="点击契刻或更换技能..." Brush="SPOptions.Description.Text" FontSize="13" AlphaFactor="0.6" MarginTop="4" DoNotAcceptEvents="true" />
-                                  </Children>
-                                </ListPanel>
+                                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="20"
+                                            IsVisible="@IsEmpty" Text="[ 未装备 ]" Brush="SPOptions.Description.Text"
+                                            FontSize="14" AlphaFactor="0.6" HorizontalAlignment="Right" MarginRight="18" MarginTop="12" DoNotAcceptEvents="true" />
+                                
+                                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="20"
+                                            IsVisible="!@IsEmpty" Text="@SkillName" Brush="SPOptions.Title.Text"
+                                            FontSize="14" Color="#FFD270FF" HorizontalAlignment="Right" MarginRight="18" MarginTop="12" DoNotAcceptEvents="true" />
 
-                                <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="120" HorizontalAlignment="Right" VerticalAlignment="Center" DoNotAcceptEvents="true">
+                                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="18" MarginRight="18" MarginTop="36" MarginBottom="12" DoNotAcceptEvents="true">
                                   <Children>
-                                    <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" StackLayout.LayoutMethod="HorizontalRightToLeft" VerticalAlignment="Top" DoNotAcceptEvents="true">
+                                    <!-- 技能图标框 (使用原生微缩边框) -->
+                                    <BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="56" SuggestedHeight="56"
+                                                 VerticalAlignment="Center" Brush="Frame1Brush" DoNotAcceptEvents="true">
                                       <Children>
-                                        <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" Text="@CooldownText" FontSize="13" Brush="SPOptions.Description.Text" MarginLeft="4" DoNotAcceptEvents="true"/>
-                                        <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" Text="冷却:" FontSize="13" Brush="SPOptions.Description.Text" AlphaFactor="0.6" DoNotAcceptEvents="true"/>
+                                        <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                                    Text="技能" Brush="SPOptions.Description.Text" FontSize="12" AlphaFactor="0.6"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center" DoNotAcceptEvents="true" />
+                                      </Children>
+                                    </BrushWidget>
+
+                                    <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="72" MarginRight="140" StackLayout.LayoutMethod="VerticalTopToBottom" VerticalAlignment="Center" DoNotAcceptEvents="true">
+                                      <Children>
+                                        <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
+                                                    IsVisible="!@IsEmpty" Text="@SkillName" Brush="SPOptions.Title.Text" FontSize="16" Color="#FFFFFFFF" DoNotAcceptEvents="true" />
+                                        <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
+                                                    Text="点击契刻或更换技能..." Brush="SPOptions.Description.Text" FontSize="13" AlphaFactor="0.6" MarginTop="4" DoNotAcceptEvents="true" />
                                       </Children>
                                     </ListPanel>
-                                    <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" StackLayout.LayoutMethod="HorizontalRightToLeft" VerticalAlignment="Bottom" DoNotAcceptEvents="true">
+
+                                    <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="120" HorizontalAlignment="Right" VerticalAlignment="Center" DoNotAcceptEvents="true">
                                       <Children>
-                                        <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" Text="@CostText" FontSize="13" Color="#E2BC73FF" Brush="SPOptions.Description.Text" MarginLeft="4" DoNotAcceptEvents="true"/>
-                                        <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" Text="气力:" FontSize="13" Brush="SPOptions.Description.Text" AlphaFactor="0.6" DoNotAcceptEvents="true"/>
+                                        <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" StackLayout.LayoutMethod="HorizontalRightToLeft" VerticalAlignment="Top" DoNotAcceptEvents="true">
+                                          <Children>
+                                            <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" Text="@CooldownText" FontSize="13" Brush="SPOptions.Description.Text" MarginLeft="4" DoNotAcceptEvents="true"/>
+                                            <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" Text="冷却:" FontSize="13" Brush="SPOptions.Description.Text" AlphaFactor="0.6" DoNotAcceptEvents="true"/>
+                                          </Children>
+                                        </ListPanel>
+                                        <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" StackLayout.LayoutMethod="HorizontalRightToLeft" VerticalAlignment="Bottom" DoNotAcceptEvents="true">
+                                          <Children>
+                                            <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" Text="@CostText" FontSize="13" Color="#E2BC73FF" Brush="SPOptions.Description.Text" MarginLeft="4" DoNotAcceptEvents="true"/>
+                                            <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" Text="气力:" FontSize="13" Brush="SPOptions.Description.Text" AlphaFactor="0.6" DoNotAcceptEvents="true"/>
+                                          </Children>
+                                        </ListPanel>
                                       </Children>
-                                    </ListPanel>
+                                    </Widget>
                                   </Children>
                                 </Widget>
-                              </Children>
-                            </Widget>
-                          </Children>
-                        </ButtonWidget>
-                      </ItemTemplate>
-                    </ListPanel>
 
-                    <!-- 原生滚动条 -->
-                    <ScrollbarWidget Id="SkillScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent" HorizontalAlignment="Right" Alignment="Right" Handle="SkillScrollbarHandle">
-                      <Children>
-                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\black_background" AlphaFactor="0.2" DoNotAcceptEvents="true" />
-                        <Widget Id="SkillScrollbarHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="40" Brush="Scrollbar.Vertical.Handle" />
+                                <!-- 透明覆盖层：渲染在最上层，拦截所有点击并跳转到技能选择界面 -->
+                                <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                              Command.Click="ExecuteClick" UpdateChildrenStates="true" />
+                              </Children>
+                            </ButtonWidget>
+                          </ItemTemplate>
+                        </ListPanel>
+
+                        <!-- 原生滚动条 -->
+                        <ScrollbarWidget Id="SkillScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent" HorizontalAlignment="Right" Alignment="Right" Handle="SkillScrollbarHandle">
+                          <Children>
+                            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\black_background" AlphaFactor="0.2" DoNotAcceptEvents="true" />
+                            <Widget Id="SkillScrollbarHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="40" Brush="Scrollbar.Vertical.Handle" />
+                          </Children>
+                        </ScrollbarWidget>
                       </Children>
-                    </ScrollbarWidget>
+                    </ScrollablePanel>
                   </Children>
-                </ScrollablePanel>
+                </Widget>
 
                 <!-- ===== 底部操作栏 (使用原生次级底板) ===== -->
                 <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="!Footer.Height" VerticalAlignment="Bottom" Brush="Frame2Brush">
