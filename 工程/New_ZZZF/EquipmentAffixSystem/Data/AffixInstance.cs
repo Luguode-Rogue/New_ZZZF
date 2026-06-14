@@ -99,25 +99,23 @@ namespace New_ZZZF
             if (!hasPrefix && !hasSuffix)
                 return baseItemName;
 
-            // 取第一个（主要）前后缀的显示名
-            string prefixName = hasPrefix ? prefixes[0].DisplayName : null;
-            string suffixName = hasSuffix ? suffixes[0].DisplayName : null;
+            // 全部前后缀去末尾"的/之"后拼接（无空格），用于"X之Y的Z"的X/Y部分
+            string prefixStem = hasPrefix ? string.Join("", prefixes.Select(p => StripConnector(p.DisplayName))) : null;
+            string suffixStem = hasSuffix ? string.Join("", suffixes.Select(p => StripConnector(p.DisplayName))) : null;
 
-            // 去掉末尾的连接词（"的"/"之"），用于拼接
-            string prefixStem = StripConnector(prefixName);
-            string suffixStem = StripConnector(suffixName);
+            // 原始显示名（保留"的/之"），用于仅前/后缀时的单独显示
+            string prefixName = hasPrefix ? string.Join(" ", prefixes.Select(p => p.DisplayName)) : null;
+            string suffixName = hasSuffix ? string.Join(" ", suffixes.Select(p => p.DisplayName)) : null;
 
             if (hasPrefix && hasSuffix)
             {
-                // 暗黑2风格：前缀之 后缀的 基础名 → "残忍之狼的长剑"
+                // 暗黑风格：前缀词干之 后缀词干的 基础名
                 return $"{prefixStem}之{suffixStem}的{baseItemName}";
             }
             if (hasPrefix)
             {
-                // 仅前缀：保持原样 "残忍的 长剑"
                 return $"{prefixName} {baseItemName}";
             }
-            // 仅后缀：后缀 + 基础名 → "狼之 长剑"
             return $"{suffixName} {baseItemName}";
         }
 

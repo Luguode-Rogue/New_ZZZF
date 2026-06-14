@@ -83,6 +83,7 @@ namespace New_ZZZF
             mission.AddMissionBehavior(new SkillSystemBehavior());
             mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
             mission.AddMissionBehavior(new HeroChangeMissionBehavior());
+            mission.AddMissionBehavior(new AffixMissionBehavior());
             // 调试日志
             InformationManager.DisplayMessage(new InformationMessage(
                 "[New_ZZZF] 技能系统已激活！"));

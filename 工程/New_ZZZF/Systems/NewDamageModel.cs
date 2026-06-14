@@ -165,8 +165,9 @@ namespace New_ZZZF
             }
 
             float result = base.CalculateStrikeMagnitudeForMissile(attackInformation, collisionData, weapon, missileSpeed);//如果字典里没有，说明是游戏源代码生成 的，所以直接输出原来acd里的mtd 
-            // TODO: 词缀实例分离 - 需要从 Agent 装备槽获取 instanceId，目前走模板回退
-            result *= AffixCampaignBehavior.GetAffixDamageMultiplier(weapon.Item, "MissileDamage");
+            string? affixInstId = AffixMissionBehavior.GetAgentWeaponInstanceId(
+                attackInformation.AttackerAgent, (EquipmentIndex)collisionData.AffectorWeaponSlotOrMissileIndex);
+            result *= AffixCampaignBehavior.GetAffixDamageMultiplier(affixInstId, weapon.Item, "MissileDamage");
             return result;
 
         }
@@ -216,8 +217,9 @@ namespace New_ZZZF
                 PerkHelper.AddPerkBonusForCharacter(DefaultPerks.Crafting.SharpenedEdge, characterObject, true, ref explainedNumber2);
                 num = explainedNumber2.ResultNumber;
             }
-            // TODO: 词缀实例分离 - 需要从 Agent 装备槽获取 instanceId，目前走模板回退
-            num *= AffixCampaignBehavior.GetAffixDamageMultiplier(item, "SwingDamage");
+            string? affixInstId_Swing = AffixMissionBehavior.GetAgentWeaponInstanceId(
+                attackInformation.AttackerAgent, (EquipmentIndex)collisionData.AffectorWeaponSlotOrMissileIndex);
+            num *= AffixCampaignBehavior.GetAffixDamageMultiplier(affixInstId_Swing, item, "SwingDamage");
             return num;
         }
         public override float CalculateStrikeMagnitudeForThrust(in AttackInformation attackInformation, in AttackCollisionData collisionData, in MissionWeapon weapon, float thrustWeaponSpeed, float extraLinearSpeed, bool isThrown = false)
@@ -269,8 +271,9 @@ namespace New_ZZZF
                 PerkHelper.AddPerkBonusForCharacter(DefaultPerks.Crafting.SharpenedTip, characterObject, true, ref explainedNumber2);
                 num = explainedNumber2.ResultNumber;
             }
-            // TODO: 词缀实例分离 - 需要从 Agent 装备槽获取 instanceId，目前走模板回退
-            num *= AffixCampaignBehavior.GetAffixDamageMultiplier(item, "ThrustDamage");
+            string? affixInstId_Thrust = AffixMissionBehavior.GetAgentWeaponInstanceId(
+                attackInformation.AttackerAgent, (EquipmentIndex)collisionData.AffectorWeaponSlotOrMissileIndex);
+            num *= AffixCampaignBehavior.GetAffixDamageMultiplier(affixInstId_Thrust, item, "ThrustDamage");
             return num;
         }
 
@@ -304,8 +307,9 @@ namespace New_ZZZF
             }
 
             float result = base.CalculateStrikeMagnitudeForMissile(attackInformation, collisionData, weapon, missileSpeed);//如果字典里没有，说明是游戏源代码生成 的，所以直接输出原来acd里的mtd 
-            // TODO: 词缀实例分离 - 需要从 Agent 装备槽获取 instanceId，目前走模板回退
-            result *= AffixCampaignBehavior.GetAffixDamageMultiplier(weapon.Item, "MissileDamage");
+            string? affixInstId = AffixMissionBehavior.GetAgentWeaponInstanceId(
+                attackInformation.AttackerAgent, (EquipmentIndex)collisionData.AffectorWeaponSlotOrMissileIndex);
+            result *= AffixCampaignBehavior.GetAffixDamageMultiplier(affixInstId, weapon.Item, "MissileDamage");
             return result;
 
         }
@@ -317,7 +321,9 @@ namespace New_ZZZF
             missionWeapon = weapon;
             //将输入进来的impactPointAsPercent武器打击点,直接替换成currentUsageItem.SweetSpotReach物品属性里的最佳打击位置,这样就算是用护手敲人也等于用剑刃打人
             float num = CombatStatCalculator.CalculateStrikeMagnitudeForSwing(swingSpeed, currentUsageItem.SweetSpotReach, missionWeapon.Item.Weight, currentUsageItem.GetRealWeaponLength(), currentUsageItem.TotalInertia, currentUsageItem.CenterOfMass, extraLinearSpeed);
-            num *= AffixCampaignBehavior.GetAffixDamageMultiplier(missionWeapon.Item, "SwingDamage");
+            string? affixInstId_Swing = AffixMissionBehavior.GetAgentWeaponInstanceId(
+                attackInformation.AttackerAgent, (EquipmentIndex)collisionData.AffectorWeaponSlotOrMissileIndex);
+            num *= AffixCampaignBehavior.GetAffixDamageMultiplier(affixInstId_Swing, missionWeapon.Item, "SwingDamage");
             return num;
         }
         public override float CalculateStrikeMagnitudeForThrust(in AttackInformation attackInformation, in AttackCollisionData collisionData, in MissionWeapon weapon, float thrustWeaponSpeed, float extraLinearSpeed, bool isThrown = false)
@@ -326,7 +332,9 @@ namespace New_ZZZF
             float num = CombatStatCalculator.CalculateStrikeMagnitudeForThrust(thrustWeaponSpeed, missionWeapon.Item.Weight, extraLinearSpeed, isThrown);
 
             num = TaleWorlds.Library.MathF.Max(num, (float)weapon.GetModifiedThrustDamageForCurrentUsage());
-            num *= AffixCampaignBehavior.GetAffixDamageMultiplier(missionWeapon.Item, "ThrustDamage");
+            string? affixInstId_Thrust = AffixMissionBehavior.GetAgentWeaponInstanceId(
+                attackInformation.AttackerAgent, (EquipmentIndex)collisionData.AffectorWeaponSlotOrMissileIndex);
+            num *= AffixCampaignBehavior.GetAffixDamageMultiplier(affixInstId_Thrust, missionWeapon.Item, "ThrustDamage");
             return num;
         }
 

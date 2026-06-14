@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
+using TaleWorlds.Localization;
 using TaleWorlds.ObjectSystem;
 using TaleWorlds.SaveSystem;
 
@@ -38,8 +42,19 @@ namespace New_ZZZF
         /// </summary>
         public Dictionary<string, AffixBinding> BindingMap = new Dictionary<string, AffixBinding>();
 
+        /// <summary>
+        /// ItemModifier → InstanceId 映射表。
+        /// 解决 UI 层无法从 EquipmentElement 获取 InstanceId 的问题。
+        /// Key: ItemModifier.StringId（如 "affix_mod_abc123"）
+        /// Value: InstanceId
+        /// </summary>
+        public Dictionary<string, string> ModifierToInstanceMap = new Dictionary<string, string>();
+
         /// <summary>系统是否已初始化</summary>
         public bool IsInitialized;
+
+        /// <summary>防止 OnPlayerInventoryExchange 递归重入（设置 ItemModifier 可能触发二次事件）</summary>
+        private bool _isProcessingInventory;
 
         // ========== 存档数据（仅支持 Bannerlord 原生可序列化类型） ==========
 
@@ -54,6 +69,10 @@ namespace New_ZZZF
         /// <summary>绑定表的序列化形式</summary>
         [SaveableField(3)]
         private List<string> _serializedBindingData = new List<string>();
+
+        /// <summary>ModifierToInstanceMap 的序列化形式</summary>
+        [SaveableField(4)]
+        private List<string> _serializedModifierData = new List<string>();
 
         public AffixCampaignBehavior()
         {
@@ -80,14 +99,16 @@ namespace New_ZZZF
         {
             if (dataStore.IsSaving)
             {
-                // 存档：将实例记录表 + 绑定表序列化为字符串列表
+                // 存档：将实例记录表 + 绑定表 + 修饰符映射序列化为字符串列表
                 _serializedAffixData = SerializeRecordMap();
                 _serializedBindingData = SerializeBindingMap();
+                _serializedModifierData = SerializeModifierMap();
                 _serializedIsInitialized = IsInitialized;
             }
 
             dataStore.SyncData<List<string>>("_serializedAffixData", ref _serializedAffixData);
             dataStore.SyncData<List<string>>("_serializedBindingData", ref _serializedBindingData);
+            dataStore.SyncData<List<string>>("_serializedModifierData", ref _serializedModifierData);
             dataStore.SyncData<bool>("_serializedIsInitialized", ref _serializedIsInitialized);
 
             if (dataStore.IsSaving)
@@ -98,11 +119,12 @@ namespace New_ZZZF
             if (dataStore.IsLoading)
             {
                 IsInitialized = _serializedIsInitialized;
-                // 读档：反序列化字符串列表为实例记录表 + 绑定表
+                // 读档：反序列化字符串列表为实例记录表 + 绑定表 + 修饰符映射
                 ItemRecordMap = DeserializeRecordMap(_serializedAffixData);
                 BindingMap = DeserializeBindingMap(_serializedBindingData);
+                ModifierToInstanceMap = DeserializeModifierMap(_serializedModifierData);
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[装备词缀系统] 读档完成，共 {ItemRecordMap.Count} 件词缀物品，{BindingMap.Count} 条绑定"));
+                    $"[装备词缀系统] 读档完成，共 {ItemRecordMap.Count} 件词缀物品，{BindingMap.Count} 条绑定，{ModifierToInstanceMap.Count} 条修饰符映射"));
                 // 读档后重建 [NonSerialized] 缓存
                 var db = AffixDatabase.Instance;
                 db.Initialize();
@@ -125,25 +147,60 @@ namespace New_ZZZF
         private void OnGameLoaded(CampaignGameStarter campaignGameStarter)
         {
             Initialize();
+            // 重建存档中的定制 ItemModifier 对象（注册到 MBObjectManager）
+            RebuildModifiers();
+            // 将既有记录同步到玩家实际背包元素（修复旧存档中未设置 Modifier 的物品）
+            SyncAffixModifiersToPlayerRoster();
+            // 同步 Hero 装备槽绑定
+            SyncHeroEquipmentBindings();
             InformationManager.DisplayMessage(new InformationMessage(
-                $"[装备词缀系统] 游戏加载完成，共 {ItemRecordMap.Count} 件词缀物品"));
+                $"[装备词缀系统] 游戏加载完成，共 {ItemRecordMap.Count} 件词缀物品，{ModifierToInstanceMap.Count} 条修饰符映射"));
         }
 
         /// <summary>
-        /// 玩家物品交换事件（购买、拾取、掉落获得物品时触发）
+        /// 玩家物品交换事件（购买、拾取、掉落获得物品时触发）。
+        /// 注意：purchasedItems 中的 ItemRosterElement 是交易系统创建的临时副本，
+        /// 修改副本不会影响玩家实际背包。必须直接在玩家 ItemRoster 上设置 Modifier。
         /// </summary>
         private void OnPlayerInventoryExchange(
             List<(ItemRosterElement, int)> purchasedItems,
             List<(ItemRosterElement, int)> soldItems,
             bool isTrading)
         {
-            foreach (var (itemElement, amount) in purchasedItems)
+            // 防止递归重入：SyncAffixModifiersToPlayerRoster 中设置 ItemModifier 可能触发二次事件
+            if (_isProcessingInventory) return;
+            _isProcessingInventory = true;
+            try
             {
-                if (itemElement.EquipmentElement.Item != null)
+                // 1. 为每批新物品创建词缀记录（记录插入 ItemRecordMap）
+                foreach (var (itemElement, amount) in purchasedItems)
                 {
-                    // 为新获得的物品创建实例记录（生成词缀）
+                    if (itemElement.EquipmentElement.Item == null)
+                        continue;
+
+                    // 跳过已由调试工具预先处理过的物品（已带 Modifier 且已注册映射）
+                    if (itemElement.EquipmentElement.ItemModifier != null)
+                    {
+                        string existingModId = itemElement.EquipmentElement.ItemModifier.StringId;
+                        if (!string.IsNullOrEmpty(existingModId)
+                            && ModifierToInstanceMap.ContainsKey(existingModId))
+                        {
+                            continue; // 已处理，跳过重复创建
+                        }
+                    }
+
                     CreateAffixedRecord(itemElement.EquipmentElement.Item, amount, "PlayerInventory");
                 }
+
+                // 2. 将记录中的修饰符同步到玩家实际背包元素
+                SyncAffixModifiersToPlayerRoster();
+
+                // 3. 同步 Hero 装备槽 → InstanceId 绑定
+                SyncHeroEquipmentBindings();
+            }
+            finally
+            {
+                _isProcessingInventory = false;
             }
         }
 
@@ -222,22 +279,73 @@ namespace New_ZZZF
 
         /// <summary>
         /// 重随物品词缀——生成全新前后缀替换旧的。
-        /// 搜索 ItemRecordMap 中首个 BaseItemId 匹配的记录，删除后重建。
-        /// 返回新的词缀实例；物品上没有词缀时返回 null。
+        /// 按 InstanceId 精确定位记录，删除后重建同底材新词缀。
+        /// 同时更新背包中的实际元素（旧 Modifier → 新 Modifier）。
+        /// 返回新的词缀实例；InstanceId 不存在时返回 null。
         /// </summary>
-        public AffixInstance? RerollAffix(ItemObject item)
+        public AffixInstance? RerollAffix(string instanceId)
         {
+            if (string.IsNullOrEmpty(instanceId)) return null;
+
+            // 按 InstanceId 精确定位
+            if (!ItemRecordMap.TryGetValue(instanceId, out var oldRecord))
+                return null;
+
+            // 获取底材物品
+            ItemObject? item = MBObjectManager.Instance.GetObject<ItemObject>(oldRecord.BaseItemId);
             if (item == null) return null;
 
-            // 搜索首个 BaseItemId 匹配的记录
-            var oldRecord = ItemRecordMap.Values
-                .FirstOrDefault(r => r.BaseItemId == item.StringId);
-            if (oldRecord == null) return null;
+            string oldModifierId = "zzzf_affix_" + instanceId;
 
-            // 删除旧记录，创建新词缀
-            ItemRecordMap.Remove(oldRecord.InstanceId);
+            // 1. 创建新词缀记录（新 InstanceId、新 ModifierId）
             var newRecord = ForceAffixItem(item, "Reroll");
-            return newRecord?.Affix;
+            if (newRecord == null) return null;
+            string newModifierId = "zzzf_affix_" + newRecord.InstanceId;
+
+            // 2. 删除旧记录 + 旧 Modifier 映射
+            ItemRecordMap.Remove(instanceId);
+            ModifierToInstanceMap.Remove(oldModifierId);
+
+            // 3. 同步背包元素：移除带旧 Modifier 的元素，添加带新 Modifier 的元素
+            ReplaceModifierInPlayerRoster(item, oldModifierId, newModifierId, newRecord.InstanceId);
+
+            return newRecord.Affix;
+        }
+
+        /// <summary>
+        /// 在玩家背包中查找带有指定旧 Modifier 的装备元素，
+        /// 用带新 Modifier 的等效元素替换它（保持数量不变）。
+        /// </summary>
+        private void ReplaceModifierInPlayerRoster(
+            ItemObject item, string oldModifierId, string newModifierId, string newInstanceId)
+        {
+            try
+            {
+                var roster = MobileParty.MainParty?.ItemRoster;
+                if (roster == null) return;
+
+                var oldModifier = MBObjectManager.Instance.GetObject<ItemModifier>(oldModifierId);
+                var newModifier = CreateOrGetItemModifier(newModifierId, newInstanceId);
+                if (newModifier == null) return;
+
+                for (int i = 0; i < roster.Count; i++)
+                {
+                    var element = roster.GetElementCopyAtIndex(i);
+                    if (element.EquipmentElement.Item != item) continue;
+                    if (oldModifier != null
+                        && element.EquipmentElement.ItemModifier != oldModifier) continue;
+                    // 如果是 null modifier（Modifier 已丢失但 instanceId 匹配），也替换
+
+                    int amount = element.Amount;
+                    roster.Remove(element);
+                    roster.AddToCounts(new EquipmentElement(item, newModifier), amount);
+                    break; // 只替换第一个匹配项
+                }
+            }
+            catch (Exception ex)
+            {
+                // 不在此阶段崩溃
+            }
         }
 
         /// <summary>
@@ -316,6 +424,266 @@ namespace New_ZZZF
                 return binding.InstanceId;
             return null;
         }
+
+        /// <summary>
+        /// 同步 Hero 当前装备槽 → InstanceId 绑定表。
+        /// 读取 Hero.BattleEquipment 和 CivilianEquipment 中带 ItemModifier 的槽位，
+        /// 通过 ModifierToInstanceMap 反查 InstanceId，更新 BindingMap。
+        ///
+        /// 调用时机：OnPlayerInventoryExchange（完成交换后）、OnGameLoaded（读档后）
+        /// </summary>
+        public void SyncHeroEquipmentBindings()
+        {
+            if (Hero.MainHero == null) return;
+
+            // 收集需要同步的英雄列表：玩家 + 队伍中所有同伴
+            var heroesToSync = new List<Hero> { Hero.MainHero };
+            if (MobileParty.MainParty != null)
+            {
+                foreach (var member in MobileParty.MainParty.MemberRoster
+                    .GetTroopRoster().Where(t => t.Character?.IsHero == true))
+                {
+                    var hero = member.Character?.HeroObject;
+                    if (hero != null && hero != Hero.MainHero)
+                        heroesToSync.Add(hero);
+                }
+            }
+
+            foreach (var hero in heroesToSync)
+            {
+                // 同步 BattleEquipment
+                SyncEquipmentToBindings(hero, hero.BattleEquipment, AffixOwnerType.Equipment);
+                // 同步 CivilianEquipment
+                SyncEquipmentToBindings(hero, hero.CivilianEquipment, AffixOwnerType.Equipment);
+            }
+        }
+
+        /// <summary>
+        /// 扫描 Hero 的单个 Equipment，将带 Modifier 的物品槽位更新到 BindingMap。
+        /// 无 Modifier 的旧绑定会被清理。
+        /// </summary>
+        private void SyncEquipmentToBindings(Hero hero, Equipment equipment, AffixOwnerType ownerType)
+        {
+            if (hero == null || equipment == null) return;
+
+            for (int i = 0; i <= (int)EquipmentIndex.HorseHarness; i++)
+            {
+                var slot = (EquipmentIndex)i;
+                var element = equipment[slot];
+                string key = $"{hero.StringId}:{(int)slot}";
+
+                if (element.IsEmpty || element.Item == null || element.ItemModifier == null)
+                {
+                    // 槽位空或无语缀修饰符 → 清除旧绑定
+                    if (BindingMap.TryGetValue(key, out var oldBinding))
+                    {
+                        if (ItemRecordMap.TryGetValue(oldBinding.InstanceId, out var record))
+                            record.IsEquipped = false;
+                        BindingMap.Remove(key);
+                    }
+                    continue;
+                }
+
+                // 有 Modifier → 尝试查 InstanceId
+                string modifierId = element.ItemModifier.StringId;
+                if (string.IsNullOrEmpty(modifierId)) continue;
+
+                if (!ModifierToInstanceMap.TryGetValue(modifierId, out string? instanceId)
+                    || string.IsNullOrEmpty(instanceId))
+                    continue;
+
+                // 检查是否需要更新
+                if (BindingMap.TryGetValue(key, out var existing)
+                    && existing.InstanceId == instanceId)
+                    continue; // 已是最新，跳过
+
+                // 清除旧绑定
+                if (BindingMap.TryGetValue(key, out var toRemove))
+                {
+                    if (ItemRecordMap.TryGetValue(toRemove.InstanceId, out var oldRecord))
+                        oldRecord.IsEquipped = false;
+                }
+
+                // 设置新绑定
+                BindingMap[key] = new AffixBinding
+                {
+                    InstanceId = instanceId,
+                    OwnerType = ownerType,
+                    OwnerId = hero.StringId,
+                    SlotIndex = (int)slot
+                };
+
+                if (ItemRecordMap.TryGetValue(instanceId, out var newRecord))
+                    newRecord.IsEquipped = true;
+            }
+        }
+
+        // ========== Modifier 桥接（UI层实例区分） ==========
+
+        /// <summary>
+        /// 注册 ItemModifier → InstanceId 映射。
+        /// 应在词缀物品生成/拾取时调用，使 UI 层能通过 EquipmentElement.ItemModifier 反查实例。
+        /// </summary>
+        public void RegisterModifierBinding(string modifierStringId, string instanceId)
+        {
+            if (string.IsNullOrEmpty(modifierStringId) || string.IsNullOrEmpty(instanceId)) return;
+            ModifierToInstanceMap[modifierStringId] = instanceId;
+        }
+
+        /// <summary>
+        /// 为词缀物品实例创建唯一 ItemModifier 并注册到 MBObjectManager。
+        /// 核心目的：使同底材不同词缀的物品在背包中独立显示、不会堆叠。
+        /// 同时注册 modifierId → instanceId 映射供 UI 层精确查找。
+        /// 返回创建的（或已存在的）ItemModifier。
+        /// </summary>
+        public ItemModifier CreateOrGetItemModifier(string modifierId, string instanceId)
+        {
+            // 1. 注册映射（UI 层通过 ItemModifier.StringId 反查实例）
+            RegisterModifierBinding(modifierId, instanceId);
+
+            // 2. 创建/获取唯一 ItemModifier
+            ItemModifier? modifier = MBObjectManager.Instance.GetObject<ItemModifier>(modifierId);
+            if (modifier == null)
+            {
+                modifier = new ItemModifier();
+                modifier.StringId = modifierId;
+                modifier.Initialize();
+                // ItemModifier.PriceMultiplier 为 private set，需反射设为 1.0 维持原价
+                typeof(ItemModifier).GetProperty("PriceMultiplier")?.SetValue(modifier, 1.0f);
+                // Name 必须包含 {ITEMNAME} 占位符，否则 GetModifiedItemName() 返回空字符串导致物品名字消失
+                var nameTO = new TextObject("{=zzzf_affix_mod}{ITEMNAME}", null);
+                typeof(ItemModifier).GetProperty("Name")?.SetValue(modifier, nameTO);
+                LogDebug($"[CreateOrGetItemModifier] modifierId={modifierId}, Name.ToString()='{modifier.Name?.ToString()}'");
+                // 注册到 MBObjectManager：presumed=true 保证存档/读档可正确序列化
+                modifier = MBObjectManager.Instance.RegisterPresumedObject<ItemModifier>(modifier);
+                LogDebug($"[CreateOrGetItemModifier] After RegisterPresumedObject, Name.ToString()='{modifier.Name?.ToString()}'");
+            }
+
+            return modifier;
+        }
+
+        /// <summary>
+        /// 读档后重建所有定制 ItemModifier 并注册到 MBObjectManager。
+        /// 遍历 ModifierToInstanceMap 为每个映射创建 ItemModifier。
+        /// 已存在则跳过（游戏读档时已自动注册）。
+        /// </summary>
+        private void RebuildModifiers()
+        {
+            foreach (var kv in ModifierToInstanceMap)
+            {
+                string modifierId = kv.Key;
+                if (MBObjectManager.Instance.GetObject<ItemModifier>(modifierId) != null)
+                    continue;
+
+                var modifier = new ItemModifier();
+                modifier.StringId = modifierId;
+                modifier.Initialize();
+                typeof(ItemModifier).GetProperty("PriceMultiplier")?.SetValue(modifier, 1.0f);
+                // Name 必须包含 {ITEMNAME} 占位符，否则 GetModifiedItemName() 返回空字符串导致物品名字消失
+                var nameTO = new TextObject("{=zzzf_affix_mod}{ITEMNAME}", null);
+                typeof(ItemModifier).GetProperty("Name")?.SetValue(modifier, nameTO);
+                LogDebug($"[RebuildModifiers] modifierId={modifierId}, Name.ToString()='{modifier.Name?.ToString()}'");
+                modifier = MBObjectManager.Instance.RegisterPresumedObject<ItemModifier>(modifier);
+                LogDebug($"[RebuildModifiers] After RegisterPresumedObject, Name.ToString()='{modifier.Name?.ToString()}'");
+            }
+        }
+
+        /// <summary>
+        /// 将 ItemRecordMap 中已创建但尚未分配修饰符的词缀记录，
+        /// 同步到玩家实际背包中对应的 ItemRosterElement 上。
+        ///
+        /// 关键：ItemRosterElement 是 struct 值类型，roster[i] 返回副本。
+        /// 必须通过 Remove + AddToCounts(EquipmentElement(item, modifier)) 模式
+        /// 才能真正设置修饰符。
+        ///
+        /// 为什么需要这个方法：
+        /// PlayerInventoryExchangeEvent 的 purchasedItems 是交易系统创建的
+        /// 临时 ItemRosterElement 副本（见 InventoryLogic.GetTransferredItems），
+        /// 修改副本不会影响玩家实际背包。必须直接操作 MobileParty.MainParty.ItemRoster。
+        /// </summary>
+        public void SyncAffixModifiersToPlayerRoster()
+        {
+            try
+            {
+                if (MobileParty.MainParty == null) return;
+                var roster = MobileParty.MainParty.ItemRoster;
+                if (roster == null) return;
+
+                // 第一步：收集需要设置修饰符的元素（不能边遍历边修改 ItemRoster）
+                var pendingAssignments = new List<(int Index, EquipmentElement NewElement, int Amount)>();
+                for (int i = 0; i < roster.Count; i++)
+                {
+                    var element = roster.GetElementCopyAtIndex(i);
+                    if (element.EquipmentElement.Item == null || element.EquipmentElement.ItemModifier != null)
+                        continue;
+
+                    string baseItemId = element.EquipmentElement.Item.StringId;
+
+                    // 找一条 BaseItemId 匹配 且 尚未分配修饰符的记录
+                    foreach (var record in ItemRecordMap.Values)
+                    {
+                        if (record.BaseItemId == baseItemId
+                            && !ModifierToInstanceMap.ContainsValue(record.InstanceId))
+                        {
+                            string modifierId = "zzzf_affix_" + record.InstanceId;
+                            var modifier = CreateOrGetItemModifier(modifierId, record.InstanceId);
+                            if (modifier != null)
+                            {
+                                pendingAssignments.Add((
+                                    i,
+                                    new EquipmentElement(element.EquipmentElement.Item, modifier),
+                                    element.Amount
+                                ));
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // 第二步：倒序应用修改（避免索引因 Remove 而变化）
+                for (int j = pendingAssignments.Count - 1; j >= 0; j--)
+                {
+                    var (index, newElement, amount) = pendingAssignments[j];
+                    var oldElement = roster.GetElementCopyAtIndex(index);
+                    // 移除旧的（无 Modifier 的）堆叠
+                    roster.Remove(oldElement);
+                    // 添加新的（带 Modifier 的）堆叠
+                    roster.AddToCounts(newElement, amount);
+                }
+            }
+            catch (Exception ex)
+            {
+                // 不在此阶段崩溃
+            }
+        }
+
+        /// <summary>
+        /// 根据 EquipmentElement 获取词缀实例（仅精确实例查找）。
+        /// 通过 ItemModifier.StringId → ModifierToInstanceMap → GetAffixByInstanceId 精确匹配。
+        /// 非 zzzf 词缀或无修饰符返回 null，不做模板回退以免污染原版物品显示。
+        /// </summary>
+        public AffixInstance? GetAffixForEquipmentElement(EquipmentElement element)
+        {
+            if (element.Item == null) return null;
+
+            // 优先级1：ItemModifier 桥接 → 精确实例查找
+            if (element.ItemModifier != null)
+            {
+                string modifierId = element.ItemModifier.StringId;
+                if (!string.IsNullOrEmpty(modifierId)
+                    && ModifierToInstanceMap.TryGetValue(modifierId, out string? instId)
+                    && !string.IsNullOrEmpty(instId))
+                {
+                    var affix = GetAffixByInstanceId(instId);
+                    if (affix != null) return affix;
+                }
+            }
+
+            // 非 zzzf 词缀或无修饰符 → 不降级，避免用模板查找污染原版物品名称
+            return null;
+        }
+
+        // ========== 显示名称查询 ==========
 
         /// <summary>
         /// 获取物品的完整显示名称（含前后缀）—— 模板回退版本。
@@ -621,6 +989,44 @@ namespace New_ZZZF
                 result[key] = binding;
             }
             return result;
+        }
+
+        /// <summary>将 ModifierToInstanceMap 编码为字符串列表，每行：modifierId|instanceId</summary>
+        private List<string> SerializeModifierMap()
+        {
+            var result = new List<string>(ModifierToInstanceMap.Count);
+            foreach (var kv in ModifierToInstanceMap)
+                result.Add($"{kv.Key}|{kv.Value}");
+            return result;
+        }
+
+        /// <summary>从字符串列表还原 ModifierToInstanceMap</summary>
+        private Dictionary<string, string> DeserializeModifierMap(List<string> lines)
+        {
+            var result = new Dictionary<string, string>();
+            if (lines == null) return result;
+            foreach (string line in lines)
+            {
+                if (string.IsNullOrEmpty(line)) continue;
+                string[] parts = line.Split('|');
+                if (parts.Length >= 2)
+                    result[parts[0]] = parts[1];
+            }
+            return result;
+        }
+
+        // ========== 调试日志 ==========
+        private static readonly string DebugLogPath =
+            @"E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\affix_debug.log";
+
+        private static void LogDebug(string msg)
+        {
+            try
+            {
+                System.IO.File.AppendAllText(DebugLogPath,
+                    $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}");
+            }
+            catch { }
         }
     }
 }
