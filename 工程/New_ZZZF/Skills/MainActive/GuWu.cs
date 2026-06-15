@@ -24,6 +24,37 @@ namespace New_ZZZF
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
             Description = new TaleWorlds.Localization.TextObject("{=ZZZF0022}群体状态，使用后附近士兵获得鼓舞状态，提升射击精度，每秒增加1点耐力，并且回复少量已损生命值。持续时间：30秒。冷却时间：60秒。");
         }
+        
+        /// <summary>
+        /// NPC AI逻辑：鼓舞是群体增益技能，当有友军且他们缺少buff时释放
+        /// </summary>
+        public override bool CheckCondition(Agent caster)
+        {
+            // 1. 基础条件检查
+            if (!base.CheckCondition(caster)) return false;
+            
+            // 2. 检查周围是否有友军
+            List<Agent> allies = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 50, true);
+            if (allies == null || allies.Count == 0) return false;
+            
+            // 3. 检查友军是否已有buff（避免重复释放）
+            int alliesWithoutBuff = 0;
+            foreach (var ally in allies)
+            {
+                if (ally.IsActive())
+                {
+                    var skillComponent = ally.GetComponent<AgentSkillComponent>();
+                    if (skillComponent != null && !skillComponent.StateContainer.HasState("GuWuBuff"))
+                    {
+                        alliesWithoutBuff++;
+                    }
+                }
+            }
+            
+            // 4. 至少有一定数量的友军缺少buff
+            return alliesWithoutBuff >= 2;
+        }
+        
         public override bool Activate(Agent agent)
         {
             List<Agent> values= Script.GetTargetedInRange(agent, agent.GetEyeGlobalPosition(),50, true);

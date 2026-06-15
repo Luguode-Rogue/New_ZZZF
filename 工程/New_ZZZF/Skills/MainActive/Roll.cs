@@ -21,6 +21,29 @@ namespace New_ZZZF
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0006}Roll");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
         }
+        
+        /// <summary>
+        /// NPC AI逻辑：翻滚是防御技能，在危险时释放
+        /// 触发条件：敌人靠近且有威胁
+        /// </summary>
+        public override bool CheckCondition(Agent caster)
+        {
+            // 1. 基础条件检查
+            if (!base.CheckCondition(caster)) return false;
+            
+            // 2. 检查是否有敌人在危险距离内（5米内）
+            var enemies = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 5);
+            if (enemies == null || enemies.Count == 0) return false;
+            
+            // 3. 危险判断：敌人数量多或自身血量低
+            if (enemies.Count >= 2) return true;  // 被包围时翻滚脱离
+            
+            var skillComponent = caster.GetComponent<AgentSkillComponent>();
+            if (skillComponent != null && caster.Health < skillComponent.MaxHP * 0.5f) return true;  // 血量低时谨慎
+            
+            return false;
+        }
+        
         public override bool Activate(Agent agent)
         {
             if (agent.MountAgent == null && !SkillSystemBehavior.WoW_AgentRushPos.ContainsKey(agent.Index))

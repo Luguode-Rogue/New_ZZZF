@@ -23,6 +23,37 @@ namespace New_ZZZF.Skills
             Text = new TaleWorlds.Localization.TextObject("{=12345676}JianQi");
             Difficulty = null;// new List<SkillDifficulty> {new SkillDifficulty(60,"Strong"), new SkillDifficulty(120, "OneHand") };//技能装备的需求
         }
+        
+        /// <summary>
+        /// NPC AI逻辑：剑气是短冷却无消耗技能，只要有敌人在视线前方就释放
+        /// </summary>
+        public override bool CheckCondition(Agent caster)
+        {
+            // 1. 基础条件检查
+            if (!base.CheckCondition(caster)) return false;
+            
+            // 2. 剑气是定向技能，检查前方是否有敌人
+            var enemies = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 15);
+            if (enemies == null || enemies.Count == 0) return false;
+            
+            // 3. 检查是否有敌人在前方视线方向
+            foreach (var enemy in enemies)
+            {
+                if (enemy.IsActive() && Script.CanSeeAgent(caster, enemy))
+                {
+                    // 检查敌人是否在前方（简单的角度判断）
+                    Vec3 directionToEnemy = (enemy.Position - caster.Position).NormalizedCopy();
+                    float dotProduct = Vec3.DotProduct(caster.LookDirection.NormalizedCopy(), directionToEnemy);
+                    if (dotProduct > 0.5f) // 前方约60度范围内
+                    {
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
         public override bool Activate(Agent casterAgent)
         {
             if (casterAgent != null)

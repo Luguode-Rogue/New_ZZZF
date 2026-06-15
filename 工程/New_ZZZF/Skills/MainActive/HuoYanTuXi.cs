@@ -33,6 +33,71 @@ namespace New_ZZZF
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
             this.Description =new TaleWorlds.Localization.TextObject("{=ZZZF0052}向前突进一段距离，并持续造成火焰伤害。如果目标过远，则改为闪现到目标面前，并造成一次火焰新星。消耗耐力：35。冷却时间：30秒。");
         }
+        /// <summary>
+        /// NPC AI逻辑：智能判断是否应该释放火焰突袭
+        /// 触发条件（满足任一即可）：
+        /// 1. 有远程敌人（优先突袭脆皮）
+        /// 2. 自身血量健康（>50%）且有敌人在射程内
+        /// 3. 敌人数量少（1v1情况）且自身装备近战武器
+        /// </summary>
+        public override bool CheckCondition(Agent caster)
+        {
+            // 1. 基础条件检查
+            if (!base.CheckCondition(caster)) return false;
+            
+            // 2. 检查是否有有效目标
+            List<Agent> agents = Script.FindAgentsWithinSpellRange(Script.AgentLookPos(caster), 10);
+            Script.AgentListIFF(caster, agents, out var friendAgent, out var foeAgent);
+            
+            if (foeAgent.Count == 0)
+            {
+                // 如果视线附近没有敌人，检查全局是否有合适目标
+                Script.AgentListIFF(caster, Mission.Current.Agents, out friendAgent, out foeAgent);
+            }
+            
+            if (foeAgent.Count == 0) return false;
+            
+            // 3. 战术判断
+            // 条件1：有远程敌人（优先突袭脆皮）
+            foreach (var enemy in foeAgent)
+            {
+                if (enemy.IsActive() && enemy.Health > 0 && Script.CanSeeAgent(caster, enemy))
+                {
+                    if (enemy.GetPrimaryWieldedItemIndex() != EquipmentIndex.None &&
+                        enemy.Equipment[enemy.GetPrimaryWieldedItemIndex()].CurrentUsageItem.IsRangedWeapon)
+                    {
+                        return true;
+                    }
+                }
+            }
+            
+            // 条件2：自身血量健康（>50%）且有敌人在射程内
+            var skillComponent = caster.GetComponent<AgentSkillComponent>();
+            if (skillComponent != null && caster.Health > skillComponent.MaxHP * 0.5f)
+            {
+                // 检查是否有可见敌人
+                foreach (var enemy in foeAgent)
+                {
+                    if (enemy.IsActive() && enemy.Health > 0 && Script.CanSeeAgent(caster, enemy))
+                    {
+                        return true;
+                    }
+                }
+            }
+            
+            // 条件3：1v1情况且自身装备近战武器
+            if (foeAgent.Count == 1)
+            {
+                var mainHand = caster.Equipment[caster.GetPrimaryWieldedItemIndex()];
+                if (mainHand.CurrentUsageItem != null && !mainHand.CurrentUsageItem.IsRangedWeapon)
+                {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
         public override bool Activate(Agent agent)
         {
             if (UseHuoYanTuXi(agent))

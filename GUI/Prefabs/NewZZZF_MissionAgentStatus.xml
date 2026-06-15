@@ -1,0 +1,64 @@
+<Prefab>
+  <Window>
+    <!-- 右下角法力/耐力双进度条面板 - 类原版血条样式 -->
+    <Widget Name="NewZZZF_MissionAgentStatus"
+            WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+            SuggestedWidth="220" SuggestedHeight="54"
+            HorizontalAlignment="Right" VerticalAlignment="Bottom"
+            MarginRight="30" MarginBottom="280">
+      <Children>
+
+        <!-- ===== 法力条 ===== -->
+        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                SuggestedWidth="220" SuggestedHeight="22"
+                HorizontalAlignment="Left" VerticalAlignment="Top"
+                PositionYOffset="0"
+                Sprite="BlankWhiteSquare_9" Color="#151515FF">
+          <Children>
+            <!-- 法力填充进度 -->
+            <FillBarWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                           FillWidget="ManaFill" ClipContents="true"
+                           InitialAmountAsFloat="@ManaCurrent" MaxAmountAsFloat="@ManaMax">
+              <Children>
+                <Widget Id="ManaFill" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        HorizontalAlignment="Left"
+                        Sprite="BlankWhiteSquare_9" Color="#3366CCFF" />
+              </Children>
+            </FillBarWidget>
+            <!-- 法力文字居中 -->
+            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        Text="@ManaText"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Brush="MPLobbyCurrentCharacterDifficultyTitle" />
+          </Children>
+        </Widget>
+
+        <!-- ===== 耐力条 ===== -->
+        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                SuggestedWidth="220" SuggestedHeight="22"
+                HorizontalAlignment="Left" VerticalAlignment="Top"
+                PositionYOffset="28"
+                Sprite="BlankWhiteSquare_9" Color="#151515FF">
+          <Children>
+            <!-- 耐力填充进度 -->
+            <FillBarWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                           FillWidget="StaminaFill" ClipContents="true"
+                           InitialAmountAsFloat="@StaminaCurrent" MaxAmountAsFloat="@StaminaMax">
+              <Children>
+                <Widget Id="StaminaFill" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        HorizontalAlignment="Left"
+                        Sprite="BlankWhiteSquare_9" Color="#CC9933FF" />
+              </Children>
+            </FillBarWidget>
+            <!-- 耐力文字居中 -->
+            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        Text="@StaminaText"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Brush="MPLobbyCurrentCharacterDifficultyTitle" />
+          </Children>
+        </Widget>
+
+      </Children>
+    </Widget>
+  </Window>
+</Prefab>
