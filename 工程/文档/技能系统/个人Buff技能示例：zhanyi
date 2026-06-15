@@ -1,0 +1,303 @@
+# 个人Buff技能示例：战意（ZhanYi）
+
+## 技能说明
+**战意**是一个强化自身的Buff技能，开启后获得战意状态：
+- **每秒回复5耐力**
+- **击杀敌方单位后，恢复50%自身已损失血量**
+- **按当前耐力值增加等量的伤害加成与速度加成**
+- **基础持续8秒**，每次击杀敌方单位后，持续时间重置为8秒
+- 如果持续时间大于8秒时造成击杀，则持续时间加1秒
+- **消耗耐力：0**，**冷却时间：60秒**
+
+---
+
+## 核心实现原理
+
+### 1. 三层架构
+战意技能采用**三层架构**实现：
+1. **技能类（ZhanYi.cs）**：负责激活技能，添加Buff
+2. **Buff类（ZhanYiBuff.cs）**：负责管理Buff状态，触发各种效果
+3. **属性计算类（ZZZF_SandboxAgentStatCalculateModel.cs）**：负责修改Agent的属性（速度、伤害等）
+
+### 2. 实现流程
+```
+玩家按下E键
+    ↓
+ZhanYi.Activate() 被调用
+    ↓
+创建 ZhanYiBuff 实例
+    ↓
+添加到 AgentSkillComponent.StateContainer
+    ↓
+ZhanYiBuff.OnApply() - Buff生效
+    ↓
+ZhanYiBuff.OnUpdate() - 每帧更新（回耐力、检测击杀）
+    ↓
+击杀敌人 → 触发回血逻辑
+    ↓
+属性计算类检测到Buff → 增加伤害和速度
+    ↓
+Buff到期 → ZhanYiBuff.OnRemove() - 清除加成
+```
+
+---
+
+## 代码实现详解
+
+### 步骤1：技能类（ZhanYi.cs）
+
+```csharp
+public class ZhanYi : SkillBase
+{
+    public ZhanYi()
+    {
+        SkillID = "ZhanYi";
+        Type = SPSkillType.MainActive;
+        Cooldown = 60f;
+        ResourceCost = 0f;
+    }
+
+    public override void Activate(Agent agent)
+    {
+        var component = agent.GetComponent<AgentSkillComponent>();
+        if (component == null) return;
+
+        // 创建Buff实例并添加到状态容器
+        var buff = new ZhanYiBuff(8f, agent);
+        component.StateContainer.AddState(buff);
+
+        // 播放特效和提示
+        MBInformationManager.AddQuickInformation(
+            new TaleWorlds.Localization.TextObject($"{agent.Name} 进入了战意状态！"), 
+            50, null, "");
+    }
+
+    public override bool CheckCondition(Agent caster)
+    {
+        // AI触发条件：血量低于50% 或 周围有5个以上敌人
+        var component = caster.GetComponent<AgentSkillComponent>();
+        if (component == null) return false;
+
+        if (caster.Health / component.MaxHP <= 0.5f) return true;
+
+        List<Agent> enemies = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 30);
+        return enemies.Count > 5;
+    }
+}
+```
+
+### 步骤2：Buff类（ZhanYiBuff.cs）
+
+```csharp
+public class ZhanYiBuff : AgentBuff
+{
+    private Agent _caster;
+    private float _timeSinceLastTick;
+
+    public ZhanYiBuff(float duration, Agent caster) : base(duration)
+    {
+        StateId = "ZhanYiBuff";
+        _caster = caster;
+        _timeSinceLastTick = 0f;
+    }
+
+    public override void OnApply(Agent agent)
+    {
+        // Buff生效时，触发一次属性更新
+        agent.UpdateAgentProperties();
+        
+        // 添加视觉效果
+        Script.spawnParticleEffect(agent.Position, "psys_weapon_lightning_emit");
+    }
+
+    public override void OnUpdate(Agent agent, float dt)
+    {
+        // 1. 每秒回复5耐力
+        _timeSinceLastTick += dt;
+        if (_timeSinceLastTick >= 1f)
+        {
+            var component = agent.GetComponent<AgentSkillComponent>();
+            if (component != null)
+            {
+                component.Mana = Math.Min(component.Mana + 5f, 100f); // 用Mana字段存储耐力
+            }
+            _timeSinceLastTick -= 1f;
+        }
+
+        // 2. 触发属性更新（速度和伤害加成）
+        agent.UpdateAgentProperties();
+
+        // 3. 检测击杀（通过SkillSystemBehavior的命中事件）
+        // 这部分在SkillSystemBehavior.ExecuteHitEvents()中处理
+    }
+
+    public override void OnRemove(Agent agent)
+    {
+        // Buff移除时，再触发一次属性更新，清除加成
+        agent.UpdateAgentProperties();
+        
+        // 移除特效
+        Script.removeParticleEffect(agent, "psys_weapon_lightning_emit");
+    }
+
+    // 击杀触发的方法（由SkillSystemBehavior调用）
+    public void OnKillAgent(Agent killedAgent)
+    {
+        if (_caster == null || _caster.IsDeleted) return;
+
+        // 恢复50%已损失血量
+        var component = _caster.GetComponent<AgentSkillComponent>();
+        if (component != null)
+        {
+            float healthLost = component.MaxHP - _caster.Health;
+            float healAmount = healthLost * 0.5f;
+            _caster.Health = Math.Min(_caster.Health + healAmount, component.MaxHP);
+        }
+
+        // 重置持续时间为8秒，如果已经超过8秒则加1秒
+        if (RemainingTime > 8f)
+        {
+            RemainingTime += 1f;
+        }
+        else
+        {
+            RemainingTime = 8f;
+        }
+    }
+}
+```
+
+### 步骤3：属性计算类（ZZZF_SandboxAgentStatCalculateModel.cs）
+
+```csharp
+public class ZZZF_SandboxAgentStatCalculateModel : SandboxAgentStatCalculateModel
+{
+    public override void UpdateAgentStats(Agent agent, AgentDrivenProperties agentDrivenProperties)
+    {
+        base.UpdateAgentStats(agent, agentDrivenProperties);
+
+        // 检查Agent是否有战意Buff
+        var component = agent.GetComponent<AgentSkillComponent>();
+        if (component == null) return;
+
+        // 如果没有战意Buff，直接返回（不修改属性）
+        if (!component.StateContainer.HasState("ZhanYiBuff")) return;
+
+        // 有战意Buff，根据耐力值增加速度和伤害
+        float stamina = component.Mana; // 用Mana字段存储耐力
+        
+        // 增加移动速度（CombatMaxSpeedMultiplier）
+        float speedBonus = stamina / 100f; // 耐力值 = 速度加成
+        agentDrivenProperties.CombatMaxSpeedMultiplier *= (1f + speedBonus);
+
+        // 增加近战武器速度（SwingSpeedMultiplier）
+        float swingSpeedBonus = stamina / 100f;
+        agentDrivenProperties.SwingSpeedMultiplier *= (1f + swingSpeedBonus);
+    }
+
+    // 伤害加成在伤害计算模型中实现
+    public override float GetWeaponDamageMultiplier(Agent attacker, WeaponComponentData weapon)
+    {
+        float multiplier = base.GetWeaponDamageMultiplier(attacker, weapon);
+
+        var component = attacker.GetComponent<AgentSkillComponent>();
+        if (component == null) return multiplier;
+
+        // 如果有战意Buff，根据耐力值增加伤害
+        if (component.StateContainer.HasState("ZhanYiBuff"))
+        {
+            float stamina = component.Mana;
+            float damageBonus = stamina / 100f; // 耐力值 = 伤害加成
+            multiplier *= (1f + damageBonus);
+        }
+
+        return multiplier;
+    }
+}
+```
+
+### 步骤4：击杀检测（SkillSystemBehavior.cs）
+
+```csharp
+public class SkillSystemBehavior : MissionLogic
+{
+    private void ExecuteHitEvents(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
+    {
+        // 检测受害者是否死亡
+        if (victim == null || victim.State == AgentState.Killed)
+        {
+            // 攻击者是否有战意Buff
+            var component = attacker.GetComponent<AgentSkillComponent>();
+            if (component != null && component.StateContainer.HasState("ZhanYiBuff"))
+            {
+                // 获取战意Buff实例并调用OnKillAgent方法
+                var zhanYiBuff = component.StateContainer.GetState("ZhanYiBuff") as ZhanYiBuff;
+                zhanYiBuff?.OnKillAgent(victim);
+            }
+        }
+
+        // 其他命中事件处理...
+    }
+}
+```
+
+---
+
+## 关键注意事项
+
+### 1. 属性修改的特殊性
+- **问题**：AgentDrivenProperties的修改不能在Buff的OnUpdate中直接完成
+- **原因**：AgentDrivenProperties是通过 `UpdateAgentStats()` 方法统一计算的
+- **解决方案**：在OnUpdate中调用 `agent.UpdateAgentProperties()`，触发自定义的属性计算类
+
+### 2. 伤害计算的分支
+- **战役模式**：在 `ZZZF_SandboxAgentStatCalculateModel.GetWeaponDamageMultiplier()` 中实现
+- **自定义战斗**：在 `CustomBattleAgentStatCalculateModel.GetWeaponDamageMultiplier()` 中实现
+- **注意**：自定义战斗没有英雄技能加成，只有基础的熟练度加成
+
+### 3. 击杀检测的时机
+- **问题**：`OnMeleeHit` 和 `OnMissileHit` 的触发时间在伤害结算之后
+- **影响**：受害者可能已经死亡，Agent引用可能为null
+- **解决**：通过检测 `victim == null` 或 `victim.State == AgentState.Killed` 来判断击杀
+
+### 4. Buff清除
+- **重要**：在Buff的 `OnRemove()` 中必须调用 `agent.UpdateAgentProperties()`
+- **目的**：清除Buff带来的属性加成，恢复原始属性
+- **避免重复触发**：在自己的属性计算逻辑中用 `if (result.StateContainer.HasState("ZhanYiBuff"))` 来避免误触发
+
+---
+
+## 测试验证
+
+### 测试场景1：基础功能
+1. 释放战意技能
+2. 验证每秒耐力回复
+3. 验证移动速度和攻击速度增加
+4. 验证伤害增加
+
+### 测试场景2：击杀触发
+1. 释放战意技能
+2. 击杀一个敌人
+3. 验证血量恢复50%已损失血量
+4. 验证持续时间重置为8秒
+
+### 测试场景3：Buff结束
+1. 释放战意技能
+2. 等待8秒技能结束
+3. 验证属性加成被清除
+4. 验证移动速度和伤害恢复正常
+
+---
+
+## 总结
+
+**战意**技能展示了个人Buff技能的标准实现模式：
+1. **技能类**：负责激活和添加Buff
+2. **Buff类**：负责管理Buff状态和触发效果
+3. **属性计算类**：负责修改Agent的属性
+4. **击杀检测**：通过MissionBehavior的命中事件来实现
+
+关键要点：
+- 属性修改必须通过 `UpdateAgentProperties()` 触发
+- 伤害计算要在对应的计算模型中实现
+- Buff清除时必须恢复原始属性

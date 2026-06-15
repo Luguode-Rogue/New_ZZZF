@@ -1,0 +1,266 @@
+# 光环Buff技能示例：威压（WeiYa）
+
+## 技能说明
+**威压**是一个光环类Buff技能，开启后对周围敌人持续生效，减少其造成的伤害。
+- **效果范围**：以自身为中心的半径30米圆形区域
+- **持续时间**：8秒
+- **效果**：范围内敌人造成的伤害降低25%
+- **特点**：不只是开启时周围的士兵有效，后来进入范围的士兵也有效
+
+---
+
+## 核心实现原理
+
+### 1. 双层Buff结构
+光环技能采用**双层Buff结构**：
+- **第一层Buff（自身Buff）**：`WeiYaBuff` - 绑定在施法者身上，负责持续检测范围
+- **第二层Buff（目标Buff）**：`WeiYaDebuff` - 绑定在受影响的敌人身上，负责减益效果
+
+### 2. 实现流程
+```
+技能激活（Activate）
+    ↓
+给施法者添加 WeiYaBuff（自身Buff）
+    ↓
+WeiYaBuff.OnUpdate() 每帧执行
+    ↓
+检测范围内所有敌人
+    ↓
+给范围内的敌人添加 WeiYaDebuff（目标Buff）
+    ↓
+敌人离开范围或Buff到期，移除 WeiYaDebuff
+```
+
+---
+
+## 代码实现详解
+
+### 步骤1：技能类（WeiYa.cs）
+
+```csharp
+public class WeiYa : SkillBase
+{
+    public WeiYa()
+    {
+        SkillID = "WeiYa";
+        Type = SPSkillType.MainActive;
+        Cooldown = 60f;
+        ResourceCost = 0f;
+    }
+
+    public override void Activate(Agent agent)
+    {
+        var component = agent.GetComponent<AgentSkillComponent>();
+        if (component == null) return;
+
+        // 给施法者添加自身Buff（光环控制器）
+        var buff = new WeiYaBuff(8f, agent);
+        component.StateContainer.AddState(buff);
+
+        // 播放特效和音效
+        Script.SpawnParticleEffect(agent.Position, "psys_weapon_lightning_emit");
+        MBInformationManager.AddQuickInformation(
+            new TaleWorlds.Localization.TextObject($"{agent.Name} 释放了威压！"), 
+            50, null, "");
+    }
+
+    public override bool CheckCondition(Agent caster)
+    {
+        // AI触发条件：周围有敌人
+        List<Agent> enemies = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 10);
+        return enemies.Count > 0;
+    }
+}
+```
+
+### 步骤2：自身Buff类（WeiYaBuff.cs）
+
+```csharp
+public class WeiYaBuff : AgentBuff
+{
+    private Agent _caster;
+    private List<Agent> _affectedAgents = new List<Agent>();
+
+    public WeiYaBuff(float duration, Agent caster)
+    {
+        StateId = "WeiYaBuff";
+        Duration = duration;
+        _caster = caster;
+    }
+
+    public override void OnApply(Agent agent)
+    {
+        // 施法者身上添加光环特效
+        agent.PlayParticleEffect("psys_aura_pressure");
+    }
+
+    public override void OnUpdate(Agent agent, float dt)
+    {
+        if (_caster == null || _caster.IsDeleted) return;
+
+        // 获取范围内所有敌人
+        List<Agent> enemiesInRange = Script.GetTargetedInRange(
+            _caster, 
+            _caster.GetEyeGlobalPosition(), 
+            30f);
+
+        // 给新进入范围的敌人添加Debuff
+        foreach (Agent enemy in enemiesInRange)
+        {
+            if (!_affectedAgents.Contains(enemy))
+            {
+                var debuff = new WeiYaDebuff(8f, _caster);
+                enemy.GetComponent<AgentSkillComponent>()?.StateContainer.AddState(debuff);
+                _affectedAgents.Add(enemy);
+            }
+        }
+
+        // 移除离开范围的敌人的Debuff
+        for (int i = _affectedAgents.Count - 1; i >= 0; i--)
+        {
+            Agent affectedAgent = _affectedAgents[i];
+            if (affectedAgent == null || affectedAgent.IsDeleted ||
+                !enemiesInRange.Contains(affectedAgent))
+            {
+                affectedAgent?.GetComponent<AgentSkillComponent>()?
+                    .StateContainer.RemoveState("WeiYaDebuff");
+                _affectedAgents.RemoveAt(i);
+            }
+        }
+    }
+
+    public override void OnRemove(Agent agent)
+    {
+        // 移除所有受影响敌人的Debuff
+        foreach (Agent affectedAgent in _affectedAgents)
+        {
+            affectedAgent?.GetComponent<AgentSkillComponent>()?
+                .StateContainer.RemoveState("WeiYaDebuff");
+        }
+        _affectedAgents.Clear();
+
+        // 停止特效
+        agent.StopParticleEffect("psys_aura_pressure");
+    }
+}
+```
+
+### 步骤3：目标Debuff类（WeiYaDebuff.cs）
+
+```csharp
+public class WeiYaDebuff : AgentBuff
+{
+    private Agent _sourceAgent;
+
+    public WeiYaDebuff(float duration, Agent sourceAgent)
+    {
+        StateId = "WeiYaDebuff";
+        Duration = duration;
+        _sourceAgent = sourceAgent;
+    }
+
+    public override void OnApply(Agent agent)
+    {
+        // 目标身上添加受影响的视觉效果
+        agent.PlayParticleEffect("psys_debuff_pressure");
+        
+        // 可以在这里添加文字提示
+        MBInformationManager.AddQuickInformation(
+            new TaleWorlds.Localization.TextObject($"{agent.Name} 受到了威压影响！"), 
+            30, null, "");
+    }
+
+    public override void OnRemove(Agent agent)
+    {
+        // 移除特效
+        agent.StopParticleEffect("psys_debuff_pressure");
+    }
+}
+```
+
+### 步骤4：伤害修正逻辑
+
+在伤害计算模型中，根据目标是否有 `WeiYaDebuff` 来修正伤害：
+
+```csharp
+// 文件：WOW_SandboxAgentStatCalculateModel.cs
+public override float GetWeaponDamageMultiplier(Agent attacker, WeaponComponentData weapon)
+{
+    float multiplier = 1f;
+
+    // 检查攻击者是否有威压Debuff
+    var component = attacker.GetComponent<AgentSkillComponent>();
+    if (component != null && component.StateContainer.HasState("WeiYaDebuff"))
+    {
+        multiplier *= 0.75f; // 伤害降低25%
+    }
+
+    return multiplier;
+}
+```
+
+---
+
+## 关键注意事项
+
+### 1. 范围检测优化
+- 使用 `Script.GetTargetedInRange()` 进行范围检测
+- 每帧检测可能影响性能，可以考虑降低检测频率（如每0.5秒检测一次）
+
+### 2. Buff状态同步
+- 自身Buff负责管理和同步所有受影响的目标Buff
+- 当自身Buff移除时，必须清理所有目标Buff
+
+### 3. 边界情况处理
+- 施法者死亡或删除时，自身Buff的 `OnRemove` 必须被调用
+- 目标离开范围时，只移除目标Buff，不影响其他目标
+
+### 4. 视觉效果
+- 自身Buff：光环特效（围绕施法者）
+- 目标Buff：debuff图标或粒子效果
+
+---
+
+## 测试验证
+
+### 测试场景1：基础功能
+1. 释放威压技能
+2. 验证周围敌人伤害是否降低25%
+3. 验证敌人离开范围后伤害恢复正常
+
+### 测试场景2：动态进入/离开
+1. 释放威压技能
+2. 命令其他士兵移动到范围内
+3. 验证新进入的士兵受到伤害降低
+4. 命令士兵离开范围
+5. 验证离开后伤害恢复正常
+
+### 测试场景3：技能结束
+1. 释放威压技能
+2. 等待8秒技能结束
+3. 验证所有敌人的Debuff被移除
+
+---
+
+## 扩展思路
+
+### 1. 友军光环
+修改检测逻辑，检测友军而不是敌人，给友军添加增益Buff
+
+### 2. 多层光环
+允许同一个Agent叠加多个光环Buff（如攻击光环+防御光环）
+
+### 3. 可视化管理
+在HUD上显示当前激活的光环数量和影响的目标数量
+
+---
+
+## 总结
+
+**威压**技能展示了光环类Buff的标准实现模式：
+1. **双层Buff结构**：自身Buff + 目标Buff
+2. **范围检测**：在自身Buff的 `OnUpdate` 中持续检测
+3. **动态管理**：自动添加/移除目标Buff
+4. **伤害修正**：在伤害计算模型中根据Buff状态修正伤害
+
+这种模式可以推广到所有光环类技能（如攻击光环、防御光环、速度光环等）。
