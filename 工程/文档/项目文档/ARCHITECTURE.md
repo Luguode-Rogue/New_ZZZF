@@ -1,5 +1,7 @@
 # 架构设计文档 - ProjectileTrajectorySystem
 
+> **概要**：本文档描述ProjectileTrajectorySystem Mod重构后的四层架构（Settings/Core/Systems/DLC），涵盖系统概览、设计原则、各层详解（文件清单+职责+关键实现）、公共API签名、子系统交互时序图。适合架构师和开发者理解整体设计。
+> 
 > 重构后的四层架构，v1.4.0.0
 
 ---

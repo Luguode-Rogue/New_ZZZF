@@ -1,5 +1,7 @@
 # 开发指南 - ProjectileTrajectorySystem
 
+> **概要**：本文档是ProjectileTrajectorySystem Mod的开发指南，面向想要理解或修改本Mod代码的开发者。涵盖技术栈、文件组织与职责、Public API签名、Core层详解、Systems层详解、如何添加新功能、调试技巧、常见问题。附带完整的目录结构和代码示例。
+> 
 > 面向想要理解或修改本 Mod 代码的开发者。重构后版本。
 
 ---

@@ -1,5 +1,7 @@
 # PST 技术实现参考手册
 
+> **概要**：本文档是PST（英雄切换出战+战斗中库存管理）Mod的技术实现参考手册，虽已合入New_ZZZF但保留作为技术参考。涵盖核心功能（英雄切换出战、战斗中按K键打开完整物品库存、粒子特效浏览器）、技术栈（Harmony补丁/反射/自定义GameState/MVVM）、文件结构及职责、关键技术实现详解（Harmony补丁系统、自定义GameState绕过原版InventoryState、反射窃取私有字段、SPSkillVM的5000行ViewModel）。适合需要理解类似功能实现时参考。
+> 
 > 来源: `C:\Users\42029\CodeBuddy\旧版本更新代码\PST`
 > 版本: v0.0.1
 > 用途: 已合入 New_ZZZF，保留本文档作为技术实现参考
