@@ -1,0 +1,1357 @@
+
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Config\FeatureGate.cs】
+using System;
+using TaleWorlds.Library;
+
+namespace New_ZZZF.TacticalMap.Config
+{
+    /// <summary>
+    /// 可独立开关的子功能。所有子功能必须先过总开关 EnableMinimap。
+    /// </summary>
+    public enum TacticalFeature
+    {
+        RiskOverlay,     // 地形风险提示层（悬崖/水域/林地）
+        CameraLink,      // 小地图点击 -> 镜头联动
+        DensityHeatmap,  // 单位密度热力
+        UnitMarkers      // 编队/单位标记
+    }
+
+    public static class FeatureGate
+    {
+        public static bool Enabled => TacticalSettings.Instance.EnableMinimap;
+
+        public static bool IsEnabled(TacticalFeature feature)
+        {
+            if (!Enabled) return false;
+            switch (feature)
+            {
+                case TacticalFeature.RiskOverlay: return TacticalSettings.Instance.EnableRiskOverlay;
+                case TacticalFeature.CameraLink: return TacticalSettings.Instance.EnableCameraLink;
+                case TacticalFeature.DensityHeatmap: return TacticalSettings.Instance.EnableDensityHeatmap;
+                case TacticalFeature.UnitMarkers: return TacticalSettings.Instance.EnableUnitMarkers;
+                default: return true;
+            }
+        }
+    }
+}
+
+========================================
+
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Config\TacticalMapBootstrap.cs】
+using HarmonyLib;
+using TaleWorlds.MountAndBlade;
+using New_ZZZF.TacticalMap.Core;
+using TaleWorlds.Library;
+
+namespace New_ZZZF.TacticalMap.Config
+{
+    /// <summary>
+    /// 小地图功能的总入口（与 ZZZF 主 SubModule 解耦）。
+    /// 在 SubModule 的两个生命周期点被调用：
+    ///   - OnSubModuleLoad：注册 Harmony 相机补丁（仅本功能，独立 Harmony id，避免双重 patch）
+    ///   - OnMissionBehaviorInitialize：注入 MissionBehavior
+    /// 这样整个 TacticalMap 文件夹可直接搬入独立 mod（仅需保留这两行调用）。
+    /// </summary>
+    public static class TacticalMapBootstrap
+    {
+        private static Harmony _harmony;
+
+        public static void OnSubModuleLoad()
+        {
+            if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导跳过：FeatureGate(EnableMinimap) 关闭")); return; }
+            _harmony = new Harmony("TacticalMap");
+            TacticalCameraPatch.Patch(_harmony);
+            InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导完成：已注册相机补丁"));
+        }
+
+        public static void OnMissionStart(Mission mission)
+        {
+            if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 未注入 MissionBehavior：FeatureGate(EnableMinimap) 关闭")); return; }
+            mission.AddMissionBehavior(new TacticalMapMissionLogic());
+            InformationManager.DisplayMessage(new InformationMessage("[TMap] 已注入 TacticalMapMissionLogic"));
+        }
+    }
+}
+
+========================================
+
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Config\TacticalSettings.cs】
+using TaleWorlds.InputSystem;
+
+namespace New_ZZZF.TacticalMap.Config
+{
+    /// <summary>
+    /// 所有可调参数集中于此，方便以后抽成独立 mod 时由 MCM 接管。
+    /// </summary>
+    public sealed class TacticalSettings
+    {
+        private static TacticalSettings _instance;
+        public static TacticalSettings Instance => _instance ?? (_instance = new TacticalSettings());
+
+        // ---- 总开关 ----
+        public bool EnableMinimap = true;
+
+        // ---- 子功能 ----
+        public bool EnableRiskOverlay = true;
+        public bool EnableDensityHeatmap = true;
+        public bool EnableUnitMarkers = true;
+        public bool EnableCameraLink = true;
+
+        // ---- 热键 ----
+        public InputKey ToggleKey = InputKey.N;          // 开关小地图
+        public InputKey CameraFollowKey = InputKey.C;    // 切换"镜头联动"模式（开启后点小地图飞镜头）
+
+        // ---- 布局（屏幕像素）----
+        public int MapSize = 320;
+        public int MapMargin = 16;
+
+        // ---- 烘焙分辨率（地形栅格每边采样数）----
+        public int BakeResolution = 128;
+
+        // ---- 动态纹理刷新间隔（秒）。0.15 => ~6.6Hz，足够流畅且极低开销 ----
+        public float UpdateInterval = 0.15f;
+
+        // ---- 地形分析阈值（基于高度/法线/材质推断，详见 TerrainAnalyzer）----
+        public float CliffSlopeThreshold = 0.55f;   // 1 - normal.z
+        public float CliffHeightJump = 2.5f;        // 相邻栅格高度突变（米）
+        public float WaterHeightFraction = 0.05f;   // 接近最低高度的区域视为水域（启发式）
+
+        // 植被/林地材质层索引（场景相关，需按实际场景微调；留空则林地主要依赖密度推断）
+        // 注意：Bannerlord 地形物理材质索引无统一语义，这里给出最可能的候选值。
+        public short[] ForestMaterialIndices = new short[] { 1, 2, 6 };
+    }
+}
+
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Core\CameraController.cs】
+using TaleWorlds.Library;
+
+namespace New_ZZZF.TacticalMap.Core
+{
+    /// <summary>
+    /// 镜头联动控制器（供 Harmony 后置补丁读取）。
+    /// 开启"镜头联动"模式后，点击小地图会把镜头平滑飞向目标点。
+    /// </summary>
+    public sealed class CameraController
+    {
+        public static CameraController Instance { get; set; }
+
+        public bool Active { get; set; }
+        public Vec2 TargetWorldPos { get; private set; }
+
+        public void Enable(Vec2 worldPos)
+        {
+            Active = true;
+            TargetWorldPos = worldPos;
+        }
+
+        public void Disable()
+        {
+            Active = false;
+        }
+
+        public bool Toggle()
+        {
+            Active = !Active;
+            return Active;
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Core\OrderSystem.cs】
+using System.Collections.Generic;
+using TaleWorlds.Core;
+using TaleWorlds.Engine;
+using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade;
+
+namespace New_ZZZF.TacticalMap.Core
+{
+    /// <summary>
+    /// 点击模式 -> 实际编队指令 的路由层。
+    /// 这里只调用 Bannerlord 1.4.6 已验证存在的 Formation/Order API。
+    /// </summary>
+    public enum TacticalClickMode
+    {
+        Move,        // 移动到点（保留阵型）
+        AttackMove,  // 推进/攻击移动
+        Face,        // 朝向某点
+        Stop         // 原地停止
+    }
+
+    public sealed class OrderSystem
+    {
+        private readonly Terrain.TerrainCache _cache;
+
+        public OrderSystem(Terrain.TerrainCache cache)
+        {
+            _cache = cache;
+        }
+
+        public void IssueOrder(Mission mission, Vec2 worldPos, TacticalClickMode mode)
+        {
+            if (mission == null || mission.Scene == null) return;
+            var formations = SelectionSystem.GetTargetFormations(mission);
+            if (formations.Count == 0)
+            {
+                InformationManager.DisplayMessage(new InformationMessage("战术地图：未选择任何编队", new Color(1f, 0.6f, 0.1f, 1f)));
+                return;
+            }
+
+            float height = 0f;
+            try { height = mission.Scene.GetTerrainHeight(worldPos, true); } catch { }
+
+            int issued = 0;
+            foreach (var formation in formations)
+            {
+                if (formation == null) continue;
+                switch (mode)
+                {
+                    case TacticalClickMode.Move:
+                        formation.SetMovementOrder(MovementOrder.MovementOrderMove(
+                            new WorldPosition(mission.Scene, new Vec3(worldPos.X, worldPos.Y, height))));
+                        break;
+                    case TacticalClickMode.AttackMove:
+                        formation.SetMovementOrder(MovementOrder.MovementOrderAdvance);
+                        break;
+                    case TacticalClickMode.Face:
+                        {
+                            Vec2 dir = worldPos - formation.CachedAveragePosition;
+                            if (dir.LengthSquared > 1E-4f)
+                                formation.SetFacingOrder(FacingOrder.FacingOrderLookAtDirection(dir.Normalized()));
+                        }
+                        break;
+                    case TacticalClickMode.Stop:
+                        formation.SetMovementOrder(MovementOrder.MovementOrderStop);
+                        break;
+                }
+                issued++;
+            }
+
+            if (issued > 0)
+            {
+                string label = mode == TacticalClickMode.Move ? "移动"
+                    : mode == TacticalClickMode.AttackMove ? "推进"
+                    : mode == TacticalClickMode.Face ? "朝向" : "停止";
+                InformationManager.DisplayMessage(new InformationMessage($"战术地图：已向 {issued} 个编队下达[{label}]指令", new Color(0.2f, 0.9f, 1f, 1f)));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 选择系统：返回应接收指令的编队（优先玩家当前选中的编队）。
+    /// </summary>
+    public static class SelectionSystem
+    {
+        public static List<Formation> GetTargetFormations(Mission mission)
+        {
+            var result = new List<Formation>();
+            if (mission == null || mission.PlayerTeam == null) return result;
+
+            var oc = mission.PlayerTeam.PlayerOrderController;
+            if (oc != null && oc.SelectedFormations != null && oc.SelectedFormations.Count > 0)
+            {
+                foreach (var f in oc.SelectedFormations) result.Add(f);
+                return result;
+            }
+
+            // 未选中时，发给玩家所有非空编队
+            var forms = mission.PlayerTeam.FormationsIncludingEmpty;
+            if (forms != null)
+            {
+                foreach (var f in forms)
+                    if (f != null && f.CountOfUnits > 0) result.Add(f);
+            }
+            return result;
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Core\TacticalCameraPatch.cs】
+using System.Reflection;
+using HarmonyLib;
+using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade;
+using TaleWorlds.MountAndBlade.View.Screens;
+
+namespace New_ZZZF.TacticalMap.Core
+{
+    /// <summary>
+    /// 通过 Harmony 后置补丁接管战场相机（与项目已有的 MountedSlashCamera 同一机制，但独立注册、互不干扰）。
+    /// 仅在小地图"镜头联动"模式激活时写入相机偏移/朝向私有字段。
+    /// </summary>
+    public static class TacticalCameraPatch
+    {
+        public static void Patch(Harmony harmony)
+        {
+            var method = typeof(MissionScreen).GetMethod(
+                "UpdateCamera",
+                BindingFlags.NonPublic | BindingFlags.Instance,
+                null,
+                new[] { typeof(float) },
+                null);
+            if (method == null) return;
+
+            harmony.Patch(
+                method,
+                postfix: new HarmonyMethod(typeof(TacticalCameraPatch).GetMethod(
+                    nameof(UpdateCameraPostfix),
+                    BindingFlags.NonPublic | BindingFlags.Static)));
+        }
+
+        private static void UpdateCameraPostfix(MissionScreen __instance)
+        {
+            var cam = CameraController.Instance;
+            if (cam == null || !cam.Active) return;
+            var mission = Mission.Current;
+            if (mission == null || mission.MainAgent == null) return;
+
+            var main = mission.MainAgent;
+            Vec3 agentPos = main.Position;
+            Vec3 delta = new Vec3(
+                cam.TargetWorldPos.X - agentPos.X,
+                cam.TargetWorldPos.Y - agentPos.Y,
+                0f);
+
+            // 抵达目标附近后交还镜头控制（避免一直被偏移锁住）
+            float distSq = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;
+            if (distSq < 9f)
+            {
+                cam.Active = false;
+                return;
+            }
+
+            // 朝目标点的方位角
+            float bearing = MathF.Atan2(delta.y, delta.x);
+
+            var t = Traverse.Create(__instance);
+            t.Field("_cameraSpecialTargetPositionToAdd").SetValue(new Vec3(delta.x, delta.y, 6f));
+            t.Field("_cameraSpecialTargetAddedBearing").SetValue(bearing);
+            t.Field("_cameraSpecialCurrentAddedBearing").SetValue(bearing);
+            t.Field("_cameraSpecialTargetAddedElevation").SetValue(0f);
+            t.Field("_cameraSpecialCurrentAddedElevation").SetValue(0f);
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Core\TacticalMapController.cs】
+using System.Collections.Generic;
+using TaleWorlds.Engine;
+using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade;
+using TaleWorlds.MountAndBlade.View.Screens;
+using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.Terrain;
+using New_ZZZF.TacticalMap.Tracking;
+using New_ZZZF.TacticalMap.UI;
+
+namespace New_ZZZF.TacticalMap.Core
+{
+    /// <summary>
+    /// 小地图总控制器：烘焙地形、驱动追踪器、派发编队指令、管理 UI 层与镜头联动。
+    /// 绘制由 MinimapWidget 直接在 OnRender 里完成（读取本控制器暴露的数据），不再依赖位图纹理。
+    /// 所有对外依赖都收敛在这里，方便整个 TacticalMap 文件夹整体抽离成独立 mod。
+    /// </summary>
+    public sealed class TacticalMapController
+    {
+        private readonly Mission _mission;
+        private readonly TerrainCache _cache;
+        private readonly FormationTracker _formationTracker;
+        private readonly AgentTracker _agentTracker;
+        private readonly OrderSystem _orderSystem;
+        private TacticalMapLayer _layer;
+        private bool _visible;
+        private float _accum;
+        private bool _cameraLink;
+        private Vec2? _playerPos;
+        private Vec2? _camTarget;
+
+        public TerrainCache Cache => _cache;
+        public bool IsVisible => _visible;
+        public List<FormationSnapshot> FormationSnapshots => _formationTracker.Snapshots;
+        public Vec2? PlayerPos => _playerPos;
+        public Vec2? CameraTarget => _camTarget;
+
+        public TacticalMapController(Mission mission)
+        {
+            _mission = mission;
+            var settings = TacticalSettings.Instance;
+            _cache = new TerrainCache(settings);
+            _formationTracker = new FormationTracker();
+            _agentTracker = new AgentTracker(_cache);
+            _orderSystem = new OrderSystem(_cache);
+            CameraController.Instance = new CameraController();
+        }
+
+        /// <summary>战斗开局烘焙地形；失败返回 false（UI 不会显示）。</summary>
+        public bool Initialize(Mission mission)
+        {
+            if (mission == null || mission.Scene == null) return false;
+            return _cache.TryBake(mission.Scene);
+        }
+
+        public void SetVisible(MissionScreen ms, bool visible)
+        {
+            if (visible && _layer == null)
+            {
+                _layer = new TacticalMapLayer(this);
+                _layer.Create(ms);
+                _accum = TacticalSettings.Instance.UpdateInterval; // 立刻出第一帧
+            }
+            else if (!visible && _layer != null)
+            {
+                _layer.Destroy(ms);
+                _layer = null;
+                if (CameraController.Instance != null) CameraController.Instance.Disable();
+            }
+            _visible = visible;
+        }
+
+        /// <summary>每帧调用（仅在可见时）。标记/密度按 UpdateInterval 节流刷新；绘制由控件每帧完成。</summary>
+        public void Tick(Mission mission, MissionScreen ms, float dt)
+        {
+            if (!_visible || _layer == null) return;
+
+            _playerPos = (_mission.MainAgent != null) ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
+            _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
+                ? CameraController.Instance.TargetWorldPos : (Vec2?)null;
+
+            _accum += dt;
+            if (_accum >= TacticalSettings.Instance.UpdateInterval)
+            {
+                _accum = 0f;
+                _formationTracker.Update(mission);
+                _agentTracker.Update(mission);
+            }
+        }
+
+        /// <summary>小地图点击：根据按键决定移动 / 攻击移动 / 朝向，并可联动镜头。</summary>
+        public void HandleClick(Vec2 mousePixel, bool shift, bool rightButton)
+        {
+            if (_layer == null) return;
+            if (!_layer.HitTestMinimap(mousePixel, out Vec2 uv)) return;
+            Vec2 world = _cache.UVToWorld(uv);
+
+            TacticalClickMode mode = rightButton ? TacticalClickMode.Face
+                : shift ? TacticalClickMode.AttackMove
+                : TacticalClickMode.Move;
+            _orderSystem.IssueOrder(_mission, world, mode);
+
+            if (FeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
+            {
+                CameraController.Instance.Enable(world);
+            }
+        }
+
+        /// <summary>C 键：切换“小地图点击联动镜头”模式。</summary>
+        public void ToggleCameraFollow()
+        {
+            _cameraLink = !_cameraLink;
+            if (CameraController.Instance != null && !_cameraLink)
+                CameraController.Instance.Disable();
+            string msg = _cameraLink ? "战术地图：已开启 点击联动镜头" : "战术地图：已关闭 点击联动镜头";
+            InformationManager.DisplayMessage(new InformationMessage(msg, new Color(0.2f, 0.9f, 1f, 1f)));
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Core\TacticalMapMissionLogic.cs】
+using TaleWorlds.InputSystem;
+using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade;
+using TaleWorlds.MountAndBlade.View.Screens;
+using TaleWorlds.ScreenSystem;
+using New_ZZZF.TacticalMap.Config;
+using System;
+
+namespace New_ZZZF.TacticalMap.Core
+{
+    /// <summary>
+    /// 战场 MissionBehavior：挂载小地图控制器、处理开关/点击/相机热键。
+    /// </summary>
+    public sealed class TacticalMapMissionLogic : MissionLogic
+    {
+        private TacticalMapController _controller;
+        private MissionScreen _ms;
+        private bool _ready;
+        private bool _initialized;
+
+        public override void OnAfterMissionCreated()
+        {
+            InformationManager.DisplayMessage(new InformationMessage("[TMap] OnAfterMissionCreated 进入"));
+            if (_initialized) return;
+            try
+            {
+                base.OnAfterMissionCreated();
+                if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 功能被关闭 (EnableMinimap=false)")); _initialized = true; return; }
+                _controller = new TacticalMapController(Mission);
+                _ready = _controller.Initialize(Mission);
+                _initialized = true;
+                var c = _controller.Cache;
+                string err = string.IsNullOrEmpty(c.LastError) ? "" : ("err=" + c.LastError);
+                InformationManager.DisplayMessage(new InformationMessage($"[TMap] 初始化 _ready={_ready} baked={c.IsBaked} {c.Width}x{c.Height} {err}"));
+            }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage($"[TMap] OnAfterMissionCreated 异常: {ex.Message}"));
+                _initialized = true;
+            }
+        }
+
+        public override void OnMissionTick(float dt)
+        {
+            base.OnMissionTick(dt);
+
+            // 懒初始化兜底：若 OnAfterMissionCreated 未被引擎调用，则在首个可用 tick 初始化
+            if (!_initialized && Mission != null && Mission.Scene != null)
+            {
+                try
+                {
+                    _controller = new TacticalMapController(Mission);
+                    _ready = _controller.Initialize(Mission);
+                    _initialized = true;
+                    var c = _controller.Cache;
+                    string err = string.IsNullOrEmpty(c.LastError) ? "" : ("err=" + c.LastError);
+                    InformationManager.DisplayMessage(new InformationMessage($"[TMap] 懒初始化 _ready={_ready} baked={c.IsBaked} {c.Width}x{c.Height} {err}"));
+                }
+                catch (Exception ex)
+                {
+                    InformationManager.DisplayMessage(new InformationMessage($"[TMap] 懒初始化 异常: {ex.Message}"));
+                    _initialized = true;
+                }
+            }
+
+            if (!_ready || _controller == null) return;
+
+            if (_ms == null) _ms = ScreenManager.TopScreen as MissionScreen;
+            if (_ms == null) return;
+
+            var s = TacticalSettings.Instance;
+
+            if (Input.IsKeyPressed(s.ToggleKey))
+            {
+                _controller.SetVisible(_ms, !_controller.IsVisible);
+                InformationManager.DisplayMessage(new InformationMessage($"[TMap] 切换显示 -> Visible={_controller.IsVisible} ready={_ready}"));
+            }
+
+            if (_controller.IsVisible)
+            {
+                if (Input.IsKeyPressed(s.CameraFollowKey))
+                    _controller.ToggleCameraFollow();
+
+                Vec2 mouse = Input.MousePositionPixel;
+                bool left = Input.IsKeyPressed(InputKey.LeftMouseButton);
+                bool right = Input.IsKeyPressed(InputKey.RightMouseButton);
+                if (left || right)
+                {
+                    bool shift = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
+                    _controller.HandleClick(mouse, shift, right);
+                }
+
+                _controller.Tick(Mission, _ms, dt);
+            }
+        }
+
+        protected override void OnEndMission()
+        {
+            if (_controller != null && _ms != null)
+                _controller.SetVisible(_ms, false);
+            base.OnEndMission();
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Terrain\TerrainAnalyzer.cs】
+using TaleWorlds.Library;
+
+namespace New_ZZZF.TacticalMap.Terrain
+{
+    /// <summary>
+    /// 战术语义地形推断器。
+    /// 不依赖任何“森林/悬崖”高层语义接口，而是用 高度 + 法线 + 材质层 + 邻域突变 推断。
+    /// 这是基于现有 Scene 接口的工程化推断（见需求讨论：你自己做一个战术判定器）。
+    /// </summary>
+    public static class TerrainAnalyzer
+    {
+        public static void ClassifyAll(TerrainCache cache, float[,] heights, TacticalMap.Config.TacticalSettings s)
+        {
+            int w = cache.Width;
+            int h = cache.Height;
+            float range = System.Math.Max(0.001f, cache.MaxH - cache.MinH);
+
+            for (int x = 0; x < w; x++)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    var cell = cache.Cells[x, y];
+
+                    // 坡度：法线 z 分量越接近 1 越平
+                    float slope = 1f - cell.Normal.z;
+                    if (slope < 0f) slope = 0f; if (slope > 1f) slope = 1f;
+                    cell.Slope = slope;
+
+                    // 邻域高度突变
+                    float jump = 0f;
+                    if (x > 0) jump = System.Math.Max(jump, System.Math.Abs(heights[x, y] - heights[x - 1, y]));
+                    if (x < w - 1) jump = System.Math.Max(jump, System.Math.Abs(heights[x, y] - heights[x + 1, y]));
+                    if (y > 0) jump = System.Math.Max(jump, System.Math.Abs(heights[x, y] - heights[x, y - 1]));
+                    if (y < h - 1) jump = System.Math.Max(jump, System.Math.Abs(heights[x, y] - heights[x, y + 1]));
+
+                    float heightFrac = (cell.Height - cache.MinH) / range;
+
+                    // 水域：接近最低高度（启发式）
+                    cell.IsWater = heightFrac <= s.WaterHeightFraction;
+
+                    // 悬崖：陡坡 或 邻域突变
+                    cell.IsCliff = (!cell.IsWater) && (slope > s.CliffSlopeThreshold || jump > s.CliffHeightJump);
+
+                    // 林地：平坦、非水、且材质层命中植被索引；或（兜底）明显偏低坡的绿色区域
+                    bool vegMat = false;
+                    if (cell.MaterialLayers != null)
+                    {
+                        for (int i = 0; i < cell.MaterialLayers.Length; i++)
+                        {
+                            for (int j = 0; j < s.ForestMaterialIndices.Length; j++)
+                            {
+                                if (cell.MaterialLayers[i] == s.ForestMaterialIndices[j]) { vegMat = true; break; }
+                            }
+                            if (vegMat) break;
+                        }
+                    }
+                    cell.IsForest = (!cell.IsWater) && (!cell.IsCliff) && slope < 0.12f && vegMat;
+
+                    // 类别与风险
+                    if (cell.IsCliff) { cell.Kind = TerrainKind.Cliff; cell.Risk = 0.9f; }
+                    else if (cell.IsWater) { cell.Kind = TerrainKind.Water; cell.Risk = 0.7f; }
+                    else if (cell.IsForest) { cell.Kind = TerrainKind.Forest; cell.Risk = 0.35f; }
+                    else { cell.Kind = TerrainKind.Plain; cell.Risk = 0f; }
+                }
+            }
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Terrain\TerrainCache.cs】
+using System;
+using TaleWorlds.Engine;
+using TaleWorlds.Library;
+
+namespace New_ZZZF.TacticalMap.Terrain
+{
+    /// <summary>
+    /// 在战斗开局把 Scene 地形烘焙成一张低分辨率战术栅格。
+    /// 只做一次（或场景变化时），之后由 MinimapCompositor 复用。
+    /// 所有坐标约定：uv(0..1) -> 世界 (uv.X*WorldW, uv.Y*WorldH)，原点在场景 (0,0)。
+    /// </summary>
+    public sealed class TerrainCache
+    {
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public float WorldW { get; private set; }
+        public float WorldH { get; private set; }
+        public float CellStep { get; private set; }
+        public float MinH { get; private set; }
+        public float MaxH { get; private set; }
+
+        public TerrainCell[,] Cells { get; private set; }
+
+        // 烘焙一次的静态底图（高度色 + 材质着色）与风险层（半透明叠加）
+        public byte[] TerrainBaseRGBA { get; private set; }
+        public byte[] RiskRGBA { get; private set; }
+
+        private readonly TacticalMap.Config.TacticalSettings _settings;
+        private Scene _scene;
+        private bool _baked;
+
+        public TerrainCache(TacticalMap.Config.TacticalSettings settings)
+        {
+            _settings = settings;
+        }
+
+        public bool TryBake(Scene scene)
+        {
+            _scene = scene;
+            try
+            {
+                scene.GetTerrainData(out Vec2i nodeDim, out float nodeSize, out _, out _);
+                if (nodeDim.X <= 0 || nodeDim.Y <= 0 || nodeSize <= 0f) { LastError = "地形数据无效(nodeDim/nodeSize)"; return false; }
+                if (!scene.GetTerrainMinMaxHeight(out float minH, out float maxH)) { LastError = "GetTerrainMinMaxHeight 失败"; return false; }
+
+                WorldW = nodeDim.X * nodeSize;
+                WorldH = nodeDim.Y * nodeSize;
+                MinH = minH;
+                MaxH = maxH;
+
+                int res = _settings.BakeResolution;
+                Width = res;
+                Height = res;
+                CellStep = WorldW / res; // 假设近正方形；非正方形场景按比例缩放也可，这里取 X
+
+                Cells = new TerrainCell[Width, Height];
+                float[,] heights = new float[Width, Height];
+
+                for (int x = 0; x < Width; x++)
+                {
+                    for (int y = 0; y < Height; y++)
+                    {
+                        Vec2 pos = CellCenter(x, y);
+                        float h = scene.GetTerrainHeight(pos, true);
+                        heights[x, y] = h;
+                        scene.GetTerrainHeightAndNormal(pos, out _, out Vec3 normal);
+
+                        int nodeX = (int)(pos.X / nodeSize);
+                        int nodeY = (int)(pos.Y / nodeSize);
+                        nodeX = Math.Max(0, Math.Min(nodeDim.X - 1, nodeX));
+                        nodeY = Math.Max(0, Math.Min(nodeDim.Y - 1, nodeY));
+                        short[] mat = scene.GetTerrainPhysicsMaterialIndexData(nodeX, nodeY);
+
+                        Cells[x, y] = new TerrainCell
+                        {
+                            Height = h,
+                            Normal = normal,
+                            MaterialLayers = mat ?? new short[0]
+                        };
+                    }
+                }
+
+                TerrainAnalyzer.ClassifyAll(this, heights, _settings);
+                BuildBaseRGBA();
+                BuildRiskRGBA();
+                _baked = true;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Console.WriteLine("[TacticalMap] TerrainCache.TryBake failed: " + ex.Message);
+                _baked = false;
+                return false;
+            }
+        }
+
+        public bool IsBaked => _baked;
+        public string LastError { get; private set; }
+
+        public Vec2 CellCenter(int x, int y)
+        {
+            return new Vec2((x + 0.5f) * CellStep, (y + 0.5f) * CellStep);
+        }
+
+        public Vec2 UVToWorld(Vec2 uv)
+        {
+            return new Vec2(uv.X * WorldW, uv.Y * WorldH);
+        }
+
+        public Vec2 WorldToUV(Vec2 world)
+        {
+            return new Vec2(world.X / WorldW, world.Y / WorldH);
+        }
+
+        public float GetHeightAt(Vec2 world)
+        {
+            if (!_baked || _scene == null) return 0f;
+            try { return _scene.GetTerrainHeight(world, true); }
+            catch { return 0f; }
+        }
+
+        // --- 颜色工具 ---
+        private void BuildBaseRGBA()
+        {
+            TerrainBaseRGBA = new byte[Width * Height * 4];
+            float range = Math.Max(0.001f, MaxH - MinH);
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    var c = Cells[x, y];
+                    float t = (c.Height - MinH) / range; // 0..1
+                    // 高度色带：低绿 -> 中棕 -> 高灰 -> 顶白
+                    byte r, g, b;
+                    if (t < 0.5f)
+                    {
+                        float k = t / 0.5f;
+                        r = (byte)(60 + k * 60); g = (byte)(120 + k * (-10)); b = (byte)(40 + k * 30);
+                    }
+                    else
+                    {
+                        float k = (t - 0.5f) / 0.5f;
+                        r = (byte)(120 + k * 115); g = (byte)(110 + k * 125); b = (byte)(70 + k * 165);
+                    }
+
+                    if (c.IsWater) { r = 40; g = 90; b = 200; }
+                    else if (c.IsForest) { r = (byte)(r * 0.6f); g = (byte)(g * 0.85f); b = (byte)(b * 0.6f); }
+                    else if (c.IsCliff) { r = (byte)(r * 0.9f + 40); g = (byte)(g * 0.5f); b = (byte)(b * 0.5f); }
+
+                    SetPixel(TerrainBaseRGBA, x, y, r, g, b, 255);
+                }
+            }
+        }
+
+        private void BuildRiskRGBA()
+        {
+            RiskRGBA = new byte[Width * Height * 4];
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    var c = Cells[x, y];
+                    if (c.IsCliff) SetPixel(RiskRGBA, x, y, 210, 50, 50, 150);
+                    else if (c.IsWater) SetPixel(RiskRGBA, x, y, 50, 110, 220, 140);
+                    else if (c.IsForest) SetPixel(RiskRGBA, x, y, 50, 180, 70, 100);
+                    else SetPixel(RiskRGBA, x, y, 0, 0, 0, 0);
+                }
+            }
+        }
+
+        public void SetPixel(byte[] buf, int x, int y, byte r, byte g, byte b, byte a)
+        {
+            int i = (y * Width + x) * 4;
+            buf[i] = r; buf[i + 1] = g; buf[i + 2] = b; buf[i + 3] = a;
+        }
+
+        public void GetPixel(byte[] buf, int x, int y, out byte r, out byte g, out byte b, out byte a)
+        {
+            int i = (y * Width + x) * 4;
+            r = buf[i]; g = buf[i + 1]; b = buf[i + 2]; a = buf[i + 3];
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Terrain\TerrainCell.cs】
+using TaleWorlds.Library;
+
+namespace New_ZZZF.TacticalMap.Terrain
+{
+    /// <summary>
+    /// 战术语义地形类别（由高度/法线/材质/邻域推断，非引擎原生语义）。
+    /// </summary>
+    public enum TerrainKind
+    {
+        Plain,
+        Forest,
+        Cliff,
+        Water,
+        Mud,
+        Snow,
+        Road,
+        Bridge,
+        Wall
+    }
+
+    /// <summary>
+    /// 单个低分辨率战术栅格单元。
+    /// </summary>
+    public sealed class TerrainCell
+    {
+        public float Height;
+        public Vec3 Normal;
+        public float Slope;                 // 0..1，越大越陡
+        public short[] MaterialLayers;      // 物理材质层索引
+        public TerrainKind Kind;
+        public float Risk;                  // 0..1，红/危险
+        public bool IsForest;
+        public bool IsCliff;
+        public bool IsWater;
+        public int DensityAgentCount;       // 由 AgentTracker 填充（单位密度）
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Tracking\AgentTracker.cs】
+using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade;
+
+namespace New_ZZZF.TacticalMap.Tracking
+{
+    /// <summary>
+    /// 单位密度追踪：把存活单位按世界坐标累加到地形栅格上。
+    /// 仅用于密度热力叠加层，按节流频率扫描一次 Mission.Agents（500v500 也极快）。
+    /// </summary>
+    public sealed class AgentTracker
+    {
+        private readonly Terrain.TerrainCache _cache;
+
+        public AgentTracker(Terrain.TerrainCache cache)
+        {
+            _cache = cache;
+        }
+
+        public void Update(Mission mission)
+        {
+            if (mission == null || !_cache.IsBaked) return;
+
+            // 清空密度
+            for (int x = 0; x < _cache.Width; x++)
+                for (int y = 0; y < _cache.Height; y++)
+                    _cache.Cells[x, y].DensityAgentCount = 0;
+
+            foreach (var agent in mission.Agents)
+            {
+                if (agent == null || agent.Health <= 0f) continue;
+
+                Vec2 p = agent.Position.AsVec2;
+                Vec2 uv = _cache.WorldToUV(p);
+                if (uv.X < 0f || uv.X > 1f || uv.Y < 0f || uv.Y > 1f) continue;
+
+                int gx = (int)(uv.X * _cache.Width);
+                int gy = (int)(uv.Y * _cache.Height);
+                if (gx < 0) gx = 0; if (gx >= _cache.Width) gx = _cache.Width - 1;
+                if (gy < 0) gy = 0; if (gy >= _cache.Height) gy = _cache.Height - 1;
+                _cache.Cells[gx, gy].DensityAgentCount++;
+            }
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\Tracking\FormationTracker.cs】
+using System.Collections.Generic;
+using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade;
+
+namespace New_ZZZF.TacticalMap.Tracking
+{
+    /// <summary>
+    /// 单个编队的轻量快照（用于绘制小地图标记）。
+    /// </summary>
+    public sealed class FormationSnapshot
+    {
+        public bool IsPlayer;
+        public Vec2 AveragePosition;  // 世界坐标
+        public Vec2 Facing;           // 归一化朝向（无有效朝向时为 0）
+        public uint Color;
+        public int Count;
+        public string Name;
+    }
+
+    /// <summary>
+    /// 每帧（节流）扫描所有队伍的非空编队，生成快照。
+    /// 编队数量通常 ≤ 数十，远小于单位数，因此标记层与单位数无关、对 500v500 零压力。
+    /// </summary>
+    public sealed class FormationTracker
+    {
+        public List<FormationSnapshot> Snapshots { get; } = new List<FormationSnapshot>();
+
+        public void Update(Mission mission)
+        {
+            Snapshots.Clear();
+            if (mission == null) return;
+
+            foreach (var team in mission.Teams)
+            {
+                if (team == null) continue;
+                bool isPlayer = team.IsPlayerTeam;
+                var formations = team.FormationsIncludingEmpty;
+                if (formations == null) continue;
+
+                foreach (var formation in formations)
+                {
+                    if (formation == null || formation.CountOfUnits <= 0) continue;
+
+                    var snap = new FormationSnapshot
+                    {
+                        IsPlayer = isPlayer,
+                        AveragePosition = formation.CachedAveragePosition,
+                        Color = team.Color,
+                        Count = formation.CountOfUnits,
+                        Name = formation.FormationIndex.ToString()
+                    };
+
+                    // 朝向：优先用当前指令目标方向，否则用编队当前方向
+                    // 注意：Formation.CurrentDirection 本身就是 Vec2（forward），不是 Mat3
+                    Vec2 facing = Vec2.Zero;
+                    if (formation.OrderPositionIsValid)
+                    {
+                        Vec2 d = formation.OrderPosition - formation.CachedAveragePosition;
+                        if (d.LengthSquared > 1E-4f) facing = d.Normalized();
+                    }
+                    if (facing.LengthSquared <= 1E-4f && formation.CurrentDirection.LengthSquared > 1E-4f)
+                    {
+                        facing = formation.CurrentDirection.Normalized();
+                    }
+                    snap.Facing = facing;
+
+                    Snapshots.Add(snap);
+                }
+            }
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\UI\MinimapWidget.cs】
+using System;
+using System.Numerics;
+using TaleWorlds.GauntletUI;
+using TaleWorlds.GauntletUI.BaseTypes;
+using TaleWorlds.Library;
+using TaleWorlds.TwoDimension;
+using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.Core;
+using New_ZZZF.TacticalMap.Terrain;
+using New_ZZZF.TacticalMap.Tracking;
+
+namespace New_ZZZF.TacticalMap.UI
+{
+    /// <summary>
+    /// 小地图绘制控件：在 OnRender 里用图元（彩色四边形）直接画地形栅格、编队标记、镜头目标。
+    /// 不使用纹理——BL 1.4.6 的 Gauntlet 只能从资源名加载 TwoDimension.Texture，
+    /// 无法把运行时字节数组显示为纹理，故改为图元绘制（地形按节流烘焙，标记按节流刷新，每帧重绘）。
+    /// </summary>
+    public sealed class MinimapWidget : ImageWidget
+    {
+        public TacticalMapController Controller { get; set; }
+
+        public MinimapWidget(UIContext context) : base(context) { }
+
+        private static bool _warnedNoCtrl, _warnedNotBaked, _warnedArea, _warnedDrawn;
+        private static void WarnOnce(ref bool flag, string msg)
+        {
+            if (flag) return;
+            flag = true;
+            InformationManager.DisplayMessage(new InformationMessage(msg));
+        }
+
+        protected override void OnRender(TwoDimensionContext twoDimensionContext, TwoDimensionDrawContext drawContext)
+        {
+            base.OnRender(twoDimensionContext, drawContext);
+
+            var ctrl = Controller;
+            if (ctrl == null) { WarnOnce(ref _warnedNoCtrl, "[TMap] OnRender: Controller 为空"); return; }
+            if (!ctrl.Cache.IsBaked) { WarnOnce(ref _warnedNotBaked, $"[TMap] OnRender: 地形未烘焙 ({ctrl.Cache.Width}x{ctrl.Cache.Height})"); return; }
+
+            // 用 Widget 稳定接口获取绘制区域，彻底避开版本相关的 Rectangle2D 字段
+            //（TopLeft / LocalPosition / localPosition 等在不同 BL 版本字段名不一致，运行时可能缺失）。
+            // 1.4.6 运行时 Widget.GlobalPosition/Size 稳定存在，直接使用。
+            Vector2 origin = new Vector2(this.GlobalPosition.X, this.GlobalPosition.Y);
+            float w = this.Size.X;
+            float h = this.Size.Y;
+            if (w <= 0f || h <= 0f) { WarnOnce(ref _warnedArea, "[TMap] OnRender: Size 无效"); return; }
+
+            var cache = ctrl.Cache;
+            var s = TacticalSettings.Instance;
+
+            // 背景
+            DrawRect(drawContext, origin.X, origin.Y, w, h, new Color(0.04f, 0.06f, 0.09f, 0.85f));
+            WarnOnce(ref _warnedDrawn, "[TMap] OnRender: 正在绘制小地图");
+
+            // 地形栅格（步进绘制，限制四边形数量以保性能；500v500 也只与栅格分辨率相关）
+            int cols = 40;
+            int step = Math.Max(1, cache.Width / cols);
+            float cw = w / (cache.Width / (float)step);
+            float ch = h / (cache.Height / (float)step);
+            byte r, g, b, a;
+            for (int x = 0; x < cache.Width; x += step)
+            {
+                for (int y = 0; y < cache.Height; y += step)
+                {
+                    cache.GetPixel(cache.TerrainBaseRGBA, x, y, out r, out g, out b, out a);
+                    float rf = r / 255f, gf = g / 255f, bf = b / 255f;
+
+                    if (s.EnableRiskOverlay)
+                    {
+                        cache.GetPixel(cache.RiskRGBA, x, y, out r, out g, out b, out a);
+                        if (a > 0)
+                        {
+                            float ka = a / 255f;
+                            rf = rf * (1f - ka) + (r / 255f) * ka;
+                            gf = gf * (1f - ka) + (g / 255f) * ka;
+                            bf = bf * (1f - ka) + (b / 255f) * ka;
+                        }
+                    }
+
+                    if (s.EnableDensityHeatmap)
+                    {
+                        int dens = cache.Cells[x, y].DensityAgentCount;
+                        if (dens > 0)
+                        {
+                            float ka = Math.Min(0.55f, dens * 0.04f);
+                            rf = rf * (1f - ka) + 1f * ka;
+                            gf = gf * (1f - ka) + 0.85f * ka;
+                            bf = bf * (1f - ka) + 0.2f * ka;
+                        }
+                    }
+
+                    float px = origin.X + (x / (float)cache.Width) * w;
+                    float py = origin.Y + (y / (float)cache.Height) * h;
+                    DrawRect(drawContext, px, py, cw + 0.5f, ch + 0.5f, new Color(rf, gf, bf, 1f));
+                }
+            }
+
+            // 编队标记（数量远小于单位数，对 500v500 零压力）
+            if (s.EnableUnitMarkers)
+            {
+                foreach (var f in ctrl.FormationSnapshots)
+                {
+                    if (f == null) continue;
+                    Vec2 uv = cache.WorldToUV(f.AveragePosition);
+                    if (uv.X < 0f || uv.X > 1f || uv.Y < 0f || uv.Y > 1f) continue;
+                    float px = origin.X + uv.X * w;
+                    float py = origin.Y + uv.Y * h;
+                    Color c = Color.FromUint(f.Color);
+                    float ms = Math.Max(7f, w * 0.035f);
+
+                    if (f.IsPlayer)
+                    {
+                        DrawRect(drawContext, px - (ms + 4f) / 2f, py - (ms + 4f) / 2f, ms + 4f, ms + 4f, new Color(1f, 1f, 1f, 1f));
+                    }
+                    DrawRect(drawContext, px - ms / 2f, py - ms / 2f, ms, ms, c);
+
+                    if (f.Facing.LengthSquared > 1E-4f)
+                    {
+                        DrawLine(drawContext, px, py, px + f.Facing.X * ms * 1.6f, py + f.Facing.Y * ms * 1.6f, c);
+                    }
+                }
+            }
+
+            // 镜头目标指示
+            if (ctrl.CameraTarget.HasValue)
+            {
+                Vec2 uv = cache.WorldToUV(ctrl.CameraTarget.Value);
+                float px = origin.X + uv.X * w;
+                float py = origin.Y + uv.Y * h;
+                DrawRect(drawContext, px - 3f, py - 3f, 6f, 6f, new Color(1f, 0.8f, 0.2f, 1f));
+            }
+        }
+
+        // 兼容不同 BL 版本的 Rectangle2D 位置字段：1.4.6 为小写字段 localPosition，较新版本可能为大写字段 LocalPosition 或属性 LocalPosition。
+        // 运行时用反射探测真实成员（只探测一次并缓存），避免硬编码成员名导致某一版本下编译或运行失败。
+        // 关键：Rectangle2D 是 struct，必须通过 box -> 设置 -> unbox 回写，才能保证修改作用在调用方的副本上。
+        private static System.Reflection.FieldInfo _rectPosField;
+        private static System.Reflection.PropertyInfo _rectPosProp;
+        private static bool _rectPosResolved;
+
+        private static void ResolveRectPosition()
+        {
+            if (_rectPosResolved) return;
+            var t = typeof(TaleWorlds.TwoDimension.Rectangle2D);
+            var bf = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            _rectPosField = t.GetField("localPosition", bf) ?? t.GetField("LocalPosition", bf);
+            if (_rectPosField == null)
+                _rectPosProp = t.GetProperty("LocalPosition", bf);
+            _rectPosResolved = true;
+        }
+
+        private static void SetRectPosition(ref Rectangle2D rect, Vector2 pos)
+        {
+            ResolveRectPosition();
+            object boxed = rect;
+            if (_rectPosField != null)
+                _rectPosField.SetValue(boxed, pos);
+            else if (_rectPosProp != null && _rectPosProp.CanWrite)
+                _rectPosProp.SetValue(boxed, pos);
+            rect = (Rectangle2D)boxed;
+        }
+
+        private static void DrawRect(TwoDimensionDrawContext ctx, float x, float y, float w, float h, Color color)
+        {
+            Rectangle2D r = Rectangle2D.Create();
+            SetRectPosition(ref r, new Vector2(x, y));
+            r.LocalScale = new Vector2(w, h);
+            r.CalculateMatrixFrame(default(Rectangle2D));
+            var mat = new SimpleMaterial();
+            mat.Texture = null;
+            mat.Color = color;
+            ImageDrawObject obj = ImageDrawObject.Create(r, Vec2.Zero, Vec2.One);
+            ctx.Draw(mat, obj);
+        }
+
+        private static void DrawLine(TwoDimensionDrawContext ctx, float x1, float y1, float x2, float y2, Color color)
+        {
+            float dx = x2 - x1, dy = y2 - y1;
+            float len = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (len < 0.001f) return;
+            float ang = (float)Math.Atan2(dy, dx);
+            Rectangle2D r = Rectangle2D.Create();
+            SetRectPosition(ref r, new Vector2(x1, y1));
+            r.LocalScale = new Vector2(len, 2f);
+            r.LocalRotation = ang;
+            r.CalculateMatrixFrame(default(Rectangle2D));
+            var mat = new SimpleMaterial();
+            mat.Texture = null;
+            mat.Color = color;
+            ImageDrawObject obj = ImageDrawObject.Create(r, Vec2.Zero, Vec2.One);
+            ctx.Draw(mat, obj);
+        }
+    }
+}
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\UI\TacticalMapLayer.cs】
+﻿using System;
+using TaleWorlds.Engine.GauntletUI;
+using TaleWorlds.GauntletUI;
+using TaleWorlds.GauntletUI.BaseTypes;
+using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade.View.Screens;
+using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.Core;
+using TaleWorlds.TwoDimension;
+
+namespace New_ZZZF.TacticalMap.UI
+{
+    /// <summary>
+    /// 管理小地图的 GauntletLayer：加载 XML、把自定义绘制控件 MinimapWidget 接到控制器、计算点击命中区域。
+    /// 与战斗 MissionScreen 解耦，方便整体抽离成独立 mod。
+    /// </summary>
+    public sealed class TacticalMapLayer
+    {
+        private readonly TacticalMapController _controller;
+        private GauntletLayer _layer;
+        private GauntletMovieIdentifier _movieId;
+        private Widget _panel;
+        private MinimapWidget _minimap;
+
+        public TacticalMapLayer(TacticalMapController controller)
+        {
+            _controller = controller;
+        }
+
+        public void Create(MissionScreen ms)
+        {
+            // MinimapWidget 是继承自 Widget 的自定义控件，会被 GauntletUI 的 WidgetInfo 自动反射发现（
+            // 凡引用了 TaleWorlds.GauntletUI 的程序集都会被扫描），无需也无法手动 RegisterWidget。
+            if (_layer != null) { try { ms.RemoveLayer(_layer); } catch { } }
+            _layer = new GauntletLayer("TacticalMap", 90);
+            _layer.IsFocusLayer = false;
+            try
+            {
+                _movieId = _layer.LoadMovie("TacticalMap", new TacticalMapVM());
+            }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage($"[TMap] LoadMovie 失败: {ex.Message}"));
+                return;
+            }
+
+            try
+            {
+                if (_movieId.Movie == null) { InformationManager.DisplayMessage(new InformationMessage("[TMap] LoadMovie 返回 Movie 为空")); return; }
+                var root = _movieId.Movie.RootWidget;
+                if (root == null) { InformationManager.DisplayMessage(new InformationMessage("[TMap] Movie.RootWidget 为空")); return; }
+            _panel = FindWidgetById(root, "MinimapPanel");
+            _minimap = FindWidgetById(root, "MinimapTex") as MinimapWidget;
+            InformationManager.DisplayMessage(new InformationMessage($"[TMap] 创建层: panel={_panel != null} minimap={_minimap != null}"));
+
+            var s = TacticalSettings.Instance;
+            if (_panel != null)
+            {
+                _panel.WidthSizePolicy = SizePolicy.Fixed;
+                _panel.HeightSizePolicy = SizePolicy.Fixed;
+                _panel.SuggestedWidth = s.MapSize;
+                _panel.SuggestedHeight = s.MapSize;
+                // 右上角定位 + 边距改由 TacticalMap.xml 的 HorizontalAlignment/MarginRight/MarginTop 处理，
+                // 避免不同 BL 版本 Widget.PosOffset 类型不一致导致的 MissingMethodException。
+            }
+
+            if (_minimap != null)
+            {
+                _minimap.Controller = _controller;
+                _minimap.WidthSizePolicy = SizePolicy.StretchToParent;
+                _minimap.HeightSizePolicy = SizePolicy.StretchToParent;
+            }
+            }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage($"[TMap] 创建层后处理失败: {ex.Message}"));
+            }
+
+            try { ms.AddLayer(_layer); }
+            catch (Exception ex) { InformationManager.DisplayMessage(new InformationMessage($"[TMap] AddLayer 失败: {ex.Message}")); }
+        }
+
+        public void Destroy(MissionScreen ms)
+        {
+            if (_layer != null && ms != null)
+            {
+                try { ms.RemoveLayer(_layer); } catch { }
+            }
+            _layer = null;
+            _movieId = default;
+            _panel = null;
+            _minimap = null;
+        }
+
+        /// <summary>屏幕像素 -> 小地图 UV；命中返回 true。</summary>
+        public bool HitTestMinimap(Vec2 mousePixel, out Vec2 uv)
+        {
+            uv = Vec2.Zero;
+            if (_panel == null) return false;
+            // 用 Widget 稳定接口，避开 Rectangle2D 版本相关字段（TopLeft/LocalPosition/localPosition 等运行时可能缺失）
+            float x0 = _panel.GlobalPosition.X, y0 = _panel.GlobalPosition.Y;
+            float w = _panel.Size.X;
+            float h = _panel.Size.Y;
+            if (mousePixel.X < x0 || mousePixel.X > x0 + w) return false;
+            if (mousePixel.Y < y0 || mousePixel.Y > y0 + h) return false;
+            uv = new Vec2((mousePixel.X - x0) / w, (mousePixel.Y - y0) / h);
+            return true;
+        }
+
+        private static Widget FindWidgetById(Widget root, string id)
+        {
+            if (root == null) return null;
+            if (root.Id == id) return root;
+            var children = root.Children;
+            if (children == null) return null;
+            foreach (var c in children)
+            {
+                var found = FindWidgetById(c, id);
+                if (found != null) return found;
+            }
+            return null;
+        }
+    }
+}
+
+.
+========================================
+.
+【E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\TacticalMap\UI\TacticalMapVM.cs】
+using TaleWorlds.Library;
+
+namespace New_ZZZF.TacticalMap.UI
+{
+    /// <summary>
+    /// 小地图界面的轻量 ViewModel（后续可由 MCM 接管显示选项）。
+    /// </summary>
+    public sealed class TacticalMapVM : ViewModel
+    {
+        private string _title = "战术地图 (RTS Minimap)";
+        private bool _showRisk = true;
+
+        [DataSourceProperty]
+        public string Title
+        {
+            get => _title;
+            set { if (value != _title) { _title = value; OnPropertyChanged("Title"); } }
+        }
+
+        [DataSourceProperty]
+        public bool ShowRisk
+        {
+            get => _showRisk;
+            set { if (value != _showRisk) { _showRisk = value; OnPropertyChanged("ShowRisk"); } }
+        }
+    }
+}
+.
+========================================

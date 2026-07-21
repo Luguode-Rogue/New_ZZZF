@@ -179,6 +179,13 @@ namespace New_ZZZF
                     return;
                 }
 
+                // Ctrl+E → 导出所有技能配置到 XML 文件
+                if (IsControlDown() && Input.IsKeyReleased(InputKey.E))
+                {
+                    _dataSource.ExecuteExport();
+                    return;
+                }
+
                 // Ctrl+Z → 撤销更改
                 if (IsControlDown() && Input.IsKeyReleased(InputKey.Z))
                 {

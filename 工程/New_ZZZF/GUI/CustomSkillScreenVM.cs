@@ -417,6 +417,7 @@ namespace New_ZZZF
         private string _searchText = string.Empty;
         private int _catalogSelectedIndex = -1;
         private int _catalogGridColumns = 4;
+        private string _exportStatusText = string.Empty;
 
         /// <summary>v2: 调试模式（F12切换，解锁兵种模板+领主NPC）</summary>
         [DataSourceProperty]
@@ -611,6 +612,21 @@ namespace New_ZZZF
                 {
                     _catalogGridColumns = value;
                     OnPropertyChangedWithValue(value, nameof(CatalogGridColumns));
+                }
+            }
+        }
+
+        /// <summary>导出状态文本（用于 UI 显示反馈）</summary>
+        [DataSourceProperty]
+        public string ExportStatusText
+        {
+            get => _exportStatusText;
+            set
+            {
+                if (value != _exportStatusText)
+                {
+                    _exportStatusText = value;
+                    OnPropertyChangedWithValue(value, nameof(ExportStatusText));
                 }
             }
         }
@@ -1198,6 +1214,64 @@ namespace New_ZZZF
             if (!_isDirty) return;
             SaveCurrentHeroSkills();
             IsDirty = false;
+        }
+
+        /// <summary>
+        /// 导出技能配置到 ModuleData/troop_skills.xml 文件。
+        /// 仅导出兵种模板 + 非队伍领主NPC，跳过队伍成员专属条目。
+        /// </summary>
+        public void ExecuteExport()
+        {
+            try
+            {
+                if (_isDirty)
+                {
+                    SaveCurrentHeroSkills();
+                    IsDirty = false;
+                }
+
+                var excludeIds = new HashSet<string>();
+                var playerClan = Clan.PlayerClan;
+                if (playerClan != null)
+                {
+                    int comeOfAge = Campaign.Current.Models?.AgeModel?.HeroComesOfAge ?? 18;
+                    foreach (var hero in playerClan.Heroes)
+                    {
+                        if (hero == null || !hero.IsAlive || hero.Age < comeOfAge) continue;
+                        if (hero.HeroState != Hero.CharacterStates.Active && hero != Hero.MainHero) continue;
+                        string tid = hero.CharacterObject?.StringId;
+                        if (!string.IsNullOrEmpty(tid)) excludeIds.Add(tid);
+                    }
+                }
+
+                var troopTemplateIds = new HashSet<string>();
+                var allCOs = MBObjectManager.Instance?.GetObjectTypeList<CharacterObject>();
+                if (allCOs != null)
+                {
+                    foreach (var co in allCOs)
+                    {
+                        if (co != null && !co.IsHero && !co.IsPlayerCharacter && !string.IsNullOrEmpty(co.StringId))
+                            troopTemplateIds.Add(co.StringId);
+                    }
+                }
+                excludeIds.ExceptWith(troopTemplateIds);
+
+                string exportPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
+                SkillConfigManager.Instance.SaveToXml(exportPath, excludeIds);
+
+                int totalCount = SkillConfigManager.Instance._troopSkillMap.Count;
+                int exportedCount = totalCount - excludeIds.Count;
+                ExportStatusText = excludeIds.Count > 0
+                    ? $"导出成功！已导出 {exportedCount} 个兵种/领主配置到 troop_skills.xml（跳过 {excludeIds.Count} 个队伍成员）"
+                    : $"导出成功！共 {exportedCount} 个兵种/领主配置已保存到 troop_skills.xml";
+
+                Debug.Print($"[New_ZZZF] 技能配置已导出: troop_skills.xml (导出{exportedCount}, 跳过{excludeIds.Count})");
+            }
+            catch (System.Exception ex)
+            {
+                ExportStatusText = $"导出失败: {ex.Message}";
+                Debug.PrintError($"[New_ZZZF] 导出技能配置失败: {ex.Message}");
+            }
         }
 
         public void ExecuteUndoChanges()

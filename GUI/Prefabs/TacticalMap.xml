@@ -1,0 +1,21 @@
+<Prefab>
+  <Window>
+    <Widget Id="Root" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent">
+      <Children>
+        <Widget Id="MinimapPanel" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="320" SuggestedHeight="320" HorizontalAlignment="Right" VerticalAlignment="Top" MarginRight="20" MarginTop="20">
+          <Children>
+            <MinimapWidget Id="MinimapTex" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" />
+          </Children>
+        </Widget>
+        <TextWidget Id="TMapLegend" WidthSizePolicy="Fixed" SuggestedWidth="232" HeightSizePolicy="CoverChildren" HorizontalAlignment="Right" VerticalAlignment="Top" MarginRight="350" MarginTop="20" DoNotAcceptEvents="true" Brush="SPOptions.Description.Text" FontSize="13" Color="#FFE9C8FF" Text="战术地图 图例
+青环+黄心 = 玩家
+红/绿框 = 敌/友编队
+红/蓝点 = 敌/我方
+橙菱形 = 相机目标
+N 开关   C 联动镜头
+左键移动   右键朝向
+Shift+左 = 攻击移动" />
+      </Children>
+    </Widget>
+  </Window>
+</Prefab>

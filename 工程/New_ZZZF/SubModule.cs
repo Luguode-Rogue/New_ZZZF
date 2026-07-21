@@ -14,6 +14,7 @@ using System.Reflection;
 using TaleWorlds.MountAndBlade.View.Screens;
 using New_ZZZF.Systems;
 using MountedSlashCamera;
+using New_ZZZF.TacticalMap.Config;
 using TaleWorlds.CampaignSystem.ComponentInterfaces;
 using StoryMode.GameComponents.CampaignBehaviors;
 using TaleWorlds.Localization;
@@ -29,6 +30,7 @@ namespace New_ZZZF
         protected override void OnSubModuleLoad()
         {
             base.OnSubModuleLoad();
+            TacticalMapBootstrap.OnSubModuleLoad();
 
         }
         public override void OnNewGameCreated(Game game, object initializerObject)
@@ -41,11 +43,9 @@ namespace New_ZZZF
             {
                 try
                 {
-                    // 初始化技能配置管理器并加载XML
                     string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
                     SkillConfigManager.Instance.LoadFromXml(xmlPath);
 
-                    // 调试日志
                     InformationManager.DisplayMessage(new InformationMessage(
                         "[New_ZZZF] 技能配置加载完成！"));
                 }
@@ -83,6 +83,7 @@ namespace New_ZZZF
             mission.AddMissionBehavior(new SkillSystemBehavior());
             mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
             mission.AddMissionBehavior(new HeroChangeMissionBehavior());
+            TacticalMapBootstrap.OnMissionStart(mission);
             mission.AddMissionBehavior(new AffixMissionBehavior());
             mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
             // 调试日志
@@ -169,11 +170,9 @@ namespace New_ZZZF
                     {
                         try
                         {
-                            // 初始化技能配置管理器并加载XML
                             string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
                             SkillConfigManager.Instance.LoadFromXml(xmlPath);
 
-                            // 调试日志
                             InformationManager.DisplayMessage(new InformationMessage(
                                 "[New_ZZZF] 技能配置加载完成！"));
                         }

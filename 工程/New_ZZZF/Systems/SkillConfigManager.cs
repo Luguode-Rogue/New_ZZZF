@@ -70,11 +70,32 @@ namespace New_ZZZF
         /// <param name="xmlPath"></param>
         public void SaveToXml(string xmlPath)
         {
+            SaveToXmlInternal(xmlPath, null);
+        }
+
+        /// <summary>
+        /// 过滤导出：仅导出不在排除集合中的兵种/领主NPC技能配置到XML。
+        /// 传入 null 给 excludeTroopIds 则导出全部。
+        /// </summary>
+        /// <param name="xmlPath">导出路径</param>
+        /// <param name="excludeTroopIds">要排除的队伍成员兵种ID集合（可为null）</param>
+        public void SaveToXml(string xmlPath, HashSet<string> excludeTroopIds)
+        {
+            SaveToXmlInternal(xmlPath, excludeTroopIds);
+        }
+
+        private void SaveToXmlInternal(string xmlPath, HashSet<string> excludeTroopIds)
+        {
             XDocument doc = new XDocument(new XElement("TroopSkills"));
 
             foreach (var kvp in _troopSkillMap)
             {
                 string troopId = kvp.Key;
+
+                // 跳过被排除的ID（队伍成员NPC专属条目）
+                if (excludeTroopIds != null && excludeTroopIds.Contains(troopId))
+                    continue;
+
                 SkillSet skillSet = kvp.Value;
 
                 XElement troopElement = new XElement("Troop",
