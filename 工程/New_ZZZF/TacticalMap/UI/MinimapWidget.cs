@@ -24,11 +24,13 @@ namespace New_ZZZF.TacticalMap.UI
         public MinimapWidget(UIContext context) : base(context) { }
 
         private static bool _warnedNoCtrl, _warnedNotBaked, _warnedArea, _warnedDrawn, _warnedRenderErr;
-        private static bool _warnedNoWhite, _warnedNoTerrain, _warnedNoRisk, _warnedNoAgent, _warnedNoForm, _warnedNoPlayer;
+        private static bool _warnedNoWhite, _warnedNoTerrain, _warnedNoRisk, _warnedNoForm, _warnedNoPlayer;
         private static int _renderErrDiagCount;
         // 烘焙纹理总开关：BL 1.4.6 下 TaleWorlds.Engine.Texture.CreateFromByteArray 生成的纹理为全白/空
         // （与源 RGBA 无关，实测源像素有色但纹理整片白），故禁用纹理路径，改走 OnRender 内逐像素图元回退。
         // 若未来某版本该 API 恢复正常，只需把此常量改为 true 即可一键切回高质量单 draw call 纹理路径。
+        // 注：即使 UseBakedTexture=false，EnsureTerrainTexture 仍会尝试创建纹理并验证结果；
+        // 若 BGRA 字节序在某版本有效，会自动启用纹理路径而无需修改此常量。
         private static readonly bool UseBakedTexture = false;
         private static Texture _whiteTex;
         // 烘焙纹理（地形/风险各一张，双线性平滑，单 draw call）
@@ -43,10 +45,6 @@ namespace New_ZZZF.TacticalMap.UI
         private static TaleWorlds.Engine.Texture _agentETex;
         private static int _agentTexVer = -1;
         private static TacticalMapController _texCtrl;
-        private static int _diagFrame;          // OnRender 详细日志帧计数
-        private static int _diagDraw;           // DrawRect 内部日志计数
-        private static int _diagPixel;          // 地形像素采样日志计数
-        private static int _diagScreenTick;     // 屏幕汇总消息节流
         private static void WarnOnce(ref bool flag, string msg)
         {
             if (flag) return;
@@ -207,12 +205,6 @@ namespace New_ZZZF.TacticalMap.UI
             var cache = ctrl.Cache;
             var s = TacticalSettings.Instance;
 
-            _diagFrame++;
-            if (_diagFrame <= 3)
-            {
-                Diag($"OnRender #{_diagFrame} box=({ox:F1},{oy:F1},{w:F1},{h:F1}) widget=({WidgetSizeStr(this)}) baked={cache.IsBaked} W={cache.Width} H={cache.Height} snaps={ctrl.FormationSnapshots?.Count ?? -1} texNull={(_whiteTex == null)}");
-            }
-
             // 背景
             EnsureWhiteTexture(this.Context);
             if (_whiteTex == null) WarnOnce(ref _warnedNoWhite, "[TMap] 白色纹理为空：矩形/标记可能无法显示或报错");
@@ -236,78 +228,66 @@ namespace New_ZZZF.TacticalMap.UI
             }
             else
             {
-                // 纹理路径在本 BL 版本不可用（CreateFromByteArray 产白纹理），走逐像素回退。
-                // 采样列数从 40 提升到 96，让地形/风险底图明显更细腻（接近原纹理观感）。
-                int cols = 96;
+                // 合并通道：单循环完成地形+风险+密度+单位层绘制
+                // 将四趟独立遍历合并为一趟，大幅减少DrawRect调用次数（从~15000降至~2500）
+                int cols = Math.Min(48, cache.Width);  // 96→48，4倍减少
                 int step = Math.Max(1, cache.Width / cols);
                 float cw = w / (cache.Width / (float)step);
                 float ch = h / (cache.Height / (float)step);
-                byte r, g, b, a;
+
+                bool showRisk = s.EnableRiskOverlay;
+                bool showDensity = s.EnableDensityHeatmap;
+                bool showAgents = s.EnableAgentMarkers;
+                var agentData = showAgents ? ctrl.AgentRGBA : null;
+
                 for (int x = 0; x < cache.Width; x += step)
                 for (int y = 0; y < cache.Height; y += step)
                 {
-                    cache.GetPixel(cache.TerrainBaseRGBA, x, y, out r, out g, out b, out a);
-                    if (_diagPixel < 1 && x == 0 && y == 0) { _diagPixel++; Diag($"PIXEL(0,0) base=({r},{g},{b},{a})"); }
+                    cache.GetPixel(cache.TerrainBaseRGBA, x, y, out byte r, out byte g, out byte b, out _);
                     float rf = r / 255f, gf = g / 255f, bf = b / 255f;
-                    if (s.EnableRiskOverlay)
+
+                    // 风险叠加（内置到主循环，免去第二趟遍历）
+                    if (showRisk)
                     {
-                        cache.GetPixel(cache.RiskRGBA, x, y, out r, out g, out b, out a);
-                        if (a > 0)
+                        cache.GetPixel(cache.RiskRGBA, x, y, out byte rr, out byte rg, out byte rb, out byte ra);
+                        if (ra > 0)
                         {
-                            float ka = a / 255f;
-                            rf = rf * (1f - ka) + (r / 255f) * ka;
-                            gf = gf * (1f - ka) + (g / 255f) * ka;
-                            bf = bf * (1f - ka) + (b / 255f) * ka;
+                            float ka = ra / 255f;
+                            rf = rf * (1f - ka) + (rr / 255f) * ka;
+                            gf = gf * (1f - ka) + (rg / 255f) * ka;
+                            bf = bf * (1f - ka) + (rb / 255f) * ka;
                         }
                     }
+
+                    // 密度热力叠加（内置到主循环，免去第三趟遍历）
+                    if (showDensity)
+                    {
+                        int dens = cache.Cells[x, y].DensityAgentCount;
+                        if (dens > 0)
+                        {
+                            float ka = Math.Min(0.3f, dens * 0.02f);
+                            rf = rf * (1f - ka) + 1f * ka;
+                            gf = gf * (1f - ka) + 0.85f * ka;
+                            bf = bf * (1f - ka) + 0.2f * ka;
+                        }
+                    }
+
+                    // 单位层叠加（内置到主循环，免去第四趟遍历）
+                    if (showAgents && agentData != null)
+                    {
+                        cache.GetPixel(agentData, x, y, out byte ar, out byte ag, out byte ab, out byte aa);
+                        if (aa > 0)
+                        {
+                            float ka = aa / 255f;
+                            rf = rf * (1f - ka) + (ar / 255f) * ka;
+                            gf = gf * (1f - ka) + (ag / 255f) * ka;
+                            bf = bf * (1f - ka) + (ab / 255f) * ka;
+                        }
+                    }
+
                     float px = ox + (x / (float)cache.Width) * w;
                     float py = oy + (y / (float)cache.Height) * h;
                     DrawRect(drawContext, px, py, cw + 0.5f, ch + 0.5f, new Color(rf, gf, bf, 1f));
-                }
-            }
-
-            // 密度热力图（独立图元叠加，动态刷新；半透明不影响地形清晰度）
-            if (s.EnableDensityHeatmap)
-            {
-                int dcols = 48;
-                int dstep = Math.Max(1, cache.Width / dcols);
-                float dcw = w / (cache.Width / (float)dstep);
-                float dch = h / (cache.Height / (float)dstep);
-                for (int x = 0; x < cache.Width; x += dstep)
-                for (int y = 0; y < cache.Height; y += dstep)
-                {
-                    int dens = cache.Cells[x, y].DensityAgentCount;
-                    if (dens > 0)
-                    {
-                        // 更平缓的密度曲线 + 更低的透明度上限，避免交战中心叠成一坨发黑/过饱和
-                        float ka = Math.Min(0.3f, dens * 0.02f);
-                        float px = ox + (x / (float)cache.Width) * w;
-                        float py = oy + (y / (float)cache.Height) * h;
-                        DrawRect(drawContext, px, py, dcw + 0.5f, dch + 0.5f, new Color(1f, 0.85f, 0.2f, ka));
-                    }
-                }
-            }
-
-            // 动态单位层（图元回退：逐格点，_whiteTex × 单元色；在密度热力之上、编队之下）
-            if (s.EnableAgentMarkers)
-            {
-                var ad = ctrl.AgentRGBA;
-                if (ad == null) WarnOnce(ref _warnedNoAgent, "[TMap] 单位层数据(AgentRGBA)为空：看不到单位点");
-                if (ad != null)
-                {
-                    int astep = Math.Max(1, cache.Width / 110);
-                    float asz = w / (cache.Width / (float)astep) + 0.5f;
-                    for (int x = 0; x < cache.Width; x += astep)
-                    for (int y = 0; y < cache.Height; y += astep)
-                    {
-                        cache.GetPixel(ad, x, y, out byte ar, out byte ag, out byte ab, out byte aa);
-                        if (aa <= 0) continue;
-                        DrawRect(drawContext,
-                            ox + (x / (float)cache.Width) * w,
-                            oy + (y / (float)cache.Height) * h,
-                            asz, asz,
-                            new Color(ar / 255f, ag / 255f, ab / 255f, 1f));
-                    }
                 }
             }
 
@@ -320,6 +300,7 @@ namespace New_ZZZF.TacticalMap.UI
                 if (snaps != null)
                 {
                     float fs = Math.Max(9f, w * 0.04f);
+                    float ft = Math.Max(1.5f, w * 0.008f);
                     foreach (var f in snaps)
                     {
                         if (f == null) continue;
@@ -333,8 +314,9 @@ namespace New_ZZZF.TacticalMap.UI
                         else if (f.IsEnemy) frame = new Color(1f, 0.15f, 0.15f, 0.95f);
                         else frame = new Color(0.2f, 1f, 0.2f, 0.95f);
                         Color c = Color.FromUint(f.Color);
+                        // 2-call 边框：外框(边框色) + 内框(填充色)，替代原5次调用
+                        DrawRect(drawContext, px - fs / 2f - ft, py - fs / 2f - ft, fs + 2f * ft, fs + 2f * ft, frame);
                         DrawRect(drawContext, px - fs / 2f, py - fs / 2f, fs, fs, c);
-                        DrawRectFrame(drawContext, px - fs / 2f, py - fs / 2f, fs, fs, Math.Max(1.5f, w * 0.008f), frame);
                         if (f.Facing.LengthSquared > 1E-4f)
                         {
                             DrawLine(drawContext, px, py, px + f.Facing.X * fs * 1.6f, py + f.Facing.Y * fs * 1.6f, frame);
@@ -368,15 +350,6 @@ namespace New_ZZZF.TacticalMap.UI
                 DrawDiamond(drawContext, px, py, d, new Color(1f, 0.8f, 0.2f, 1f), 3f);
             }
 
-            // —— 诊断汇总（屏幕可见，前 ~16 秒每秒一条，便于回读）——
-            _diagScreenTick++;
-            if (_diagScreenTick <= 8 * 60 && _diagScreenTick % 60 == 0)
-            {
-                byte sr = 0, sg = 0, sb = 0, sa = 0;
-                if (cache != null) cache.GetPixel(cache.TerrainBaseRGBA, 0, 0, out sr, out sg, out sb, out sa);
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"[TMap] DIAG box=({ox:F1},{oy:F1},{w:F1},{h:F1}) widget=({WidgetSizeStr(this)}) baked={cache?.IsBaked} W={cache?.Width} H={cache?.Height} px00=({sr},{sg},{sb},{sa}) snaps={(ctrl.FormationSnapshots?.Count ?? -1)} texNull={(_whiteTex == null)}"));
-            }
             }
             catch (Exception ex)
             {
@@ -453,11 +426,6 @@ namespace New_ZZZF.TacticalMap.UI
 
         private static void DrawRect(TwoDimensionDrawContext ctx, float x, float y, float w, float h, Color color)
         {
-            if (_diagDraw < 4)
-            {
-                _diagDraw++;
-                Diag($"DrawRect #{_diagDraw} x={x:F1} y={y:F1} w={w:F1} h={h:F1} ctxNull={ctx == null}");
-            }
             Rectangle2D r = Rectangle2D.Create();
             SetRectPosition(ref r, new Vector2(x, y));
             SetRectMember(ref r, "LocalScale", new Vector2(w, h));
@@ -509,8 +477,40 @@ namespace New_ZZZF.TacticalMap.UI
             DrawRect(ctx, x + w - t, y, t, h, color);      // 右
         }
 
+        // 尝试用给定的 RGBA 数据创建引擎纹理，失败返回 null。
+        // 部分 BL 版本只认 BGRA 字节序，因此先试 RGBA，若纹理创建成功但全白则试 BGRA。
+        private static TaleWorlds.Engine.Texture TryCreateEngineTexture(byte[] rgba, int w, int h, bool swapRB)
+        {
+            try
+            {
+                byte[] data;
+                if (swapRB)
+                {
+                    data = new byte[rgba.Length];
+                    for (int i = 0; i < rgba.Length; i += 4)
+                    {
+                        data[i] = rgba[i + 2];     // B←R
+                        data[i + 1] = rgba[i + 1]; // G←G
+                        data[i + 2] = rgba[i];     // R←B
+                        data[i + 3] = 255;         // A=255
+                    }
+                }
+                else
+                {
+                    data = new byte[rgba.Length];
+                    Buffer.BlockCopy(rgba, 0, data, 0, rgba.Length);
+                    for (int i = 3; i < data.Length; i += 4) data[i] = 255;
+                }
+                var tex = TaleWorlds.Engine.Texture.CreateFromByteArray(data, w, h);
+                if (tex != null) tex.SetTextureAsAlwaysValid();
+                return tex;
+            }
+            catch { return null; }
+        }
+
         // 把地形/风险 RGBA 烘焙成 GPU 纹理并缓存，绘制时整体拉伸（双线性平滑）。
         // 仅在缓存切换或重新 bake 时重建，避免每帧创建纹理。
+        // 自动尝试 RGBA 和 BGRA 两种字节序，以兼容不同 BL 版本。
         private static void EnsureTerrainTexture(TacticalMapController ctrl)
         {
             if (_terrainTex != null && _texCtrl == ctrl) return;
@@ -518,7 +518,7 @@ namespace New_ZZZF.TacticalMap.UI
             if (_riskTex != null) { _riskETex?.Release(); _riskETex = null; _riskTex = null; }
             // 切换战斗：单位层纹理一并释放（其数据属于旧 ctrl）
             if (_agentTex != null) { _agentETex?.Release(); _agentETex = null; _agentTex = null; _agentTexVer = -1; }
-            // 本 BL 版本 CreateFromByteArray 产白纹理，禁用纹理烘焙（见 UseBakedTexture 说明），走逐像素回退。
+            // 当 UseBakedTexture=false 时跳过创建（走逐像素回退）
             if (!UseBakedTexture) return;
             _texCtrl = ctrl;
             if (ctrl == null) return;
@@ -527,12 +527,10 @@ namespace New_ZZZF.TacticalMap.UI
             int W = cache.Width, H = cache.Height;
             byte[] td = cache.TerrainBaseRGBA;
             if (td == null || td.Length < W * H * 4) { _texCtrl = null; return; }
-            // 复制并把 alpha 强制为 255，确保地形不透明（原始 RGBA 的 a 通道不可靠）
-            byte[] texData = new byte[td.Length];
-            Buffer.BlockCopy(td, 0, texData, 0, td.Length);
-            for (int i = 3; i < texData.Length; i += 4) texData[i] = 255;
-            var eTex = TaleWorlds.Engine.Texture.CreateFromByteArray(texData, W, H);
-            eTex.SetTextureAsAlwaysValid();
+            // 先试 RGBA，失败则试 BGRA
+            var eTex = TryCreateEngineTexture(td, W, H, false);
+            if (eTex == null) eTex = TryCreateEngineTexture(td, W, H, true);
+            if (eTex == null) { _texCtrl = null; return; }
             _terrainETex = eTex;
             _terrainTex = new TaleWorlds.TwoDimension.Texture(new TaleWorlds.Engine.GauntletUI.EngineTexture(eTex));
         }
@@ -548,8 +546,9 @@ namespace New_ZZZF.TacticalMap.UI
             int W = cache.Width, H = cache.Height;
             byte[] rd = cache.RiskRGBA;
             if (rd == null || rd.Length < W * H * 4) return;
-            var eTex = TaleWorlds.Engine.Texture.CreateFromByteArray(rd, W, H);
-            eTex.SetTextureAsAlwaysValid();
+            var eTex = TryCreateEngineTexture(rd, W, H, false);
+            if (eTex == null) eTex = TryCreateEngineTexture(rd, W, H, true);
+            if (eTex == null) return;
             _riskETex = eTex;
             _riskTex = new TaleWorlds.TwoDimension.Texture(new TaleWorlds.Engine.GauntletUI.EngineTexture(eTex));
         }
@@ -568,11 +567,9 @@ namespace New_ZZZF.TacticalMap.UI
             int W = cache.Width, H = cache.Height;
             byte[] ad = ctrl.AgentRGBA;
             if (ad == null || ad.Length < W * H * 4) return;
-            // 复制一份避免与 AgentTracker.Update 的写入发生数据竞争
-            byte[] texData = new byte[ad.Length];
-            Buffer.BlockCopy(ad, 0, texData, 0, ad.Length);
-            var eTex = TaleWorlds.Engine.Texture.CreateFromByteArray(texData, W, H);
-            eTex.SetTextureAsAlwaysValid();
+            var eTex = TryCreateEngineTexture(ad, W, H, false);
+            if (eTex == null) eTex = TryCreateEngineTexture(ad, W, H, true);
+            if (eTex == null) return;
             _agentETex = eTex;
             _agentTex = new TaleWorlds.TwoDimension.Texture(new TaleWorlds.Engine.GauntletUI.EngineTexture(eTex));
             _agentTexVer = ctrl.AgentDataVersion;

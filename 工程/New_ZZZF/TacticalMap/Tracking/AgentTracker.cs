@@ -45,7 +45,7 @@ namespace New_ZZZF.TacticalMap.Tracking
                 if (agent.Team == null) { r = 180; g = 180; b = 180; }
                 else if (agent.Team.IsPlayerTeam) { r = 0; g = 230; b = 255; }
                 else { r = 255; g = 30; b = 30; }
-                _cache.PaintAgent(gx, gy, r, g, b, 2);
+                _cache.PaintAgent(gx, gy, r, g, b, 1);
             }
         }
     }

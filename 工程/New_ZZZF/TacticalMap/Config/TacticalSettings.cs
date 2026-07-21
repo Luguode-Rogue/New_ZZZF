@@ -31,8 +31,8 @@ namespace New_ZZZF.TacticalMap.Config
         // ---- 烘焙分辨率（地形栅格每边采样数）----
         public int BakeResolution = 256;
 
-        // ---- 动态纹理刷新间隔（秒）。0.15 => ~6.6Hz，足够流畅且极低开销 ----
-        public float UpdateInterval = 0.15f;
+        // ---- 动态纹理刷新间隔（秒）。0.2 => 5Hz，减少AgentTracker/FormationTracker更新频率，降低CPU开销 ----
+        public float UpdateInterval = 0.2f;
 
         // ---- 地形分析阈值（基于高度/法线/材质推断，详见 TerrainAnalyzer）----
         public float CliffSlopeThreshold = 0.55f;   // 1 - normal.z
