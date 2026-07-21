@@ -7,7 +7,8 @@ namespace New_ZZZF.TacticalMap.Terrain
     /// <summary>
     /// 在战斗开局把 Scene 地形烘焙成一张低分辨率战术栅格。
     /// 只做一次（或场景变化时），之后由 MinimapCompositor 复用。
-    /// 所有坐标约定：uv(0..1) -> 世界 (uv.X*WorldW, uv.Y*WorldH)，原点在场景 (0,0)。
+    /// 所有坐标约定：uv(0..1) -> 世界 (OriginX + uv.X*WorldW, OriginY + uv.Y*WorldH)。
+    /// WorldW/WorldH 由实际战场边界决定（软边界或包围盒），而非整个地形大小。
     /// </summary>
     public sealed class TerrainCache
     {
@@ -15,6 +16,8 @@ namespace New_ZZZF.TacticalMap.Terrain
         public int Height { get; private set; }
         public float WorldW { get; private set; }
         public float WorldH { get; private set; }
+        public float OriginX { get; private set; }
+        public float OriginY { get; private set; }
         public float CellStep { get; private set; }
         public float MinH { get; private set; }
         public float MaxH { get; private set; }
@@ -45,16 +48,26 @@ namespace New_ZZZF.TacticalMap.Terrain
                 scene.GetTerrainData(out Vec2i nodeDim, out float nodeSize, out _, out _);
                 if (nodeDim.X <= 0 || nodeDim.Y <= 0 || nodeSize <= 0f) { LastError = "地形数据无效(nodeDim/nodeSize)"; return false; }
                 if (!scene.GetTerrainMinMaxHeight(out float minH, out float maxH)) { LastError = "GetTerrainMinMaxHeight 失败"; return false; }
-
-                WorldW = nodeDim.X * nodeSize;
-                WorldH = nodeDim.Y * nodeSize;
                 MinH = minH;
                 MaxH = maxH;
+
+                // ---- 计算实际战场边界（避免地图显示范围过大） ----
+                float fullWorldW = nodeDim.X * nodeSize;
+                float fullWorldH = nodeDim.Y * nodeSize;
+                if (!ComputeBattleBounds(scene, out Vec2 battleMin, out Vec2 battleMax))
+                {
+                    battleMin = Vec2.Zero;
+                    battleMax = new Vec2(fullWorldW, fullWorldH);
+                }
+                OriginX = battleMin.X;
+                OriginY = battleMin.Y;
+                WorldW = Math.Max(1f, battleMax.X - battleMin.X);
+                WorldH = Math.Max(1f, battleMax.Y - battleMin.Y);
 
                 int res = _settings.BakeResolution;
                 Width = res;
                 Height = res;
-                CellStep = WorldW / res; // 假设近正方形；非正方形场景按比例缩放也可，这里取 X
+                CellStep = Math.Max(WorldW, WorldH) / res;
 
                 Cells = new TerrainCell[Width, Height];
                 float[,] heights = new float[Width, Height];
@@ -105,17 +118,17 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         public Vec2 CellCenter(int x, int y)
         {
-            return new Vec2((x + 0.5f) * CellStep, (y + 0.5f) * CellStep);
+            return new Vec2(OriginX + (x + 0.5f) * CellStep, OriginY + (y + 0.5f) * CellStep);
         }
 
         public Vec2 UVToWorld(Vec2 uv)
         {
-            return new Vec2(uv.X * WorldW, uv.Y * WorldH);
+            return new Vec2(OriginX + uv.X * WorldW, OriginY + uv.Y * WorldH);
         }
 
         public Vec2 WorldToUV(Vec2 world)
         {
-            return new Vec2(world.X / WorldW, world.Y / WorldH);
+            return new Vec2((world.X - OriginX) / WorldW, (world.Y - OriginY) / WorldH);
         }
 
         public float GetHeightAt(Vec2 world)
@@ -123,6 +136,46 @@ namespace New_ZZZF.TacticalMap.Terrain
             if (!_baked || _scene == null) return 0f;
             try { return _scene.GetTerrainHeight(world, true); }
             catch { return 0f; }
+        }
+
+        // ---- 战场边界计算 ----
+        /// <summary>计算实际战斗区域的边界矩形。</summary>
+        private bool ComputeBattleBounds(Scene scene, out Vec2 min, out Vec2 max)
+        {
+            // ① 优先使用软边界（walk_area）多边形顶点包围盒，这是关编辑器中定义的可行走区域
+            int softCount = scene.GetSoftBoundaryVertexCount();
+            if (softCount > 0)
+            {
+                min = new Vec2(float.MaxValue, float.MaxValue);
+                max = new Vec2(float.MinValue, float.MinValue);
+                for (int i = 0; i < softCount; i++)
+                {
+                    Vec2 v = scene.GetSoftBoundaryVertex(i);
+                    if (v.X < min.X) min.X = v.X;
+                    if (v.Y < min.Y) min.Y = v.Y;
+                    if (v.X > max.X) max.X = v.X;
+                    if (v.Y > max.Y) max.Y = v.Y;
+                }
+                // 向外扩展 10% 边距，避免边界上的单位被裁切
+                float mx = (max.X - min.X) * 0.1f;
+                float my = (max.Y - min.Y) * 0.1f;
+                min.X -= mx; min.Y -= my;
+                max.X += mx; max.Y += my;
+                return true;
+            }
+            // ② 回退：场景包围盒（包含所有实体的最小矩形）
+            scene.GetBoundingBox(out Vec3 bbMin, out Vec3 bbMax);
+            if (bbMin.IsValid && bbMax.IsValid &&
+                bbMax.X > bbMin.X && bbMax.Y > bbMin.Y)
+            {
+                min = bbMin.AsVec2;
+                max = bbMax.AsVec2;
+                return true;
+            }
+            // ③ 都失败，返回 false 让调用方使用全地形范围
+            min = Vec2.Zero;
+            max = Vec2.Zero;
+            return false;
         }
 
         // --- 颜色工具 ---
