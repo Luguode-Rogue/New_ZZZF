@@ -146,21 +146,21 @@ namespace New_ZZZF.TacticalMap.Terrain
             int softCount = scene.GetSoftBoundaryVertexCount();
             if (softCount > 0)
             {
-                min = new Vec2(float.MaxValue, float.MaxValue);
-                max = new Vec2(float.MinValue, float.MinValue);
+                float minX = float.MaxValue, minY = float.MaxValue;
+                float maxX = float.MinValue, maxY = float.MinValue;
                 for (int i = 0; i < softCount; i++)
                 {
                     Vec2 v = scene.GetSoftBoundaryVertex(i);
-                    if (v.X < min.X) min.X = v.X;
-                    if (v.Y < min.Y) min.Y = v.Y;
-                    if (v.X > max.X) max.X = v.X;
-                    if (v.Y > max.Y) max.Y = v.Y;
+                    if (v.X < minX) minX = v.X;
+                    if (v.Y < minY) minY = v.Y;
+                    if (v.X > maxX) maxX = v.X;
+                    if (v.Y > maxY) maxY = v.Y;
                 }
                 // 向外扩展 10% 边距，避免边界上的单位被裁切
-                float mx = (max.X - min.X) * 0.1f;
-                float my = (max.Y - min.Y) * 0.1f;
-                min.X -= mx; min.Y -= my;
-                max.X += mx; max.Y += my;
+                float mx = (maxX - minX) * 0.1f;
+                float my = (maxY - minY) * 0.1f;
+                min = new Vec2(minX - mx, minY - my);
+                max = new Vec2(maxX + mx, maxY + my);
                 return true;
             }
             // ② 回退：场景包围盒（包含所有实体的最小矩形）
