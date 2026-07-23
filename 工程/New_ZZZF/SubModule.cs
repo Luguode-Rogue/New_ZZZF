@@ -130,6 +130,7 @@ namespace New_ZZZF
                 campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
                 campaignGameStarter.AddBehavior(new HeroChangeCampaignBehavior());
                 campaignGameStarter.AddBehavior(new AffixCampaignBehavior());
+                campaignGameStarter.AddBehavior(new LegacyWorld.Bannerlord.LegacyBehavior());
 
             }
         }
@@ -219,6 +220,9 @@ namespace New_ZZZF
                     {
                         AffixDebugHelper.RerollRandomItemAffix();
                     }
+
+                    // ---- LegacyWorld MCM 按钮已替代原 Ctrl+F10/F11 快捷键 ----
+                    // 手动导出/应用改为 MCM 菜单按钮触发（OnTick 消费）
                 }
             }
         }
