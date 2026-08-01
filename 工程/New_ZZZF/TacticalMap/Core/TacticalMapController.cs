@@ -28,6 +28,7 @@ namespace New_ZZZF.TacticalMap.Core
         private bool _cameraLink;
         private Vec2? _playerPos;
         private Vec2? _camTarget;
+        private Vec2 _playerFacing = Vec2.Zero;
         private int _agentVersion;
 
         public TerrainCache Cache => _cache;
@@ -35,6 +36,7 @@ namespace New_ZZZF.TacticalMap.Core
         public List<FormationSnapshot> FormationSnapshots => _formationTracker.Snapshots;
         public Vec2? PlayerPos => _playerPos;
         public Vec2? CameraTarget => _camTarget;
+        public Vec2 PlayerFacing => _playerFacing;
         // 动态单位层（每个 agent 一个点），供 MinimapWidget 烘焙成纹理
         public byte[] AgentRGBA => _cache.AgentRGBA;
         public int AgentDataVersion => _agentVersion;
@@ -80,6 +82,11 @@ namespace New_ZZZF.TacticalMap.Core
             if (!_visible || _layer == null) return;
 
             _playerPos = (_mission.MainAgent != null) ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
+            if (_mission.MainAgent != null)
+            {
+                float af = _mission.MainAgent.Facing; // 朝向角（弧度，绕 Z 轴）
+                _playerFacing = new Vec2((float)Math.Cos(af), (float)Math.Sin(af));
+            }
             _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
                 ? CameraController.Instance.TargetWorldPos : (Vec2?)null;
 

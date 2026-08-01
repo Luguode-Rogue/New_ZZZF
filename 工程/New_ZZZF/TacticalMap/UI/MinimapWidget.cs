@@ -205,11 +205,17 @@ namespace New_ZZZF.TacticalMap.UI
             var cache = ctrl.Cache;
             var s = TacticalSettings.Instance;
 
-            // 背景
+            // 背景（深军事蓝灰，半透明，让 HUD 透出但不刺眼）
             EnsureWhiteTexture(this.Context);
             if (_whiteTex == null) WarnOnce(ref _warnedNoWhite, "[TMap] 白色纹理为空：矩形/标记可能无法显示或报错");
             DrawRect(drawContext, ox, oy, w, h, new Color(0.04f, 0.06f, 0.09f, 0.85f));
             WarnOnce(ref _warnedDrawn, "[TMap] OnRender: 正在绘制小地图");
+
+            // 外发光底（在地图外扩 3px 画一圈半透明暗色，营造悬浮层次感）
+            DrawRect(drawContext, ox - 3f, oy - 3f, w + 6f, h + 6f, new Color(0f, 0f, 0f, 0.35f));
+            // 双层边框：外暗内亮（军事仪表描边风格）
+            DrawRectFrame(drawContext, ox - 2f, oy - 2f, w + 4f, h + 4f, 2f, new Color(0.02f, 0.03f, 0.04f, 0.9f));
+            DrawRectFrame(drawContext, ox, oy, w, h, Math.Max(1.5f, w * 0.006f), new Color(0.78f, 0.72f, 0.55f, 0.85f)); // 暗金描边
 
             // 地形 + 风险叠加：优先用烘焙纹理（双线性平滑 + 单 draw call）；
             // bake 未完成时降级为逐像素矩形（仅首帧）。
@@ -252,23 +258,31 @@ namespace New_ZZZF.TacticalMap.UI
                         cache.GetPixel(cache.RiskRGBA, x, y, out byte rr, out byte rg, out byte rb, out byte ra);
                         if (ra > 0)
                         {
+                            // 屏幕叠加（overlay）式混合：保留地形明暗，只染红危险区，更通透不留脏块
                             float ka = ra / 255f;
-                            rf = rf * (1f - ka) + (rr / 255f) * ka;
-                            gf = gf * (1f - ka) + (rg / 255f) * ka;
-                            bf = bf * (1f - ka) + (rb / 255f) * ka;
+                            float red = rr / 255f;
+                            rf = rf + (red - rf) * ka;
+                            gf = gf * (1f - ka * 0.85f);
+                            bf = bf * (1f - ka * 0.85f);
                         }
                     }
 
                     // 密度热力叠加（内置到主循环，免去第三趟遍历）
+                    // 军事风格：低密度暖橙 → 高密度亮黄白，梯度更克制、不抢主体
                     if (showDensity)
                     {
                         int dens = cache.Cells[x, y].DensityAgentCount;
                         if (dens > 0)
                         {
-                            float ka = Math.Min(0.3f, dens * 0.02f);
-                            rf = rf * (1f - ka) + 1f * ka;
-                            gf = gf * (1f - ka) + 0.85f * ka;
-                            bf = bf * (1f - ka) + 0.2f * ka;
+                            float t = Math.Min(1f, dens / 12f);
+                            float ka = Math.Min(0.35f, 0.08f + t * 0.22f);
+                            // 目标色：橙(1,0.55,0.15) → 黄白(1,0.95,0.7)
+                            float tr = 1f;
+                            float tg = 0.55f + t * 0.4f;
+                            float tb = 0.15f + t * 0.55f;
+                            rf = rf * (1f - ka) + tr * ka;
+                            gf = gf * (1f - ka) + tg * ka;
+                            bf = bf * (1f - ka) + tb * ka;
                         }
                     }
 
@@ -308,19 +322,37 @@ namespace New_ZZZF.TacticalMap.UI
                         if (uv.X < 0f || uv.X > 1f || uv.Y < 0f || uv.Y > 1f) continue;
                         float px = ox + uv.X * w;
                         float py = oy + uv.Y * h;
-                        // 框色：玩家=白(不变) / 敌方=红 / 友军=绿
+                        // 框色：玩家=白 / 敌方=红 / 友军=绿
                         Color frame;
                         if (f.IsPlayer) frame = new Color(1f, 1f, 1f, 0.95f);
-                        else if (f.IsEnemy) frame = new Color(1f, 0.15f, 0.15f, 0.95f);
-                        else frame = new Color(0.2f, 1f, 0.2f, 0.95f);
+                        else if (f.IsEnemy) frame = new Color(1f, 0.2f, 0.2f, 0.95f);
+                        else frame = new Color(0.25f, 1f, 0.35f, 0.95f);
                         Color c = Color.FromUint(f.Color);
-                        // 2-call 边框：外框(边框色) + 内框(填充色)，替代原5次调用
-                        DrawRect(drawContext, px - fs / 2f - ft, py - fs / 2f - ft, fs + 2f * ft, fs + 2f * ft, frame);
-                        DrawRect(drawContext, px - fs / 2f, py - fs / 2f, fs, fs, c);
-                        if (f.Facing.LengthSquared > 1E-4f)
-                        {
-                            DrawLine(drawContext, px, py, px + f.Facing.X * fs * 1.6f, py + f.Facing.Y * fs * 1.6f, frame);
-                        }
+                        // 朝向单位向量（默认朝上）
+                        Vec2 dir = f.Facing.LengthSquared > 1E-4f ? f.Facing.Normalized() : new Vec2(0f, 1f);
+                        // 旋转基：右/前（屏幕 Y 向下，前=dir）
+                        Vec2 fwd = dir;
+                        Vec2 right = new Vec2(-dir.Y, dir.X);
+                        // 实心三角（箭头）顶点：尖端=前，底边两角=后±右
+                        Vec2 tip = new Vec2(px + fwd.X * fs * 0.6f, py + fwd.Y * fs * 0.6f);
+                        Vec2 bl = new Vec2(px - fwd.X * fs * 0.45f + right.X * fs * 0.45f, py - fwd.Y * fs * 0.45f + right.Y * fs * 0.45f);
+                        Vec2 br = new Vec2(px - fwd.X * fs * 0.45f - right.X * fs * 0.45f, py - fwd.Y * fs * 0.45f - right.Y * fs * 0.45f);
+                        // 外发光：先画一圈半透明放大三角（同色低 alpha，粗线近似填充）
+                        float glow = ft * 2.5f;
+                        DrawLine(drawContext, tip.X + fwd.X * glow, tip.Y + fwd.Y * glow, bl.X - right.X * glow, bl.Y - right.Y * glow, new Color(frame.R, frame.G, frame.B, 0.22f), glow);
+                        DrawLine(drawContext, bl.X - right.X * glow, bl.Y - right.Y * glow, br.X + right.X * glow, br.Y + right.Y * glow, new Color(frame.R, frame.G, frame.B, 0.22f), glow);
+                        DrawLine(drawContext, br.X + right.X * glow, br.Y + right.Y * glow, tip.X + fwd.X * glow, tip.Y + fwd.Y * glow, new Color(frame.R, frame.G, frame.B, 0.22f), glow);
+                        // 实心三角：用队伍色粗线（ft 宽）围合近似实心
+                        DrawLine(drawContext, tip.X, tip.Y, bl.X, bl.Y, c, Math.Max(ft, fs * 0.5f));
+                        DrawLine(drawContext, bl.X, bl.Y, br.X, br.Y, c, Math.Max(ft, fs * 0.5f));
+                        DrawLine(drawContext, br.X, br.Y, tip.X, tip.Y, c, Math.Max(ft, fs * 0.5f));
+                        DrawRect(drawContext, px - fs * 0.18f, py - fs * 0.18f, fs * 0.36f, fs * 0.36f, c); // 中心实心补点
+                        // 暗金描边：沿三角外扩 ft 画细边
+                        DrawLine(drawContext, tip.X + fwd.X * ft, tip.Y + fwd.Y * ft, bl.X - right.X * ft, bl.Y - right.Y * ft, frame, ft);
+                        DrawLine(drawContext, bl.X - right.X * ft, bl.Y - right.Y * ft, br.X + right.X * ft, br.Y + right.Y * ft, frame, ft);
+                        DrawLine(drawContext, br.X + right.X * ft, br.Y + right.Y * ft, tip.X + fwd.X * ft, tip.Y + fwd.Y * ft, frame, ft);
+                        // 朝向指示线（从三角尖端向前延长，强化方向感）
+                        DrawLine(drawContext, tip.X, tip.Y, px + fwd.X * fs * 1.4f, py + fwd.Y * fs * 1.4f, frame);
                     }
                 }
             }
@@ -335,8 +367,18 @@ namespace New_ZZZF.TacticalMap.UI
                     float px = ox + uv.X * w;
                     float py = oy + uv.Y * h;
                     float pr = Math.Max(10f, w * 0.05f);   // 圆环外径
-                    DrawRectFrame(drawContext, px - pr / 2f, py - pr / 2f, pr, pr, Math.Max(2.5f, w * 0.012f), new Color(0f, 1f, 1f, 1f)); // 青色描边
-                    DrawRect(drawContext, px - 3f, py - 3f, 6f, 6f, new Color(1f, 1f, 0.2f, 1f)); // 亮黄中心
+                    // 玩家朝向（优先用镜头目标方向，否则主 Agent 朝向）
+                    Vec2 pdir = ctrl.CameraTarget.HasValue && (ctrl.CameraTarget.Value - ctrl.PlayerPos.Value).LengthSquared > 1E-3f
+                        ? (ctrl.CameraTarget.Value - ctrl.PlayerPos.Value).Normalized()
+                        : (ctrl.PlayerFacing.LengthSquared > 1E-4f ? ctrl.PlayerFacing.Normalized() : new Vec2(0f, 1f));
+                    // 外发光圆环
+                    DrawRectFrame(drawContext, px - pr / 2f - 2f, py - pr / 2f - 2f, pr + 4f, pr + 4f, Math.Max(2f, w * 0.01f), new Color(0f, 1f, 1f, 0.3f));
+                    // 青色描边圆环
+                    DrawRectFrame(drawContext, px - pr / 2f, py - pr / 2f, pr, pr, Math.Max(2.5f, w * 0.012f), new Color(0f, 1f, 1f, 1f));
+                    // 朝向箭头（从圆心沿 pdir 指向环外）
+                    DrawLine(drawContext, px, py, px + pdir.X * pr * 0.7f, py + pdir.Y * pr * 0.7f, new Color(1f, 1f, 0.2f, 1f), Math.Max(2.5f, w * 0.012f));
+                    // 亮黄中心
+                    DrawRect(drawContext, px - 3f, py - 3f, 6f, 6f, new Color(1f, 1f, 0.2f, 1f));
                 }
             }
 
