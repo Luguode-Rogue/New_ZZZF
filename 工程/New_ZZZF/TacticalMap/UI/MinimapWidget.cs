@@ -339,9 +339,9 @@ namespace New_ZZZF.TacticalMap.UI
                         Vec2 br = new Vec2(px - fwd.X * fs * 0.45f - right.X * fs * 0.45f, py - fwd.Y * fs * 0.45f - right.Y * fs * 0.45f);
                         // 外发光：先画一圈半透明放大三角（同色低 alpha，粗线近似填充）
                         float glow = ft * 2.5f;
-                        DrawLine(drawContext, tip.X + fwd.X * glow, tip.Y + fwd.Y * glow, bl.X - right.X * glow, bl.Y - right.Y * glow, new Color(frame.R, frame.G, frame.B, 0.22f), glow);
-                        DrawLine(drawContext, bl.X - right.X * glow, bl.Y - right.Y * glow, br.X + right.X * glow, br.Y + right.Y * glow, new Color(frame.R, frame.G, frame.B, 0.22f), glow);
-                        DrawLine(drawContext, br.X + right.X * glow, br.Y + right.Y * glow, tip.X + fwd.X * glow, tip.Y + fwd.Y * glow, new Color(frame.R, frame.G, frame.B, 0.22f), glow);
+                        DrawLine(drawContext, tip.X + fwd.X * glow, tip.Y + fwd.Y * glow, bl.X - right.X * glow, bl.Y - right.Y * glow, new Color(frame.Red, frame.Green, frame.Blue, 0.22f), glow);
+                        DrawLine(drawContext, bl.X - right.X * glow, bl.Y - right.Y * glow, br.X + right.X * glow, br.Y + right.Y * glow, new Color(frame.Red, frame.Green, frame.Blue, 0.22f), glow);
+                        DrawLine(drawContext, br.X + right.X * glow, br.Y + right.Y * glow, tip.X + fwd.X * glow, tip.Y + fwd.Y * glow, new Color(frame.Red, frame.Green, frame.Blue, 0.22f), glow);
                         // 实心三角：用队伍色粗线（ft 宽）围合近似实心
                         DrawLine(drawContext, tip.X, tip.Y, bl.X, bl.Y, c, Math.Max(ft, fs * 0.5f));
                         DrawLine(drawContext, bl.X, bl.Y, br.X, br.Y, c, Math.Max(ft, fs * 0.5f));

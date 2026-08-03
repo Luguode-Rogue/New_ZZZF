@@ -100,6 +100,14 @@ namespace New_ZZZF.TacticalMap.Core
         {
             if (_controller != null && _ms != null)
                 _controller.SetVisible(_ms, false);
+
+            // 归还并释放引擎相机资源，避免 CustomCamera 残留到下一场战斗
+            if (CameraController.Instance != null)
+            {
+                try { CameraController.Instance.Destroy(); }
+                catch (Exception) { }
+                CameraController.Instance = null;
+            }
             base.OnEndMission();
         }
     }

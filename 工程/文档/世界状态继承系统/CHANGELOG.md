@@ -1,5 +1,40 @@
 # 更新日志
 
+## [0.5.0] — 2026-08-03
+
+### Added
+- **英雄模板复刻（A 方案：复原"原来的自己"）**
+  - 突破原 PRD 第 4 节「排除功能」，实现跨存档的英雄角色复原
+  - 范围：**仅玩家本体**（`Hero.MainHero`）+ **玩家招募过且存活的 NPC**（`Clan.PlayerClan.Companions` 且 `IsAlive`）
+  - 不复制家族全部成员 / 固定名 NPC 英雄
+- 导出层新增英雄档案
+  - `HeroProfile` 数据模型：记录 StringId、姓名、来源(player/companion)、文化、等级、技能、特性、职业、性别、体型(`StaticBodyProperties`/`Weight`/`Build`)
+  - `BannerlordGameAdapter.GetHeroProfiles()`：导出玩家本体与存活 companion 档案，附逐条 `[HERO]` 日志
+- 导入层新增英雄复刻工厂
+  - `HeroResurrectionFactory.CreateHeroFromProfile()`：使用 `HeroCreator.CreateSpecialHero` 重建相似游荡英雄（跨存档 StringId 不稳定，采用"重建"而非"找回原对象"）
+  - 文化取自模板 `CharacterObject.Culture`（Hero 无 `Culture` 属性，已修正）
+  - 通过 `Hero.SetName / SetNewOccupation / SetSkillValue / SetTraitLevel` 还原属性
+  - 复刻成功/失败均登记到 `ResurrectedHeroTracker`
+- 运行时登记表
+  - `ResurrectedHeroTracker`：进程内登记表（重启清空，不参与存档），供验证按钮读取
+  - `Entry`：`HeroStringId / Name / Source / CultureId / Level / Status`
+- MCM 验证按钮（控制台级）
+  - «列出已复刻英雄（验证）»：`LegacyWorldSettingsManager.RunListResurrected` → `LegacyBehavior.DoListResurrected()`
+  - `DoListResurrected()`：遍历登记表，`Hero.Find` 查状态，输出信息栏 + `[VERIFY]`/`[BEHAVIOR]` 日志
+- 导入日志完善
+  - `LegacyImporter` 导入循环加 try/catch，`ImportResult` 新增 `HeroesResurrectFailed`
+  - 输出：`英雄模板复刻完成: 成功 X 个 / 失败 Y 个`
+
+### Changed
+- `BannerlordGameAdapter` 修复 `Hero.Culture` 不存在问题，改用 `hero.CharacterObject?.Culture?.StringId`
+- `HeroResurrectionFactory` 删除 `hero.Culture = culture` 编译错误行，文化由模板决定
+
+### Notes
+- 构建零错误
+- 新功能让新档世界中出现"原来自己/同伴"的游荡英雄，达成"遇到原来的自己"的效果
+
+---
+
 ## [0.4.0] — 2026-07-23
 
 ### Added

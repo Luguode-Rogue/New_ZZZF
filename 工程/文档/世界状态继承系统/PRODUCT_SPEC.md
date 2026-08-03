@@ -26,6 +26,9 @@
 | US-10 | 同世界检测：不允许导入与当前世界来自同一 Campaign 的遗产 | P2 |
 | US-11 | 玩家可以关闭存档时自动导出 | P2 |
 | US-12 | 玩家可以关闭调试日志 | P2 |
+| US-13 | 玩家在旧档结束时，导出玩家本体与招募过且存活的同伴英雄档案 | P1 |
+| US-14 | 玩家在新档开始时，世界中出现"原来自己/同伴"的游荡英雄（遇到原来的自己） | P1 |
+| US-15 | 玩家可通过 MCM 按钮快速列出已复刻英雄，验证操作结果 | P2 |
 
 ## 3. 功能列表
 
@@ -54,17 +57,30 @@
 ### 3.4 调试日志
 
 - 文件位置：`Modules\New_ZZZF\affix_debug.log`
-- 日志标签：`BEHAVIOR`、`SERVICE`、`KINGDOMIMP`、`CLANIMP`、`SETTLEIMPORT`
+- 日志标签：`BEHAVIOR`、`SERVICE`、`KINGDOMIMP`、`CLANIMP`、`SETTLEIMPORT`、`HERO`、`VERIFY`
 - 运行时开关：MCM «启用调试日志»
+
+### 3.5 英雄模板复刻 (Hero Resurrection)
+
+- **目标**：让新档世界中出现"原来自己 / 同伴"的游荡英雄，达成"遇到原来的自己"的效果
+- **范围**：
+  - **仅玩家本体**（`Hero.MainHero`）
+  - **仅玩家招募过且存活的 NPC**（`Clan.PlayerClan.Companions` 且 `IsAlive`）
+  - 不复制家族全部成员 / 固定名 NPC 英雄
+- **策略**：跨存档 `StringId` 不稳定，采用**重建相似游荡英雄**而非"找回原对象"
+  - 导出：`HeroProfile`（姓名、来源、文化、等级、技能、特性、职业、性别、体型）
+  - 复刻：`HeroCreator.CreateSpecialHero` 重建 → `SetName / SetNewOccupation / SetSkillValue / SetTraitLevel` 还原
+  - 文化取自模板 `CharacterObject.Culture`（Hero 无 `Culture` 属性）
+- **验证**：MCM 按钮«列出已复刻英雄（验证）»读取 `ResurrectedHeroTracker` 登记表
 
 ## 4. 排除功能
 
 | 排除项 | 原因 |
 |--------|------|
-| 英雄 (Hero) 状态继承 | 英雄对象存在跨存档 ID 冲突风险 |
-| 玩家角色继承 | 玩家是新世界的独立存在 |
+| 英雄完整状态继承（装备/部队/家族关系） | 仅复刻"游荡英雄模板"，不还原装备、部队、家族从属等完整状态 |
 | 物品/装备/部队继承 | 超出政治格局继承范围 |
 | 外交关系/战争状态 | 设计复杂度高，优先级低 |
+| 玩家本体作为可控角色复用 | 玩家是新世界的独立存在；旧档玩家仅以"游荡英雄"形式出现，不可控 |
 
 ## 5. 非功能需求
 

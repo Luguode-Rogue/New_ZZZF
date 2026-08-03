@@ -29,6 +29,21 @@ LegacyService.Export()
 - 所有王国（含统治者）
 - 所有非隐藏家族（含所属王国、等级、金币、声望、影响力）
 - 所有定居点（含拥有者、繁荣度）
+- 英雄档案（仅玩家本体 + 招募过且存活的 companion）
+  - 来源标记：`player`（`Hero.MainHero`）/ `companion`（`Clan.PlayerClan.Companions` 且 `IsAlive`）
+  - 字段：姓名、文化（取自 `CharacterObject.Culture`）、等级、技能、特性、职业、性别、`StaticBodyProperties`/`Weight`/`Build`
+  - 日志：`[HERO] 导出英雄: xxx (player/companion, LvN)`
+
+### 1.4 英雄导出流程
+
+```
+BannerlordGameAdapter.GetHeroProfiles()
+  ├── Hero.MainHero → HeroProfile(source=player)
+  ├── Clan.PlayerClan.Companions
+  │   └── 过滤 IsAlive == true
+  │       └── HeroProfile(source=companion)
+  └── 逐条写入 [HERO] 日志
+```
 
 ## 2. 导入机制 (Import)
 
@@ -69,6 +84,13 @@ LegacyService.Import(worldId)
   │       ├── adapter.FindSettlement(id)
   │       ├── ChangeSettlementOwner() / SetProsperity()
   │       └── SettlementRestoredCount++
+  │   └── Phase 4: HeroResurrectionFactory.Resurrect()
+  │       ├── 遍历 legacyData.HeroProfiles
+  │       ├── HeroCreator.CreateSpecialHero(template, settlement, clan, clan, age)
+  │       ├── SetName / SetNewOccupation / SetSkillValue / SetTraitLevel
+  │       ├── 文化取自 template.CharacterObject.Culture
+  │       ├── 成功/失败登记到 ResurrectedHeroTracker
+  │       └── 输出: 英雄模板复刻完成: 成功 X 个 / 失败 Y 个
   └── 标记 _applied = true（防重复）
 ```
 

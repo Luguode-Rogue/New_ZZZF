@@ -1,65 +1,31 @@
-using System.Reflection;
 using HarmonyLib;
-using TaleWorlds.Library;
-using TaleWorlds.MountAndBlade;
-using TaleWorlds.MountAndBlade.View.Screens;
 
 namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
-    /// 通过 Harmony 后置补丁接管战场相机（与项目已有的 MountedSlashCamera 同一机制，但独立注册、互不干扰）。
-    /// 仅在小地图"镜头联动"模式激活时写入相机偏移/朝向私有字段。
+    /// 【已废弃 / 保留空壳以兼容 Bootstrap 调用】
+    ///
+    /// 旧实现通过 Harmony 后置补丁 MissionScreen.UpdateCamera，用 Traverse 写入
+    /// _cameraSpecialTargetPositionToAdd / _cameraSpecialTargetAddedBearing 等私有字段
+    /// 来实现「镜头切到地图点」。该方案存在根本性缺陷，已整体废弃：
+    ///
+    ///   1. 这组字段是官方给「对话/处决」做**相对主角的小幅偏移**用的，
+    ///      语义上根本不是绝对世界坐标，无法表达「飞到地图任意一点」。
+    ///   2. 官方 UpdateCamera 在常规分支里每帧会把这组字段无条件清零
+    ///      （MissionScreen.cs 约 1455-1459 行），postfix 写进去的值下一帧即被抹除，
+    ///      表现为镜头抖动或完全不动。
+    ///   3. 旧的「抵达判定」算的是 MainAgent 到目标点的距离，而镜头飞走时角色并没有移动，
+    ///      导致 Active 永远无法复位，镜头再也交还不回来。
+    ///
+    /// 新实现见 CameraController：改为接管 MissionScreen.CustomCamera。
+    /// 官方 CheckForUpdateCamera 在 CustomCamera != null 时会直接 SetCamera 并 return，
+    /// 短路掉全部跟随/碰撞/边界逻辑，因此无需任何 Harmony 补丁即可完全掌控相机位姿。
     /// </summary>
     public static class TacticalCameraPatch
     {
         public static void Patch(Harmony harmony)
         {
-            var method = typeof(MissionScreen).GetMethod(
-                "UpdateCamera",
-                BindingFlags.NonPublic | BindingFlags.Instance,
-                null,
-                new[] { typeof(float) },
-                null);
-            if (method == null) return;
-
-            harmony.Patch(
-                method,
-                postfix: new HarmonyMethod(typeof(TacticalCameraPatch).GetMethod(
-                    nameof(UpdateCameraPostfix),
-                    BindingFlags.NonPublic | BindingFlags.Static)));
-        }
-
-        private static void UpdateCameraPostfix(MissionScreen __instance)
-        {
-            var cam = CameraController.Instance;
-            if (cam == null || !cam.Active) return;
-            var mission = Mission.Current;
-            if (mission == null || mission.MainAgent == null) return;
-
-            var main = mission.MainAgent;
-            Vec3 agentPos = main.Position;
-            Vec3 delta = new Vec3(
-                cam.TargetWorldPos.X - agentPos.X,
-                cam.TargetWorldPos.Y - agentPos.Y,
-                0f);
-
-            // 抵达目标附近后交还镜头控制（避免一直被偏移锁住）
-            float distSq = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;
-            if (distSq < 9f)
-            {
-                cam.Active = false;
-                return;
-            }
-
-            // 朝目标点的方位角
-            float bearing = MathF.Atan2(delta.y, delta.x);
-
-            var t = Traverse.Create(__instance);
-            t.Field("_cameraSpecialTargetPositionToAdd").SetValue(new Vec3(delta.x, delta.y, 6f));
-            t.Field("_cameraSpecialTargetAddedBearing").SetValue(bearing);
-            t.Field("_cameraSpecialCurrentAddedBearing").SetValue(bearing);
-            t.Field("_cameraSpecialTargetAddedElevation").SetValue(0f);
-            t.Field("_cameraSpecialCurrentAddedElevation").SetValue(0f);
+            // 有意留空：相机控制已改由 CustomCamera 接管，不再需要打补丁。
         }
     }
 }

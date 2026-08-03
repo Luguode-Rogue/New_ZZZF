@@ -7,6 +7,7 @@ using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
 using New_ZZZF.TacticalMap.UI;
+using System;
 
 namespace New_ZZZF.TacticalMap.Core
 {
@@ -84,11 +85,19 @@ namespace New_ZZZF.TacticalMap.Core
             _playerPos = (_mission.MainAgent != null) ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
             if (_mission.MainAgent != null)
             {
-                float af = _mission.MainAgent.Facing; // 朝向角（弧度，绕 Z 轴）
+                float af = _mission.MainAgent.LookDirectionAsAngle; // 朝向角（弧度，绕 Z 轴）
                 _playerFacing = new Vec2((float)Math.Cos(af), (float)Math.Sin(af));
             }
             _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
                 ? CameraController.Instance.TargetWorldPos : (Vec2?)null;
+
+            // 驱动相机状态机（飞出 → 停留 → 飞回）。必须每帧调用，
+            // 且要在 CameraController.Initialize 之后才有效。
+            if (CameraController.Instance != null)
+            {
+                CameraController.Instance.Initialize(ms, mission.Scene);
+                CameraController.Instance.Tick(dt);
+            }
 
             _accum += dt;
             if (_accum >= TacticalSettings.Instance.UpdateInterval)
@@ -122,8 +131,12 @@ namespace New_ZZZF.TacticalMap.Core
         public void ToggleCameraFollow()
         {
             _cameraLink = !_cameraLink;
-            if (CameraController.Instance != null && !_cameraLink)
-                CameraController.Instance.Disable();
+            if (CameraController.Instance != null)
+            {
+                // 同步开关：关闭时让镜头平滑飞回原位
+                CameraController.Instance.PreviewModeEnabled = _cameraLink;
+                if (!_cameraLink) { CameraController.Instance.Disable(); }
+            }
             string msg = _cameraLink ? "战术地图：已开启 点击联动镜头" : "战术地图：已关闭 点击联动镜头";
             InformationManager.DisplayMessage(new InformationMessage(msg, new Color(0.2f, 0.9f, 1f, 1f)));
         }
