@@ -96,6 +96,8 @@ namespace New_ZZZF.TacticalMap.Core
             if (CameraController.Instance != null)
             {
                 CameraController.Instance.Initialize(ms, mission.Scene);
+                // 每帧幂等记录玩家基准高度（agent 就绪后即生效一次，之后值不变）
+                CameraController.Instance.CaptureBaseHeight(mission);
                 CameraController.Instance.Tick(dt);
             }
 
@@ -139,6 +141,22 @@ namespace New_ZZZF.TacticalMap.Core
             }
             string msg = _cameraLink ? "战术地图：已开启 点击联动镜头" : "战术地图：已关闭 点击联动镜头";
             InformationManager.DisplayMessage(new InformationMessage(msg, new Color(0.2f, 0.9f, 1f, 1f)));
+
+            // 调试用：输出【当前真实相机】的姿态（按 C 时打印），方便把调好的角度回贴给开发
+            if (CameraController.Instance != null)
+            {
+                CameraController.Instance.ReadRealCameraAngles(out float bearing, out float pitch, out Vec3 eye);
+                float bearingDeg = bearing * 57.29578f;
+                float pitchDeg = pitch * 57.29578f;
+                // 归一化到 [0,360)
+                if (bearingDeg < 0f) { bearingDeg += 360f; }
+                InformationManager.DisplayMessage(new InformationMessage(
+                    $"[Cam] 真实相机 bearing={bearingDeg:F1}° pitch={pitchDeg:F1}° eye=({eye.x:F1},{eye.y:F1},{eye.z:F1})",
+                    new Color(1f, 0.85f, 0.2f, 1f)));
+                InformationManager.DisplayMessage(new InformationMessage(
+                    $"[Cam] 固定参数(供替换): ViewBearing={bearing:F6}f; ViewHeight={(float)Math.Max(0, eye.z):F1}f;",
+                    new Color(1f, 0.85f, 0.2f, 1f)));
+            }
         }
     }
 }

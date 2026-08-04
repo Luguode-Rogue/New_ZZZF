@@ -123,12 +123,13 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         public Vec2 UVToWorld(Vec2 uv)
         {
-            return new Vec2(OriginX + uv.X * WorldW, OriginY + uv.Y * WorldH);
+            // X 轴镜像：把小地图左右翻转，使地图显示/点击与镜头方位一致
+            return new Vec2(OriginX + (1f - uv.X) * WorldW, OriginY + uv.Y * WorldH);
         }
 
         public Vec2 WorldToUV(Vec2 world)
         {
-            return new Vec2((world.X - OriginX) / WorldW, (world.Y - OriginY) / WorldH);
+            return new Vec2(1f - (world.X - OriginX) / WorldW, (world.Y - OriginY) / WorldH);
         }
 
         public float GetHeightAt(Vec2 world)

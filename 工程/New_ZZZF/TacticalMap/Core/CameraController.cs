@@ -1,6 +1,7 @@
 using System;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 
 namespace New_ZZZF.TacticalMap.Core
@@ -50,10 +51,17 @@ namespace New_ZZZF.TacticalMap.Core
         public float HoldDuration = 2.5f;
         /// <summary>飞回原位所需时间（秒）。</summary>
         public float FlyBackDuration = 0.7f;
-        /// <summary>相机悬停在目标点上方的高度（米）。</summary>
-        public float ViewHeight = 18f;
+        /// <summary>相机相对基准高度的抬升量（米）。基准高度在进入战场时记录玩家坐标高度。
+        /// 实际悬停高度 = BaseHeight + HeightOffset。</summary>
+        public float HeightOffset = 15f;
+        /// <summary>进入战场时记录的玩家坐标高度（米），作为悬停高度的基准。</summary>
+        private float _baseHeight = 0f;
         /// <summary>相机相对目标点的水平后退距离（米），用于形成俯视角。</summary>
-        public float ViewDistance = 14f;
+        public float ViewDistance = 17.6f;
+        /// <summary>固定观察角度（水平朝向，弧度）。
+        /// 回退版本：取 π(180°) 即相机站在目标正南(+Y)、朝北(-Y)看，
+        /// 画面上下对、左右反（与战术地图左右相反）。后续由他人处理左右镜像问题。</summary>
+        public float ViewBearing = 3.14159265f;
         /// <summary>垂直 FOV（度）。</summary>
         public float FieldOfView = 65f;
 
@@ -81,6 +89,20 @@ namespace New_ZZZF.TacticalMap.Core
         }
 
         /// <summary>
+        /// 进入战场后记录玩家当前坐标高度，作为悬停高度的基准。
+        /// 用 MainAgent.Position.z；agent 未就绪时跳过，等后续再调。
+        /// </summary>
+        public void CaptureBaseHeight(Mission mission)
+        {
+            if (mission == null) { return; }
+            Agent agent = mission.MainAgent;
+            if (agent != null && agent.IsActive())
+            {
+                _baseHeight = agent.Position.z;
+            }
+        }
+
+        /// <summary>
         /// 兼容入口：小地图点击时调用，传入世界平面坐标。
         /// 高度自动取该点地面高度。
         /// </summary>
@@ -93,7 +115,7 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 try
                 {
-                    float ground = _scene.GetGroundHeightAtPosition(new Vec3(worldPos.X, worldPos.Y, 1000f));
+                    float ground = _scene.GetGroundHeightAtPosition(new Vec3(worldPos.X, worldPos.Y, 100f));
                     if (ground > -1000f && ground < 9999f) { z = ground; }
                 }
                 catch (Exception) { }
@@ -249,8 +271,8 @@ namespace New_ZZZF.TacticalMap.Core
 
         /// <summary>
         /// 由目标点构造一个俯视观察位姿。
-        /// 沿用当前镜头的水平朝向，从该方向后退 ViewDistance 并抬高 ViewHeight，
-        /// 再 LookAt 目标点，这样切过去的视角与玩家当前朝向连续，不会产生方向感错乱。
+        /// 使用固定观察角度 ViewBearing，从该角度的对面后退 ViewDistance 并抬高 ViewHeight，
+        /// 再 LookAt 目标点。角度和高度均固定，保证每次点击切过去的视角一致。
         /// </summary>
         private MatrixFrame BuildViewFrame(Vec3 target)
         {
@@ -268,12 +290,14 @@ namespace New_ZZZF.TacticalMap.Core
                 catch (Exception) { }
             }
 
-            float bearing = _missionScreen != null ? _missionScreen.CameraBearing : 0f;
-            // 相机站位：沿当前朝向的反方向后退，并抬升
+            // 固定观察角度：先算出 eye 水平位置（按 bearing 偏离 target）+ Z 抬高 ViewHeight
+            // 然后用 Camera.LookAt 让引擎自己构造旋转矩阵，避开 rotation.f 方向约定的歧义
+            float bearing = ViewBearing;
+            float viewHeight = _baseHeight + HeightOffset;
             Vec3 eye = new Vec3(
-                target.x - (float)Math.Sin(bearing) * -ViewDistance,
-                target.y - (float)Math.Cos(bearing) * -ViewDistance,
-                target.z + ViewHeight);
+                target.x + (float)Math.Sin(bearing) * ViewDistance,
+                target.y - (float)Math.Cos(bearing) * ViewDistance,
+                target.z + viewHeight);
 
             // 防止相机穿地
             if (_scene != null)
@@ -289,23 +313,13 @@ namespace New_ZZZF.TacticalMap.Core
                 catch (Exception) { }
             }
 
-            MatrixFrame frame = MatrixFrame.Identity;
-            frame.origin = eye;
-
-            // 用 LookAt 语义构造旋转：f = 前方(视线)，s = 右，u = 上
-            Vec3 forward = (target - eye);
-            if (forward.Length < 0.001f) { forward = new Vec3(0f, 1f, 0f); }
-            forward.Normalize();
-            Vec3 worldUp = new Vec3(0f, 0f, 1f);
-            Vec3 side = Vec3.CrossProduct(forward, worldUp);
-            if (side.Length < 0.001f) { side = new Vec3(1f, 0f, 0f); }
-            side.Normalize();
-            Vec3 up = Vec3.CrossProduct(side, forward);
-            up.Normalize();
-
-            frame.rotation.s = side;
-            frame.rotation.f = forward;
-            frame.rotation.u = up;
+            // 用引擎 Camera.LookAt 构造 view frame（版本回退：上下对、左右反）
+            if (_camera == null)
+            {
+                _camera = Camera.CreateCamera();
+            }
+            _camera.LookAt(eye, target, new Vec3(0f, 0f, 1f));
+            MatrixFrame frame = _camera.Frame;
             return frame;
         }
 
@@ -313,6 +327,25 @@ namespace New_ZZZF.TacticalMap.Core
         {
             // ease-in-out，起步和收尾都平缓，观感接近官方过场
             return t * t * (3f - 2f * t);
+        }
+
+        /// <summary>
+        /// 读取当前真实相机（MissionScreen.CombatCamera）的姿态，反解出水平方位角与俯仰角。
+        /// 用于按 C 键时把玩家当前调好的镜头角度打印出来，方便回贴成固定参数。
+        /// bearing：水平方位（弧度，与官方 Vec3.RotationZ 同约定 Atan2(-x, y)）
+        /// pitch：俯仰角（弧度，Asin(forward.z)）
+        /// </summary>
+        public void ReadRealCameraAngles(out float bearing, out float pitch, out Vec3 eyePos)
+        {
+            bearing = 0f; pitch = 0f; eyePos = Vec3.Zero;
+            if (_missionScreen == null || _missionScreen.CombatCamera == null) { return; }
+            MatrixFrame f = _missionScreen.CombatCamera.Frame;
+            eyePos = f.origin;
+            Vec3 forward = f.rotation.f;
+            if (forward.Length < 0.0001f) { return; }
+            forward.Normalize();
+            bearing = (float)Math.Atan2(-forward.x, forward.y);
+            pitch = (float)Math.Asin(MBMath.ClampFloat(forward.z, -1f, 1f));
         }
 
         private static MatrixFrame LerpFrame(MatrixFrame a, MatrixFrame b, float t)

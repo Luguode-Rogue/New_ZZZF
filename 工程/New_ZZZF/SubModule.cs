@@ -130,7 +130,6 @@ namespace New_ZZZF
                 campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
                 campaignGameStarter.AddBehavior(new HeroChangeCampaignBehavior());
                 campaignGameStarter.AddBehavior(new AffixCampaignBehavior());
-                campaignGameStarter.AddBehavior(new LegacyWorld.Bannerlord.LegacyBehavior());
 
             }
         }
