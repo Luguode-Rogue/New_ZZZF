@@ -79,8 +79,8 @@ LegacyBehavior (CampaignBehaviorBase)
 
 LegacyService (静态入口)
   ├─ Initialize() → 创建 IGameAdapter
-  ├─ Export() → LegacyExporter
-  ├─ Import() → 同世界检测 → LegacyImporter
+  ├─ Export() → LegacyExporter.ExportWorld + ExportHeroes（双文件）
+  ├─ Import() → 合并双文件 + applied_world_ids 去重 → LegacyImporter
   └─ ForceImport() → 跳过检测 → LegacyImporter
 
 LegacyImporter (编排器)
@@ -91,14 +91,21 @@ LegacyImporter (编排器)
 
 ### 3.2 防重复导入机制
 
-```csharp
-// 通过 IDataStore 随存档序列化
-bool _applied;          // 当前存档是否已导入
-string _appliedWorldId; // 已应用的世界 ID
+已复刻过的遗产来源世界持久化在 `LegacyHeroes.json` 的 `applied_world_ids`，**跨进程生效**：
 
-// OnNewGameCreated: 自动导入（此时 _applied=false）
-// SyncData 加载后: _applied=true, 不再触发
+```csharp
+// LegacyHeroes.json
+{
+  "profiles": [ ... ],
+  "applied_world_ids": ["worldA", "worldB"]   // 已复刻过的遗产世界，重开游戏仍生效
+}
+
+// LegacyService.Import()
+// - 仅当 foreignWorlds（遗产中非当前世界的来源）不在 applied_world_ids 时才复刻
+// - 成功后把 foreignWorlds 写回 applied_world_ids
 ```
+
+> 与玩家人物遗产共用同一文件，避免额外 sidecar；同进程与跨进程均不会重复复刻同一世界的遗留 NPC。
 
 ### 3.3 MCM 按钮触发机制
 
@@ -134,7 +141,7 @@ if (LegacyWorldSettingsManager.TryConsumeManualExport())
 |------|------|------|
 | 配置方式 | MCM + XML 持久化 | 用户友好，无需手动编辑文件 |
 | 导出格式 | JSON (Newtonsoft.Json) | 可读性好，易于调试 |
-| 存储位置 | MyDocuments 下 | 独立于 Mod 更新，用户可访问 |
+| 存储位置 | 模块根目录（`Legacy.json` 世界状态 + `LegacyHeroes.json` 玩家人物） | 与 `SubModule.xml` 同级，易于排查 |
 | 适配器模式 | `IGameAdapter` 接口 | 隔离游戏版本 API 变更 |
-| 导入顺序 | Kingdom → Clan → Settlement | 满足依赖约束（领地需要所属家族存在） |
+| 导入顺序 | Kingdom → Clan → Settlement → Hero | 满足依赖约束（领地需要所属家族存在） |
 | 所有权变更 | `Town.OwnerClan` setter | 触发游戏内 OnFortificationAdded/Removed |

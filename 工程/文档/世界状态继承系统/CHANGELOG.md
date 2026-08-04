@@ -1,5 +1,34 @@
 # 更新日志
 
+## [0.6.0] — 2026-08-04
+
+### Added
+- **玩家人物遗产独立文件 `LegacyHeroes.json`**
+  - 与世界状态 `Legacy.json` 分离存储，专门累积玩家人物（player/companion/wanderer）模板
+  - 存储位置：模块根目录（与 `SubModule.xml`、`LegacyWorld.log` 同级）
+- **跨世界遗产链（累积式导出）**
+  - 导出改为**累积写**：每次导出把当前存档的玩家模板按 `(WorldId + Name + Source)` 去重追加进 `LegacyHeroes.json`
+  - 例：A 世界导出 → B 世界导出（保留 A）→ C 世界导入时可同时复刻 **A 与 B** 的遗留玩家人物
+- **防本存档二重身**
+  - `player`/`companion` 模板仅当「当前 WorldId == 遗产 WorldId」（同一存档）时，才判断是否命中当前存活的自己/队友，命中则跳过
+  - 跨存档（A 导出、B 导入，WorldId 不同）即使姓名雷同也放行复刻，实现"遇到原来的自己"
+- **已复刻世界持久化（跨进程防重复）**
+  - `LegacyHeroes.json` 新增 `applied_world_ids` 字段，记录已复刻过的遗产来源世界
+  - 重开游戏后再次点导入时，已导入过的世界不再重复复刻，避免酒馆里堆积重复 NPC
+- `HeroProfile` 新增 `WorldId` 字段，标记模板所属存档
+- 新增 `HeroProfileList` 模型承载累积的玩家人物遗产
+
+### Changed
+- `LegacyExporter.Export` 拆分为 `ExportWorld`（写 `Legacy.json`，覆盖）与 `ExportHeroes`（写 `LegacyHeroes.json`，累积）
+- `LegacyService` 导入时读取两个文件并合并；去重依据由内存 `_appliedWorldIds` 改为持久化的 `AppliedWorldIds`
+- `Resurrect` 增加 `currentWorldId` 参数透传至防二重身判断
+
+### Notes
+- 构建零错误
+- 设计澄清：本存档内禁止出现"自己/队友"的二重身；跨新档遇到"原来的自己"为预期功能
+
+---
+
 ## [0.5.0] — 2026-08-03
 
 ### Added

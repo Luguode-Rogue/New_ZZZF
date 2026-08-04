@@ -5,7 +5,7 @@
 | 项目 | 配置 |
 |------|------|
 | 游戏版本 | Mount & Blade II: Bannerlord v1.2.x |
-| Mod 版本 | New_ZZZF (LegacyWorld v0.4.0) |
+| Mod 版本 | New_ZZZF (LegacyWorld v0.6.0) |
 | 依赖 Mod | MCMv5 (Mod Configuration Menu v5) |
 | 测试工具 | 游戏内置 Console / 日志文件 `affix_debug.log` |
 
@@ -15,12 +15,13 @@
 
 | 编号 | 用例 | 前置条件 | 预期结果 |
 |------|------|----------|----------|
-| EXP-01 | 自动导出 | MCM «启用» + «存档自动导出» 均为开 | 保存游戏后 `Legacy.json` 被创建 |
+| EXP-01 | 自动导出 | MCM «启用» + «存档自动导出» 均为开 | 保存游戏后 `Legacy.json` 与 `LegacyHeroes.json` 被创建 |
 | EXP-02 | 自动导出关闭 | MCM «存档自动导出» 为关 | 保存游戏后不生成 `Legacy.json` |
 | EXP-03 | 主开关关闭 | MCM «启用» 为关 | 保存游戏后不生成 `Legacy.json` |
-| EXP-04 | 手动导出 | 游戏中拨动 MCM «手动导出» 按钮 | 立即生成 `Legacy.json` |
-| EXP-05 | 导出文件内容完整 | 导出后手动检查 JSON 文件 | 格式正确，包含 Kingdoms/Clans/Settlements |
+| EXP-04 | 手动导出 | 游戏中拨动 MCM «手动导出» 按钮 | 立即生成 `Legacy.json` 与 `LegacyHeroes.json` |
+| EXP-05 | 导出文件内容完整 | 导出后手动检查 JSON 文件 | `Legacy.json` 含 Kingdoms/Clans/Settlements；`LegacyHeroes.json` 含 profiles |
 | EXP-06 | 导出内容与游戏一致 | 导出后对比游戏内状态 | JSON 数据与当前世界状态匹配 |
+| EXP-07 | 玩家人物累积 | A 世界导出后 B 世界导出 | `LegacyHeroes.json` 同时含 A、B 的玩家模板（按 WorldId 区分） |
 
 ### 2.2 导入功能测试
 
@@ -30,10 +31,12 @@
 | IMP-02 | 载入存档不导入 | 已有存档，存在 `Legacy.json` | 载入后不触发导入 |
 | IMP-03 | 主开关关闭不导入 | MCM «启用» 为关，存在 `Legacy.json` | 新游戏不导入 |
 | IMP-04 | 手动应用 | 游戏中拨动 «手动应用» | 立即导入 `Legacy.json` |
-| IMP-05 | 同世界保护 | 同一游戏中导出后拨动 «手动应用» | 被拒绝（同世界检测） |
-| IMP-06 | 手动应用跳过检测 | 同一游戏中先手动导出再手动应用 | 同世界检测被跳过，强制导入 |
-| IMP-07 | 防重复导入 | 新游戏导入后保存/读档 | 不再触发第二次导入 |
+| IMP-05 | 本存档防二重身 | 当前存档内导出后拨动 «手动应用» | player/companion 命中当前存活的自己/队友，跳过（无二重身） |
+| IMP-06 | 手动应用跨世界 | A 世界导出、B 世界拨动 «手动应用» | 同 WorldId 不同，正常复刻 A 的遗留玩家（遇到原来的自己） |
+| IMP-07 | 持久化防重复 | 重开游戏后再次点导入同一遗产世界 | `applied_world_ids` 已含该世界，跳过，不重复复刻 |
 | IMP-08 | 不存在 JSON 时不导入 | `Legacy.json` 不存在时开始新游戏 | 正常开始游戏 |
+| IMP-09 | 跨世界遗产链 | A 导出 → B 导出 → C 导入 | C 世界同时复刻 A 与 B 的遗留玩家人物 |
+| IMP-10 | 同进程重复导入 | 同一游戏会话内多次拨动 «手动应用» | 仅首次复刻，后续跳过 |
 
 ### 2.3 分类开关测试
 

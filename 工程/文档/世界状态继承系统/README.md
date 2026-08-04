@@ -37,25 +37,25 @@ LegacyWorld 流程：
 | 王国（Kingdom）状态继承 | 设计完成 |
 | 家族（Clan）状态继承 | 设计完成 |
 | 城镇/城堡/村庄（Settlement）继承 | 设计完成 |
-| 多版本 API 适配 | 设计完成 |
-| 英雄（Hero）继承 | 设计排除 |
-| 玩家继承 | 设计排除 |
+| 多版本 API 适配 | 已实现 |
+| 玩家人物遗产（跨世界累积） | 已实现（v0.6.0） |
+| 英雄（Hero）复刻（遇到原来的自己） | 已实现（v0.5.0） |
 
 ## 当前版本
 
-**0.4.0** — 触发时机修正（仅新游戏导入）+ MCM 设置菜单 + 日志路径统一到模块根目录。
+**0.6.0** — 玩家人物遗产独立为 `LegacyHeroes.json` + 跨世界累积遗产链 + 防本存档二重身 + 已复刻世界持久化。
 
 ## 触发时机
 
 | 事件 | 行为 | 控制开关 |
 |------|------|----------|
-| `OnBeforeSaveEvent` | 自动导出世界状态到 `Legacy.json` | MCM「启用世界状态继承系统」+「存档时自动导出」 |
+| `OnBeforeSaveEvent` | 自动导出世界状态到 `Legacy.json`；玩家人物累积写入 `LegacyHeroes.json` | MCM「启用世界状态继承系统」+「存档时自动导出」 |
 | `OnNewGameCreatedEvent` | 自动导入世界遗产（**仅新游戏**，载入存档不触发） | MCM「启用世界状态继承系统」 |
-| MCM 按钮「手动导出」 | 手动导出当前世界状态 | 无条件 |
-| MCM 按钮「手动应用」 | 手动强制应用 `Legacy.json`（忽略同世界检测） | 无条件 |
+| MCM 按钮「手动导出」 | 手动导出当前世界状态（世界状态 + 玩家人物） | 无条件 |
+| MCM 按钮「手动应用」 | 手动强制应用遗产（忽略同世界检测） | 无条件 |
 
 > **重要**：导入只在「开始新游戏」时自动发生。载入已有存档不会触发导入，避免污染已有进度。
-> 每个存档通过 `applied` 标志（随 `SyncData` 序列化）保证整局只导入一次。
+> 已复刻过的遗产世界记录在 `LegacyHeroes.json` 的 `applied_world_ids` 中（持久化），重开游戏也不会重复复刻。
 
 ## 配置（MCM 设置菜单）
 
@@ -91,8 +91,15 @@ LegacyWorld 流程：
 
 ## 日志
 
-调试日志统一写入**模块根目录**下的 `affix_debug.log`（与 `SubModule.xml` 同目录，即 `Modules\New_ZZZF\affix_debug.log`）。
-每次游戏启动会清空旧日志并写入新文件。关键标签：`BEHAVIOR`、`SERVICE`、`KINGDOMIMP`、`CLANIMP`、`SETTLEIMPORT`。
+调试日志统一写入**模块根目录**下的 `LegacyWorld.log`（与 `SubModule.xml` 同级）。
+每次游戏启动会清空旧日志并写入新文件。关键标签：`BEHAVIOR`、`SERVICE`、`KINGDOMIMP`、`CLANIMP`、`SETTLEIMPORT`、`HERO`、`VERIFY`、`EXPORT`、`IMPORT`。
+
+## 数据存储文件
+
+| 文件 | 位置 | 说明 |
+|------|------|------|
+| `Legacy.json` | 模块根目录 | 世界状态（王国/家族/定居点），覆盖写 |
+| `LegacyHeroes.json` | 模块根目录 | 玩家人物遗产，累积写（跨世界遗产链） |
 
 ## 文档索引
 

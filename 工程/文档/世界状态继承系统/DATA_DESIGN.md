@@ -6,7 +6,7 @@
 
 ```json
 {
-  "version": "0.4.0",
+  "version": "0.6.0",
   "world_id": "v1.2.10.164250_1689977024",
   "created_at": "2026-07-23T12:00:00",
   "game_version": "v1.2.10.164250",
@@ -16,6 +16,8 @@
   "settlements": [...]
 }
 ```
+
+> 存储位置：模块根目录（与 `SubModule.xml` 同级）。世界状态写入 `Legacy.json`（覆盖写）。
 
 ### 1.1 LegacyData (C#)
 
@@ -30,6 +32,7 @@ public class LegacyData
     [JsonProperty("kingdoms")]    public List<KingdomState> Kingdoms { get; set; }
     [JsonProperty("clans")]       public List<ClanState> Clans { get; set; }
     [JsonProperty("settlements")] public List<SettlementState> Settlements { get; set; }
+    // 注意：导入时 HeroProfiles 由 LegacyHeroes.json 合并填充（见 §8）
 }
 ```
 
@@ -183,5 +186,75 @@ public class ImportResult
     public int KingdomsRestored { get; set; }
     public int ClansRestored { get; set; }
     public int SettlementsRestored { get; set; }
+    public int HeroesResurrected { get; set; }   // 新建的游荡英雄数
 }
 ```
+
+## 8. 玩家人物遗产 (LegacyHeroes.json)
+
+v0.6.0 起，玩家人物模板独立存储于 `LegacyHeroes.json`（与 `Legacy.json` 同目录），采用**累积写**，
+形成跨世界遗产链：A 世界导出 → B 世界导出（保留 A）→ C 世界导入时同时拿到 A 与 B 的遗留人物。
+
+```json
+{
+  "version": "0.6.0",
+  "profiles": [
+    {
+      "source": "player",
+      "world_id": "v1.2.10.164250_1689977024",
+      "name": "张三",
+      "culture_id": "empire",
+      "level": 32,
+      "skills": { "OneHanded": 120, "Leadership": 100 },
+      "traits": { "Generous": 1 },
+      "age": 36,
+      "occupation": "Wanderer",
+      "gender": "Male",
+      "body_properties": "..."
+    },
+    {
+      "source": "companion",
+      "world_id": "v1.2.10.164250_1689977024",
+      "name": "李四",
+      "culture_id": "empire",
+      ...
+    }
+  ],
+  "applied_world_ids": ["v1.2.10.164250_1689977024"]
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `version` | string | 数据版本 |
+| `profiles` | List\<HeroProfile\> | 累积的玩家人物模板（跨世界） |
+| `applied_world_ids` | List\<string\> | 已复刻过的遗产来源 WorldId，持久化防重复 |
+
+### 8.1 HeroProfile (C#)
+
+```csharp
+public class HeroProfile
+{
+    [JsonProperty("source")]      public string Source { get; set; }   // player / companion / wanderer ...
+    [JsonProperty("world_id")]    public string WorldId { get; set; }  // 模板所属存档（用于区分同存档/跨存档）
+    [JsonProperty("name")]        public string Name { get; set; }
+    [JsonProperty("culture_id")]  public string CultureId { get; set; }
+    [JsonProperty("level")]       public int Level { get; set; }
+    [JsonProperty("skills")]      public Dictionary<string,int> Skills { get; set; }
+    [JsonProperty("traits")]      public Dictionary<string,int> Traits { get; set; }
+    [JsonProperty("age")]         public int Age { get; set; }
+    [JsonProperty("occupation")]  public string Occupation { get; set; }
+    [JsonProperty("gender")]      public string Gender { get; set; }
+    [JsonProperty("body_properties")] public string BodyProperties { get; set; }
+}
+```
+
+> `WorldId` 是 v0.6.0 新增：防本存档二重身依赖它——仅当「当前 WorldId == 遗产 WorldId」时才判断模板是否指向当前存活的自己/队友。
+
+### 8.2 去重与防二重身规则
+
+- **累积去重**：导出时按 `(WorldId + Name + Source)` 去重，避免同一存档重复追加。
+- **防本存档二重身**：导入时 `player`/`companion` 模板若当前 WorldId == 遗产 WorldId 且命中存活的自己/队友，则跳过（禁止在本存档生成二重身）。
+- **跨存档放行**：当前 WorldId ≠ 遗产 WorldId（如 A 导出、B 导入）即使姓名雷同也放行，实现"遇到原来的自己"。
+- **持久化防重复**：`applied_world_ids` 记录已复刻世界，重开游戏后再导入也不会重复复刻。
+

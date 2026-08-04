@@ -11,38 +11,49 @@
 
 ### 1.2 导出流程
 
+导出分两部分写入两个文件（均位于模块根目录）：
+
 ```
 LegacyService.Export()
   ├── 检查 Enable 主开关（自动导出时）
-  ├── AffixLogger.Info("SERVICE", "开始导出...")
-  ├── LegacyExporter.Export(adapter)
+  ├── LegacyExporter.ExportWorld(adapter)        → 写 Legacy.json（覆盖）
   │   ├── 遍历所有 Kingdom → KingdomState
   │   ├── 遍历所有 Clan → ClanState
   │   ├── 遍历所有 Settlement → SettlementState
   │   └── 组装 LegacyData（含版本号、WorldId、时间戳）
-  ├── LegacySerializer.Serialize(legacyData) → JSON
-  └── LegacyStorage.Write(json)
+  └── LegacyExporter.ExportHeroes(adapter)       → 写 LegacyHeroes.json（累积）
+      ├── 读取已有 LegacyHeroes.json（保留 applied_world_ids）
+      ├── 遍历 GetHeroProfiles() → HeroProfile
+      ├── 按 (WorldId + Name + Source) 去重追加
+      └── 写回 LegacyHeroes.json
 ```
 
 ### 1.3 导出内容
 
+**Legacy.json（世界状态，覆盖写）：**
 - 所有王国（含统治者）
 - 所有非隐藏家族（含所属王国、等级、金币、声望、影响力）
 - 所有定居点（含拥有者、繁荣度）
-- 英雄档案（仅玩家本体 + 招募过且存活的 companion）
+
+**LegacyHeroes.json（玩家人物，累积写）：**
+- 英雄档案（仅玩家本体 + 招募过且存活的 companion + 现有游荡英雄可选）
   - 来源标记：`player`（`Hero.MainHero`）/ `companion`（`Clan.PlayerClan.Companions` 且 `IsAlive`）
-  - 字段：姓名、文化（取自 `CharacterObject.Culture`）、等级、技能、特性、职业、性别、`StaticBodyProperties`/`Weight`/`Build`
+  - 字段：姓名、所属 `world_id`、文化（取自 `CharacterObject.Culture`）、等级、技能、特性、职业、性别、`StaticBodyProperties`/`Weight`/`Build`
+  - 每个模板带 `world_id`，用于跨世界区分与防二重身
   - 日志：`[HERO] 导出英雄: xxx (player/companion, LvN)`
 
 ### 1.4 英雄导出流程
 
 ```
 BannerlordGameAdapter.GetHeroProfiles()
-  ├── Hero.MainHero → HeroProfile(source=player)
+  ├── Hero.MainHero → HeroProfile(source=player, world_id=当前)
   ├── Clan.PlayerClan.Companions
   │   └── 过滤 IsAlive == true
-  │       └── HeroProfile(source=companion)
+  │       └── HeroProfile(source=companion, world_id=当前)
   └── 逐条写入 [HERO] 日志
+
+LegacyExporter.ExportHeroes(adapter)
+  └── 累积写 LegacyHeroes.json（按 WorldId+Name+Source 去重）
 ```
 
 ## 2. 导入机制 (Import)
@@ -55,43 +66,33 @@ BannerlordGameAdapter.GetHeroProfiles()
 | 手动应用 | MCM 按钮«手动应用»拨动触发，跳过同世界检测 | `HourlyTick` 消费 `ManualApplyTrigger` → `LegacyService.ForceImport()` |
 
 > **重要**：载入已有存档（`OnGameLoadedEvent`）**不会**触发导入。
-> 每个存档通过 `SyncData` 中的 `_applied` 标志保证整局只执行一次。
+> 已复刻过的遗产世界记录在 `LegacyHeroes.json` 的 `applied_world_ids`（持久化），重开游戏也不重复复刻。
 
 ### 2.2 导入流程
 
 ```
-LegacyService.Import(worldId)
-  ├── 检查 Legacy.json 是否存在 → 否: 退出
-  ├── LegacySerializer.Deserialize() → LegacyData
-  ├── 同世界检测: currentWorldId == legacyData.WorldId?
-  │   └── 是: 退出（ForceImport 跳过此步）
+LegacyService.LoadCombined()
+  ├── 读取 Legacy.json → LegacyData（世界状态）
+  ├── 读取 LegacyHeroes.json → HeroProfileList（玩家人物，跨世界累积）
+  └── 将 heroes.Profiles 合并进 legacyData.HeroProfiles
+
+LegacyService.Import()
+  ├── currentWorldId = adapter.GetWorldId()
+  ├── 计算 foreignWorlds = heroes 中 WorldId != currentWorldId 的来源世界集合
+  ├── 若 foreignWorlds 为空（遗产只含当前世界）：跳过英雄导入
+  ├── 若 foreignWorlds ⊆ applied_world_ids（已复刻过）：跳过，避免重复
   ├── LegacyService.RefreshSettings()  ← 从 MCM 读取分类开关
   ├── LegacyImporter.Apply(adapter, legacyData, settings)
   │   ├── Phase 1: KingdomImporter.Restore()
-  │   │   ├── 遍历 legacyData.Kingdoms
-  │   │   ├── 根据 RestoreKingdoms 开关过滤
-  │   │   ├── adapter.FindKingdom(id) → 设置统治者
-  │   │   └── KingdomRestoredCount++
   │   ├── Phase 2: ClanImporter.Restore()
-  │   │   ├── 遍历 legacyData.Clans
-  │   │   ├── 根据 RestoreClans/CreateMissingClans/RestoreClanEconomy 开关
-  │   │   ├── adapter.FindClan(id) / CreateClan(id)
-  │   │   ├── 设置所属王国、金币、声望、影响力
-  │   │   └── ClanRestoredCount++
-  │   └── Phase 3: SettlementImporter.Restore()
-  │       ├── 遍历 legacyData.Settlements
-  │       ├── 根据 RestoreSettlements 开关过滤
-  │       ├── adapter.FindSettlement(id)
-  │       ├── ChangeSettlementOwner() / SetProsperity()
-  │       └── SettlementRestoredCount++
-  │   └── Phase 4: HeroResurrectionFactory.Resurrect()
-  │       ├── 遍历 legacyData.HeroProfiles
+  │   ├── Phase 3: SettlementImporter.Restore()
+  │   └── Phase 4: HeroResurrectionFactory.Resurrect(profile, currentWorldId)
+  │       ├── 防本存档二重身：当前 WorldId == 遗产 WorldId 且命中存活的自己/队友 → 跳过
+  │       ├── 游荡英雄查重：同名同文化游荡英雄已存在 → 跳过
   │       ├── HeroCreator.CreateSpecialHero(template, settlement, clan, clan, age)
   │       ├── SetName / SetNewOccupation / SetSkillValue / SetTraitLevel
-  │       ├── 文化取自 template.CharacterObject.Culture
-  │       ├── 成功/失败登记到 ResurrectedHeroTracker
-  │       └── 输出: 英雄模板复刻完成: 成功 X 个 / 失败 Y 个
-  └── 标记 _applied = true（防重复）
+  │       └── 登记到 ResurrectedHeroTracker
+  └── 成功后 SaveAppliedWorlds() → 将 foreignWorlds 写入 LegacyHeroes.json.applied_world_ids
 ```
 
 ### 2.3 导入顺序依赖
@@ -107,38 +108,45 @@ Phase 3: Settlement 恢复
   │ 拥有者家族必须已存在
 ```
 
-## 3. 同世界检测
+## 3. 本存档保护与防二重身
+
+设计上**禁止在本存档内出现"自己/队友"的二重身**，但**允许跨新档遇到"原来的自己"**：
 
 ```csharp
-public bool Import(string worldId = null)
+// HeroResurrectionFactory.Resurrect(profile, currentWorldId)
+// 仅当「当前 WorldId == 遗产 WorldId」（同一存档）时，才判断原 Hero 是否仍存活
+if (currentWorldId == profile.WorldId && IsStillAliveInCurrentSave(profile))
 {
-    var legacyData = LoadLegacy();
-    if (legacyData == null) return false;
-
-    string currentWorldId = _adapter.GetWorldId();
-    if (currentWorldId == legacyData.WorldId)
-    {
-        AffixLogger.Warn("SERVICE", "同世界遗产，跳过导入");
-        return false; // 禁止用本世界的导出覆盖本世界
-    }
-    return ImportCore(legacyData);
+    // player/companion 命中当前存活的自己/队友 → 跳过，避免本存档二重身
+    return;
 }
+// 跨存档（WorldId 不同，如 A 导出、B 导入）：即使姓名雷同也放行复刻
 ```
 
-- **自动导入**：执行同世界检测，禁止自我覆盖
-- **手动应用**：调用 `ForceImport()` 跳过同世界检测，允许强制导入
+- `player` 模板比对 `Hero.MainHero` 是否同名且存活；
+- `companion` 模板在 `Clan.PlayerClan.Companions` 中比对；
+- 跨世界（WorldId 不同）的同名主角/队友视为不同生命，正常复刻为游荡英雄（"遇到原来的自己"）。
 
-## 4. 防重复导入
+## 4. 防重复复刻（持久化）
+
+已复刻过的遗产来源世界持久化在 `LegacyHeroes.json` 的 `applied_world_ids`，跨进程生效：
 
 ```csharp
-// LegacyBehavior — 通过 IDataStore 随存档序列化
-private bool _applied;
-private string _appliedWorldId;
-
-// Save: ISerializable 随存档保存
-// Load: 从存档恢复 _applied=true → 不再触发导入
-// OnNewGameCreated: _applied=false → 可以导入
+// LegacyService.Import()
+var applied = new HashSet<string>(heroes?.AppliedWorldIds ?? new List<string>());
+var foreignWorlds = heroes.Profiles.Where(p => p.WorldId != currentWorldId).Select(p => p.WorldId).ToHashSet();
+if (foreignWorlds.Any(w => applied.Contains(w)))
+{
+    AffixLogger.Warn("SERVICE", "这些遗产世界已导入过，跳过以避免重复复刻");
+    return;
+}
+// ... 导入成功后 ...
+SaveAppliedWorlds(heroes, foreignWorlds); // 写回 applied_world_ids
 ```
+
+- 同进程反复导入：立即命中 `applied_world_ids` 跳过；
+- 重开游戏后再导入：从文件读到已导入记录，仍跳过，避免酒馆堆积重复 NPC；
+- 新世界（不在记录中）正常复刻并写入记录。
 
 ## 5. 定居点所有权变更
 
