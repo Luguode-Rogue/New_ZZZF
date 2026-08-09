@@ -1246,9 +1246,11 @@ namespace New_ZZZF
         {
             if (_isSpellForgeOpen) return;
             IsSpellForgeOpen = true;
-            // 回调：法术锻造界面关闭后刷新当前界面状态，不自装备（新法术已在全部魔法列表中供玩家手动选择）
+            // 回调：法术锻造界面关闭后刷新目录与当前目标技能槽
             System.Action onCommit = () =>
             {
+                Catalog?.Reload();
+                BuildAllSkillItemVMs();
                 if (CurrentHero != null)
                     LoadSkillsForTarget(CurrentHero.HeroId);
             };

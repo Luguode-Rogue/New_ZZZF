@@ -61,6 +61,11 @@ namespace New_ZZZF
         }
         public static void PlayParticleEffect(this Agent agent, string effectName)
         {
+            // 防御性校验：Agent 可能已死亡/被回收，或尚未构建视觉体（AgentVisuals 为 null）
+            if (agent == null || !agent.IsActive()) return;
+            if (agent.AgentVisuals == null || agent.Mission == null || agent.Mission.Scene == null) return;
+            if (string.IsNullOrEmpty(effectName)) return;
+
             // 加载预制件
             MatrixFrame attachFrame = agent.AgentVisuals.GetBoneEntitialFrame(0, true);
             Vec3 attachVec3 =agent.GetEyeGlobalPosition();
@@ -86,6 +91,8 @@ namespace New_ZZZF
 
         public static void StopParticleEffect(this Agent agent, string effectName)
         {
+            if (agent == null || string.IsNullOrEmpty(effectName)) return;
+
             string key = agent.Index + effectName;
             if (_activeParticles.TryGetValue(key, out GameEntity entity))
             {

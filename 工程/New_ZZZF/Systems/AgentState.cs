@@ -57,8 +57,26 @@ namespace New_ZZZF
         }
         public void AddState(AgentBuff state)
         {
+            AddState(state, null);
+        }
+
+        /// <summary>
+        /// 添加状态。owner 为该容器所属的 Agent，用于在调用方未设置
+        /// <see cref="AgentBuff.TargetAgent"/> 时兜底，避免 OnApply 收到 null。
+        /// </summary>
+        public void AddState(AgentBuff state, Agent owner)
+        {
+            if (state == null) return;
+
+            // 兜底：调用方忘记设置 TargetAgent 时使用 owner
+            if (state.TargetAgent == null) state.TargetAgent = owner;
+
             _activeStates.Add(state);
-            state.OnApply(state.TargetAgent);
+
+            if (state.TargetAgent == null) return; // 无有效目标则只登记不触发特效
+
+            try { state.OnApply(state.TargetAgent); }
+            catch (Exception e) { Debug.Print("[New_ZZZF] AddState.OnApply 异常: " + e.Message); }
         }
 
         public void UpdateStates(Agent agent, float dt)
@@ -68,12 +86,23 @@ namespace New_ZZZF
                 AgentBuff state = _activeStates[i];
                 state.Duration -= dt;
                 state.Duration = TaleWorlds.Library.MathF.Clamp(state.Duration, 0f, 100f);
-                state.OnUpdate(agent, dt);
+
+                Agent target = agent ?? state.TargetAgent;
+                if (target == null || !target.IsActive())
+                {
+                    // 目标已失效：直接丢弃状态，避免后续 OnUpdate/OnRemove 触发空引用
+                    _activeStates.RemoveAt(i);
+                    continue;
+                }
+
+                try { state.OnUpdate(target, dt); }
+                catch (Exception e) { Debug.Print("[New_ZZZF] OnUpdate 异常: " + e.Message); }
 
                 if (state.Duration <= 0)
                 {
                     _activeStates.RemoveAt(i);
-                    state.OnRemove(agent);
+                    try { state.OnRemove(target); }
+                    catch (Exception e) { Debug.Print("[New_ZZZF] OnRemove 异常: " + e.Message); }
                 }
             }
         }

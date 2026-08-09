@@ -66,6 +66,7 @@ namespace New_ZZZF.SpellForge
             foreach (var k in SpellForgeData.Combinations)
                 list.Add(new ForgeEntryVM(this, "combo:" + k.CombinationId, k.Name.ToString(), "[组合] " + k.Description.ToString()));
             AvailableNodes = list;
+            SpellForgeDiag.Log($"RefreshAvailableNodes 完成：Nodes={SpellForgeData.Nodes.Count} Components={SpellForgeData.Components.Count} OfficialSpells={SpellForgeData.OfficialSpells.Count} Combos={SpellForgeData.Combinations.Count} => AvailableNodes.Count={AvailableNodes.Count}");
         }
 
         // ============================ 右栏：全部魔法 ============================
@@ -86,8 +87,9 @@ namespace New_ZZZF.SpellForge
         /// <summary>左栏点击：将一项加入当前组装</summary>
         public void ExecuteAddNode(object param)
         {
+            SpellForgeDiag.Log($"ExecuteAddNode 触发 param=({param?.GetType().Name})'{param}'");
             string id = param as string;
-            if (string.IsNullOrEmpty(id)) return;
+            if (string.IsNullOrEmpty(id)) { SpellForgeDiag.Log("ExecuteAddNode 跳过：id为空"); return; }
 
             if (id.StartsWith("combo:"))
             {
@@ -106,8 +108,9 @@ namespace New_ZZZF.SpellForge
                 return;
             }
 
+            SpellForgeDiag.Log($"ExecuteAddNode 解析id='{id}' 去重前 CurrentBuild.Count={CurrentBuild.Count}");
             // 避免重复加入（组件/法术）
-            if (CurrentBuild.Any(x => x.SkillId == id)) return;
+            if (CurrentBuild.Any(x => x.SkillId == id)) { SpellForgeDiag.Log("ExecuteAddNode 跳过：已存在"); return; }
 
             if (id.StartsWith("node:"))
             {
@@ -149,8 +152,37 @@ namespace New_ZZZF.SpellForge
         /// <summary>中栏：确认铸造 —— 生成 CompositeSpell 并写入英雄法术槽</summary>
         public void ExecuteConfirmSpell()
         {
-            var comps = CurrentBuild.Where(x => x.SkillId.StartsWith("comp:")).Select(x => x.SkillId.Substring(5)).ToList();
-            var spells = CurrentBuild.Where(x => x.SkillId.StartsWith("spell:")).Select(x => x.SkillId.Substring(6)).ToList();
+            var comps = new List<string>();
+            var spells = new List<string>();
+
+            foreach (var entry in CurrentBuild)
+            {
+                if (entry.SkillId.StartsWith("comp:"))
+                {
+                    comps.Add(entry.SkillId.Substring(5));
+                }
+                else if (entry.SkillId.StartsWith("spell:"))
+                {
+                    spells.Add(entry.SkillId.Substring(6));
+                }
+                else if (entry.SkillId.StartsWith("combo:"))
+                {
+                    // 展开预设组合：其 RequiredComponents 作为组件，BaseSkillId 作为子法术底料
+                    var combo = SpellForgeData.GetCombination(entry.SkillId.Substring(6));
+                    if (combo != null)
+                    {
+                        if (combo.RequiredComponents != null)
+                            comps.AddRange(combo.RequiredComponents);
+                        if (!string.IsNullOrEmpty(combo.BaseSkillId) && !spells.Contains(combo.BaseSkillId))
+                            spells.Add(combo.BaseSkillId);
+                    }
+                }
+                // node: 节点本身不含可直接注入的组件，仅作为结构占位，此处不展开
+            }
+
+            // 去重
+            comps = comps.Distinct().ToList();
+            spells = spells.Distinct().ToList();
 
             if (comps.Count == 0 && spells.Count == 0)
             {
@@ -164,15 +196,24 @@ namespace New_ZZZF.SpellForge
             foreach (var sid in spells)
             {
                 var sub = SkillFactory.Create(sid);
-                if (sub != null) composite.componentSpells.Add(sub);
+                // Create 查不到时返回的是 NullSkill（不是 null），
+                // 直接塞进去会让 componentSpells 混入永远不生效的空技能
+                if (sub != null && sub.SkillID != "NullSkill")
+                    composite.componentSpells.Add(sub);
             }
             composite.ApplyComponentConfiguration(comps);
             composite.Text = new TextObject(NewSpellName);
             composite.Description = new TextObject(BuildDescription);
 
             // 注册到 SkillFactory（以旧系统为准，动态注册）
+            // 关键：注册表的 key 必须与 composite.SkillID 完全一致。
+            // 存档只保存 SkillID（见 SkillConfigManager.CreateSkillElement），
+            // 读档时用该字符串回注册表查；若两者不一致则查不到 -> 退化成 NullSkill（Type=None，永远无法施放）。
             string uniqueId = "Composite_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            composite.SetSkillId(uniqueId);
             SkillFactory.RegisterSkill(uniqueId, composite);
+            // 记录配方，供读档后重建（否则重启游戏法术就丢了）
+            CompositeSpellRegistry.Save(uniqueId, NewSpellName, BuildDescription, comps, spells);
 
             // 写入英雄法术槽
             var uiData = new SkillUIData
@@ -286,9 +327,20 @@ namespace New_ZZZF.SpellForge
         }
 
         // ItemTemplate 内按钮的 DataContext 是 ForgeEntryVM 本身，命令必须定义在这里
-        public void ExecuteAddNode(object param) => _parent?.ExecuteAddNode(SkillId);
-        public void ExecuteRemoveNode(object param) => _parent?.ExecuteRemoveNode(SkillId);
-        public void ExecuteEquipSpell(object param) => _parent?.ExecuteEquipSpell(SkillId);
-        public void ExecuteEditSpell(object param) => _parent?.ExecuteEditSpell(SkillId);
+        public void ExecuteAddNode() { SpellForgeDiag.Log($"ForgeEntryVM.ExecuteAddNode 转发 SkillId='{SkillId}'"); _parent?.ExecuteAddNode(SkillId); }
+        public void ExecuteRemoveNode() { SpellForgeDiag.Log($"ForgeEntryVM.ExecuteRemoveNode 转发 SkillId='{SkillId}'"); _parent?.ExecuteRemoveNode(SkillId); }
+        public void ExecuteEquipSpell() { SpellForgeDiag.Log($"ForgeEntryVM.ExecuteEquipSpell 转发 SkillId='{SkillId}'"); _parent?.ExecuteEquipSpell(SkillId); }
+        public void ExecuteEditSpell() { SpellForgeDiag.Log($"ForgeEntryVM.ExecuteEditSpell 转发 SkillId='{SkillId}'"); _parent?.ExecuteEditSpell(SkillId); }
+    }
+}
+
+/// <summary>法术锻造诊断日志（与 SpellForgeVM / ForgeEntryVM 同程序集，供两者调用）</summary>
+internal static class SpellForgeDiag
+{
+    private static readonly string ForgeDiagPath =
+        @"E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\affix_debug.log";
+    internal static void Log(string msg)
+    {
+        try { System.IO.File.AppendAllText(ForgeDiagPath, $"[{System.DateTime.Now:HH:mm:ss.fff}] [SpellForge] {msg}{System.Environment.NewLine}"); } catch { }
     }
 }

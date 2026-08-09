@@ -297,6 +297,27 @@ namespace New_ZZZF
             _skillsByType.TryGetValue(type, out var list);
             return list ?? new List<SkillUIData>();
         }
+
+        /// <summary>重新从 SkillFactory 注册表加载全部技能（法术锻造新增法术后刷新目录）</summary>
+        public void Reload()
+        {
+            AllSkills.Clear();
+            _skillLookup.Clear();
+            _skillsByType.Clear();
+
+            foreach (var kvp in SkillFactory._skillRegistry)
+            {
+                if (kvp.Key == "NullSkill") continue;
+
+                var uiData = SkillUIData.FromSkillBase(kvp.Value);
+                AllSkills.Add(uiData);
+                _skillLookup[kvp.Key] = uiData;
+
+                if (!_skillsByType.ContainsKey(uiData.Type))
+                    _skillsByType[uiData.Type] = new List<SkillUIData>();
+                _skillsByType[uiData.Type].Add(uiData);
+            }
+        }
     }
 
     /// <summary>

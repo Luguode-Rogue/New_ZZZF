@@ -51,7 +51,7 @@
                 <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
                               SuggestedWidth="44" SuggestedHeight="44"
                               MarginRight="14" HorizontalAlignment="Right" VerticalAlignment="Center"
-                              Brush="ButtonBrush2" Command.Click="ExecuteClose"
+                              Brush="ButtonBrush2" ButtonType="DefaultButton" Command.Click="ExecuteClose"
                               DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
                   <Children>
                     <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
@@ -93,7 +93,8 @@
                                 <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
                                               SuggestedHeight="62" MarginBottom="4"
                                               MarginLeft="8" MarginRight="8"
-                                              Brush="ButtonBrush2" Command.Click="ExecuteAddNode"
+                                              Brush="ButtonBrush2" ButtonType="Radio"
+                                              Command.Click="ExecuteAddNode"
                                               DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
                                   <Children>
                                     <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
@@ -181,7 +182,8 @@
                                 <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
                                               SuggestedHeight="56" MarginBottom="4"
                                               MarginLeft="8" MarginRight="8"
-                                              Brush="ButtonBrush2" Command.Click="ExecuteRemoveNode"
+                                              Brush="ButtonBrush2" ButtonType="Radio"
+                                              Command.Click="ExecuteRemoveNode"
                                               DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
                                   <Children>
                                     <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
@@ -248,7 +250,7 @@
                       <Children>
                         <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
                                       SuggestedWidth="150" SuggestedHeight="44" MarginRight="14"
-                                      VerticalAlignment="Center" Brush="ButtonBrush2"
+                                      VerticalAlignment="Center" Brush="ButtonBrush2" ButtonType="DefaultButton"
                                       Command.Click="ExecuteClearBuild"
                                       DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
                           <Children>
@@ -259,7 +261,7 @@
 
                         <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
                                       SuggestedWidth="190" SuggestedHeight="44"
-                                      VerticalAlignment="Center" Brush="ButtonBrush1"
+                                      VerticalAlignment="Center" Brush="ButtonBrush1" ButtonType="DefaultButton"
                                       Command.Click="ExecuteConfirmSpell"
                                       DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
                           <Children>
@@ -321,7 +323,8 @@
                                       <Children>
                                         <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
                                                       SuggestedWidth="84" SuggestedHeight="30" MarginRight="8"
-                                                      Brush="ButtonBrush2" Command.Click="ExecuteEditSpell"
+                                                      Brush="ButtonBrush2" ButtonType="Radio"
+                                                      Command.Click="ExecuteEditSpell"
                                                       DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
                                           <Children>
                                             <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
@@ -331,7 +334,8 @@
 
                                         <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
                                                       SuggestedWidth="84" SuggestedHeight="30"
-                                                      Brush="ButtonBrush1" Command.Click="ExecuteEquipSpell"
+                                                      Brush="ButtonBrush1" ButtonType="Radio"
+                                                      Command.Click="ExecuteEquipSpell"
                                                       DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
                                           <Children>
                                             <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
@@ -379,7 +383,7 @@
                 <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
                               SuggestedWidth="160" SuggestedHeight="48"
                               MarginRight="26" HorizontalAlignment="Right" VerticalAlignment="Center"
-                              Brush="ButtonBrush2" Command.Click="ExecuteClose"
+                              Brush="ButtonBrush2" ButtonType="DefaultButton" Command.Click="ExecuteClose"
                               DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
                   <Children>
                     <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"

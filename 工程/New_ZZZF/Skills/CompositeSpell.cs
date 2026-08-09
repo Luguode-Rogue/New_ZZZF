@@ -408,6 +408,16 @@ namespace New_ZZZF
             Description = new TextObject("{=ZZZF_SF_COMPD}由法术锻造台合成的法术。");
         }
 
+        /// <summary>
+        /// 设定本法术的唯一ID。
+        /// 必须与 SkillFactory._skillRegistry 的 key 保持一致：
+        /// 存档只写 SkillID，读档时拿它回注册表查，不一致就会退化成 NullSkill。
+        /// </summary>
+        public void SetSkillId(string id)
+        {
+            if (!string.IsNullOrWhiteSpace(id)) SkillID = id;
+        }
+
         /// <summary>由 SpellForgeVM 在合成后调用，解析组件并刷新派生参数。</summary>
         public void ApplyComponentConfiguration(List<string> componentIds)
         {
@@ -464,21 +474,35 @@ namespace New_ZZZF
             if (!CheckCondition(casterAgent)) return false;
             SpellForgeData.EnsureInitialized();
 
-            // 以旧系统为准：发射制导弹道。
+            // 以旧系统为准（对齐 JianQi.Activate 的可用写法）：发射制导弹道。
             int shots = Math.Max(1, Multishot);
             for (int i = 0; i < shots; i++)
             {
-                Vec3 dir = casterAgent.LookDirection.AsVec2.ToVec3();
-                Vec3 origin = casterAgent.GetEyeGlobalPosition();
+                // 用 LookFrame 取完整三维朝向。
+                // 注意：不能用 LookDirection.AsVec2.ToVec3()，那会丢掉俯仰(Z)分量，
+                // 导致弹道永远水平飞出，抬头/低头瞄准全部失效。
+                MatrixFrame frame = casterAgent.LookFrame;
+                frame.origin = casterAgent.GetEyeGlobalPosition();
+
+                Vec3 origin = frame.origin;
+                Vec3 dir = frame.rotation.f.NormalizedCopy();
                 if (shots > 1)
                 {
                     // 散射：在水平面上均匀偏转
                     float spread = (i - (shots - 1) / 2f) * 0.12f;
                     dir.RotateAboutZ(spread);
+                    dir = dir.NormalizedCopy();
                 }
 
                 GameEntity projectile = GameEntity.CreateEmpty(Mission.Current.Scene);
-                projectile.SetLocalPosition(origin);
+                // 必须挂一个可见网格：空实体没有包围盒，既看不见也可能不参与场景更新
+                try
+                {
+                    projectile.AddAllMeshesOfGameEntity(
+                        GameEntity.Instantiate(Mission.Current.Scene, "weapon_heap_sword_a", true));
+                }
+                catch { }
+                projectile.SetGlobalFrame(new MatrixFrame(frame.rotation, origin));
                 var projData = new ProjectileData
                 {
                     Name = SkillID,
@@ -504,7 +528,9 @@ namespace New_ZZZF
             // AoE 形态：在落点直接生成范围效果（不依赖弹道命中）
             if (HasAoe && !HasProjectile)
             {
-                ApplyAoe(casterAgent, casterAgent.GetEyeGlobalPosition() + casterAgent.LookDirection.AsVec2.ToVec3() * 8f);
+                MatrixFrame aoeFrame = casterAgent.LookFrame;
+                Vec3 aoeDir = aoeFrame.rotation.f.NormalizedCopy();
+                ApplyAoe(casterAgent, casterAgent.GetEyeGlobalPosition() + aoeDir * 8f);
             }
 
             return true;
@@ -518,8 +544,16 @@ namespace New_ZZZF
             Agent caster = data.CasterAgent;
             Vec3 pos = missileEntity.GlobalPosition;
 
-            // 命中检测：围绕弹道当前位置检索 Agents
-            List<Agent> nearby = Script.FindAgentsWithinSpellRange(pos, (int)(HasAoe ? 4f : 1.5f));
+            // 命中检测：围绕弹道当前位置检索 Agents。
+            // 注意 FindAgentsWithinSpellRange 的半径参数是 int：
+            // 原来写 (int)1.5f 会被截断成 1 米，而弹道每帧位移远大于 1 米，
+            // 实际上几乎永远检测不到目标（表现为“法术打出去没有任何效果”）。
+            // 这里对齐可用的旧法术 JianQi（半径 2）。
+            List<Agent> nearby = Script.FindAgentsWithinSpellRange(pos, HasAoe ? 4 : 2);
+            if (nearby.Count == 0) return;
+
+            // 排除施法者自身，避免刚出膛就打到自己
+            nearby.RemoveAll(a => a == caster);
             if (nearby.Count == 0) return;
 
             Script.AgentListIFF(caster, nearby, out var friends, out var foes);
@@ -559,6 +593,8 @@ namespace New_ZZZF
         // —— 对敌效果：转发组合内子法术，并叠加元素/状态 ——
         private bool ApplyOnEnemy(Agent caster, Agent target)
         {
+            if (target == null || !target.IsActive()) return false;
+
             float dmg = 30f * DamageMul;
             switch (PrimaryElement)
             {
@@ -580,11 +616,11 @@ namespace New_ZZZF
             if (comp != null)
             {
                 if (ComponentIds.Contains("st_burn") || PrimaryElement == "fire")
-                    comp.StateContainer.AddState(new BurningState(4f, 6f, caster));
+                    comp.StateContainer.AddState(new BurningState(4f, 6f, caster) { TargetAgent = target });
                 if (ComponentIds.Contains("st_freeze") || PrimaryElement == "ice")
-                    comp.StateContainer.AddState(new FreezeState(3f, 0.5f, caster));
+                    comp.StateContainer.AddState(new FreezeState(3f, 0.5f, caster) { TargetAgent = target });
                 if (ComponentIds.Contains("st_poison") || PrimaryElement == "toxin")
-                    comp.StateContainer.AddState(new WeakenState(4f, 5f, caster));
+                    comp.StateContainer.AddState(new WeakenState(4f, 5f, caster) { TargetAgent = target });
                 if (ComponentIds.Contains("ctrl_stun"))
                 {
                     target.SetActionChannel(0, ActionIndexCache.Create("act_knocked_down"));
@@ -598,6 +634,8 @@ namespace New_ZZZF
         // —— 对友增益 ——
         private void ApplyOnAlly(Agent caster, Agent ally)
         {
+            if (ally == null || !ally.IsActive()) return;
+
             var comp = ally.GetComponent<AgentSkillComponent>();
             if (HasShield)
             {
@@ -606,7 +644,7 @@ namespace New_ZZZF
             }
             if (HasHeal)
             {
-                comp?.StateContainer.AddState(new HealState(4f, caster));
+                comp?.StateContainer.AddState(new HealState(4f, caster) { TargetAgent = ally });
             }
             foreach (var sub in componentSpells)
             {

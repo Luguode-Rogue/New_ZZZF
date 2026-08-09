@@ -37,6 +37,9 @@ namespace New_ZZZF
         {
             base.OnNewGameCreated(game, initializerObject);
             InformationManager.DisplayMessage(new InformationMessage("Save_SkillConfigManager.Instance._troopSkillMap", Colors.Red));
+            // 先把自创组合法术重建回注册表，再生成 ItemObject，
+            // 否则自创法术没有 Item，且存档里的 SkillID 会查不到而退化成 NullSkill
+            CompositeSpellRegistry.LoadAndRegisterAll();
             SkillFactory.SkillToItemObject();
             SkillConfigManager.Instance._troopSkillMap.Clear();
             if (!(SkillConfigManager.Instance._troopSkillMap != null && SkillConfigManager.Instance._troopSkillMap.Count > 1))
@@ -71,6 +74,7 @@ namespace New_ZZZF
                 CampaignGameStarter campaignGameStarter = gameStarterObject as CampaignGameStarter;
                 
             }
+            CompositeSpellRegistry.LoadAndRegisterAll();
             SkillFactory.SkillToItemObject();
 
             SkillConfigManager.Instance._troopSkillMap.Clear();
@@ -163,6 +167,7 @@ namespace New_ZZZF
                 {
                     MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
                     SkillFactory.Refresh_skillRegistry();
+                    CompositeSpellRegistry.LoadAndRegisterAll();
                     SkillFactory.SkillToItemObject();
                     SkillConfigManager.Instance._troopSkillMap.Clear();
                     if (!(SkillConfigManager.Instance._troopSkillMap != null && SkillConfigManager.Instance._troopSkillMap.Count > 1)&&Mission.Current==null)
