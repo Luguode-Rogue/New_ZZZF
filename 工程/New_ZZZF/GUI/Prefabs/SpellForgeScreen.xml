@@ -1,0 +1,249 @@
+<Prefab>
+  <Constants>
+    <Constant Name="Forge.LeftWidth" Value="260" />
+    <Constant Name="Forge.CenterWidth" Value="320" />
+    <Constant Name="Forge.RowHeight" Value="30" />
+  </Constants>
+
+  <Window>
+    <!-- 全屏根：Widget 铺满，背景 BrushWidget 同构一级界面（不泛黄） -->
+    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent">
+      <Children>
+
+        <!-- 背景 -->
+        <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                     Brush="Frame1Brush" DoNotAcceptEvents="true" />
+
+        <!-- 顶部标题栏 -->
+        <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="64"
+                     VerticalAlignment="Top" MarginTop="10" Brush="Frame1Brush">
+          <Children>
+            <TextWidget Text="法术锻造 v7" WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                        Brush="SPOptions.Title.Text" FontSize="26" Color="#E2BC73FF"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" DoNotAcceptEvents="true" />
+          </Children>
+        </BrushWidget>
+
+        <!-- 关闭按钮：原版 Mission 风格（抄自 MissionObjectives.xml 的 mission brush） -->
+        <ButtonWidget Command.Click="ExecuteClose"
+                      WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren"
+                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                      MarginRight="25" MarginTop="18"
+                      ButtonType="DefaultButton" DoNotPassEventsToChildren="true">
+          <Children>
+            <BrushWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren"
+                         Brush="Mission.Objective.Title.Background" DoNotAcceptEvents="true">
+              <Children>
+                <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren" StackLayout.LayoutMethod="HorizontalLeftToRight">
+                  <Children>
+                    <BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="21" SuggestedHeight="25"
+                                 MarginLeft="5" VerticalAlignment="Center" Brush="Mission.Objective.Tracker.Title.Icon" />
+                    <TextWidget Text="退出" WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="30"
+                                MarginLeft="5" MarginRight="5" VerticalAlignment="Center"
+                                Brush="Mission.Objective.Tracker.Title.Text" />
+                  </Children>
+                </ListPanel>
+              </Children>
+            </BrushWidget>
+          </Children>
+        </ButtonWidget>
+
+        <!-- 三栏主内容区 -->
+        <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                   MarginLeft="35" MarginRight="35" MarginTop="90" MarginBottom="40"
+                   StackLayout.LayoutMethod="HorizontalLeftToRight">
+
+          <Children>
+
+            <!-- 左栏：可配置组件（旧 SkillFactory Spell 法术） -->
+            <BrushWidget WidthSizePolicy="Fixed" SuggestedWidth="!Forge.LeftWidth" HeightSizePolicy="StretchToParent"
+                         Brush="Frame1Brush" MarginRight="15" ClipContents="true">
+              <Children>
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30"
+                             VerticalAlignment="Top" Brush="Frame2Brush" MarginLeft="4" MarginRight="4" MarginTop="4">
+                  <Children>
+                    <TextWidget Text="可配置组件（点击加入）" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Brush="SPOptions.Title.Text" FontSize="15" Color="#E2BC73FF"
+                                VerticalAlignment="Center" MarginLeft="12" DoNotAcceptEvents="true" />
+                  </Children>
+                </BrushWidget>
+
+                <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                 MarginTop="42" AutoHideScrollBars="true"
+                                 ClipRect="LeftViewport" InnerPanel="LeftInnerPanel" VerticalScrollbar="LeftScrollbar">
+                  <Children>
+                    <Widget Id="LeftViewport" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true" />
+                    <ListPanel Id="LeftInnerPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
+                               DataSource="{AvailableNodes}" StackLayout.LayoutMethod="VerticalTopToBottom"
+                               StackLayout.Spacing="4" MarginLeft="4" MarginRight="4" MarginTop="4">
+                      <ItemTemplate>
+                        <ButtonWidget Command.Click="ExecuteAddNode" CommandParameter="@SkillId"
+                                      WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="!Forge.RowHeight"
+                                      Brush="ButtonPrimary2Brush" ButtonType="Radio"
+                                      DoNotPassEventsToChildren="true">
+                          <Children>
+                            <TextWidget Text="@SkillName" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                        Brush="SPOptions.Title.Text" FontSize="14" Color="#FFFFFFFF"
+                                        VerticalAlignment="Center" MarginLeft="12" DoNotAcceptEvents="true" />
+                          </Children>
+                        </ButtonWidget>
+                      </ItemTemplate>
+                    </ListPanel>
+                    <ScrollbarWidget Id="LeftScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent"
+                                     HorizontalAlignment="Right" AlignmentAxis="Vertical"
+                                     Handle="LeftScrollHandle" MaxValue="100" MinValue="0">
+                      <Children>
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4"
+                                HorizontalAlignment="Center" Sprite="BlankWhiteSquare_9" AlphaFactor="0.2" Color="#5a4033FF" DoNotAcceptEvents="true" />
+                        <ImageWidget Id="LeftScrollHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                     SuggestedWidth="8" SuggestedHeight="10" HorizontalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
+                      </Children>
+                    </ScrollbarWidget>
+                  </Children>
+                </ScrollablePanel>
+              </Children>
+            </BrushWidget>
+
+            <!-- 中栏：当前组装 + 控制 -->
+            <BrushWidget WidthSizePolicy="Fixed" SuggestedWidth="!Forge.CenterWidth" HeightSizePolicy="StretchToParent"
+                         Brush="Frame1Brush" MarginLeft="8" MarginRight="8" ClipContents="true">
+              <Children>
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30"
+                             VerticalAlignment="Top" Brush="Frame2Brush" MarginLeft="4" MarginRight="4" MarginTop="4">
+                  <Children>
+                    <TextWidget Text="当前组装（点击移除）" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Brush="SPOptions.Title.Text" FontSize="15" Color="#E2BC73FF"
+                                VerticalAlignment="Center" MarginLeft="12" DoNotAcceptEvents="true" />
+                  </Children>
+                </BrushWidget>
+
+                <!-- 组装列表 -->
+                <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="120"
+                                 MarginTop="42" AutoHideScrollBars="true"
+                                 ClipRect="MidViewport" InnerPanel="MidInnerPanel" VerticalScrollbar="MidScrollbar">
+                  <Children>
+                    <Widget Id="MidViewport" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true" />
+                    <ListPanel Id="MidInnerPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
+                               DataSource="{CurrentBuild}" StackLayout.LayoutMethod="VerticalTopToBottom"
+                               StackLayout.Spacing="3" MarginLeft="4" MarginRight="4" MarginTop="4">
+                      <ItemTemplate>
+                        <ButtonWidget Command.Click="ExecuteRemoveNode" CommandParameter="@SkillId"
+                                      WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24"
+                                      Brush="ButtonPrimary2Brush" ButtonType="Radio"
+                                      DoNotPassEventsToChildren="true">
+                          <Children>
+                            <TextWidget Text="@SkillName" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                        Brush="SPOptions.Title.Text" FontSize="13" Color="#FFFFFFFF"
+                                        VerticalAlignment="Center" MarginLeft="12" DoNotAcceptEvents="true" />
+                          </Children>
+                        </ButtonWidget>
+                      </ItemTemplate>
+                    </ListPanel>
+                    <ScrollbarWidget Id="MidScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent"
+                                     HorizontalAlignment="Right" AlignmentAxis="Vertical"
+                                     Handle="MidScrollHandle" MaxValue="100" MinValue="0">
+                      <Children>
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4"
+                                HorizontalAlignment="Center" Sprite="BlankWhiteSquare_9" AlphaFactor="0.2" Color="#5a4033FF" DoNotAcceptEvents="true" />
+                        <ImageWidget Id="MidScrollHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                     SuggestedWidth="8" SuggestedHeight="10" HorizontalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
+                      </Children>
+                    </ScrollbarWidget>
+                  </Children>
+                </ScrollablePanel>
+
+                <!-- 详情 + 控制区 -->
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="270"
+                             MarginLeft="8" MarginRight="8" MarginTop="170" Brush="Frame2Brush">
+                  <Children>
+                    <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                               StackLayout.LayoutMethod="VerticalTopToBottom" StackLayout.Spacing="5"
+                               MarginLeft="6" MarginRight="6" MarginTop="6" MarginBottom="6">
+                      <Children>
+                        <TextWidget Text="@BuildDescription" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="55"
+                                    Brush="SPOptions.Description.Text" FontSize="13" AlphaFactor="0.85" DoNotAcceptEvents="true" />
+                        <TextWidget Text="法术名称:" WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="20"
+                                    Brush="SPOptions.Title.Text" FontSize="14" DoNotAcceptEvents="true" />
+                        <InputTextWidget Text="@NewSpellName" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28"
+                                         Brush="ButtonPrimary2Brush" FontSize="14" Color="#FFFFFFFF" />
+                        <ButtonWidget Command.Click="ExecuteConfirmSpell" Text="确认创建（装入法术槽）"
+                                      WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="36"
+                                      Brush="ButtonPrimary2Brush" ButtonType="DefaultButton" />
+                        <ButtonWidget Command.Click="ExecuteClearBuild" Text="清空组装"
+                                      WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="32"
+                                      Brush="ButtonPrimary2Brush" ButtonType="DefaultButton" />
+                        <TextWidget Text="@ValidationMessage" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="40"
+                                    Brush="SPOptions.Value.Text" FontSize="13" Color="#D9534FFF" DoNotAcceptEvents="true" />
+                      </Children>
+                    </ListPanel>
+                  </Children>
+                </BrushWidget>
+              </Children>
+            </BrushWidget>
+
+            <!-- 右栏：全部魔法（旧 SkillFactory Spell 法术 + 已合成） -->
+            <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                         Brush="Frame1Brush" MarginLeft="15" ClipContents="true">
+              <Children>
+                <BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="40"
+                             VerticalAlignment="Top" Brush="Frame2Brush" DoNotAcceptEvents="true">
+                  <Children>
+                    <TextWidget Text="全部魔法（装备 / 编辑）" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Brush="SPOptions.Title.Text" FontSize="16" Color="#E2BC73FF"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" DoNotAcceptEvents="true" />
+                  </Children>
+                </BrushWidget>
+
+                <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                 MarginTop="48" AutoHideScrollBars="true"
+                                 ClipRect="RightViewport" InnerPanel="RightInnerPanel" VerticalScrollbar="RightScrollbar">
+                  <Children>
+                    <Widget Id="RightViewport" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true" />
+                    <ListPanel Id="RightInnerPanel" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren"
+                               DataSource="{AllSpells}" StackLayout.LayoutMethod="VerticalTopToBottom"
+                               StackLayout.Spacing="6" MarginLeft="12" MarginRight="12" MarginTop="6">
+                      <ItemTemplate>
+                        <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="60"
+                                   StackLayout.LayoutMethod="HorizontalLeftToRight" Brush="ButtonPrimary2Brush">
+                          <Children>
+                            <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                       StackLayout.LayoutMethod="VerticalTopToBottom" MarginLeft="8">
+                              <Children>
+                                <TextWidget Text="@SkillName" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24"
+                                            Brush="SPOptions.Title.Text" FontSize="14" Color="#FFFFFFFF" DoNotAcceptEvents="true" />
+                                <TextWidget Text="@Description" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="20"
+                                            Brush="SPOptions.Description.Text" FontSize="12" AlphaFactor="0.7" DoNotAcceptEvents="true" />
+                              </Children>
+                            </ListPanel>
+                            <ButtonWidget Command.Click="ExecuteEquipSpell" CommandParameter="@SkillId"
+                                          WidthSizePolicy="Fixed" SuggestedWidth="70" HeightSizePolicy="StretchToParent"
+                                          Brush="ButtonPrimary2Brush" ButtonType="Radio" Text="装备" MarginRight="4" />
+                            <ButtonWidget Command.Click="ExecuteEditSpell" CommandParameter="@SkillId"
+                                          WidthSizePolicy="Fixed" SuggestedWidth="70" HeightSizePolicy="StretchToParent"
+                                          Brush="ButtonPrimary2Brush" ButtonType="Radio" Text="编辑" />
+                          </Children>
+                        </ListPanel>
+                      </ItemTemplate>
+                    </ListPanel>
+                    <ScrollbarWidget Id="RightScrollbar" WidthSizePolicy="Fixed" SuggestedWidth="8" HeightSizePolicy="StretchToParent"
+                                     HorizontalAlignment="Right" AlignmentAxis="Vertical"
+                                     Handle="RightScrollHandle" MaxValue="100" MinValue="0">
+                      <Children>
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="4"
+                                HorizontalAlignment="Center" Sprite="BlankWhiteSquare_9" AlphaFactor="0.2" Color="#5a4033FF" DoNotAcceptEvents="true" />
+                        <ImageWidget Id="RightScrollHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                     SuggestedWidth="8" SuggestedHeight="10" HorizontalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
+                      </Children>
+                    </ScrollbarWidget>
+                  </Children>
+                </ScrollablePanel>
+              </Children>
+            </BrushWidget>
+
+          </Children>
+        </ListPanel>
+
+      </Children>
+    </Widget>
+  </Window>
+</Prefab>

@@ -1,63 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Prefab>
   <Window>
-    <!-- 右下角法力/耐力双进度条面板 - 类原版血条样式 -->
-    <Widget Name="NewZZZF_MissionAgentStatus"
-            WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
-            SuggestedWidth="220" SuggestedHeight="54"
-            HorizontalAlignment="Right" VerticalAlignment="Bottom"
-            MarginRight="30" MarginBottom="280">
+
+    <!-- ============================================================
+         NewZZZF_MissionAgentStatus  —  战场法力 / 耐力条 (重制版)
+         DataSource : New_ZZZF.NewZZZF_MissionAgentStatusVM
+           ManaCurrent / ManaMax / ManaText
+           StaminaCurrent / StaminaMax / StaminaText
+
+         位置：屏幕左下，位于原版血条上方，避免遮挡准心与技能栏
+         ============================================================ -->
+
+    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+            IsEnabled="false">
       <Children>
 
-        <!-- ===== 法力条 ===== -->
-        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
-                SuggestedWidth="220" SuggestedHeight="22"
-                HorizontalAlignment="Left" VerticalAlignment="Top"
-                PositionYOffset="0"
-                Sprite="BlankWhiteSquare_9" Color="#151515FF">
+        <!-- 资源条容器 -->
+        <ListPanel WidthSizePolicy="Fixed" HeightSizePolicy="CoverChildren"
+                   SuggestedWidth="330"
+                   MarginLeft="42" MarginBottom="150"
+                   HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                   LayoutImp.LayoutMethod="VerticalBottomToTop">
           <Children>
-            <!-- 法力填充进度 -->
-            <FillBarWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                           FillWidget="ManaFill" ClipContents="true"
-                           InitialAmountAsFloat="@ManaCurrent" MaxAmountAsFloat="@ManaMax">
-              <Children>
-                <Widget Id="ManaFill" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                        HorizontalAlignment="Left"
-                        Sprite="BlankWhiteSquare_9" Color="#3366CCFF" />
-              </Children>
-            </FillBarWidget>
-            <!-- 法力文字居中 -->
-            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                        Text="@ManaText"
-                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Brush="MPLobbyCurrentCharacterDifficultyTitle" />
-          </Children>
-        </Widget>
 
-        <!-- ===== 耐力条 ===== -->
-        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
-                SuggestedWidth="220" SuggestedHeight="22"
-                HorizontalAlignment="Left" VerticalAlignment="Top"
-                PositionYOffset="28"
-                Sprite="BlankWhiteSquare_9" Color="#151515FF">
-          <Children>
-            <!-- 耐力填充进度 -->
-            <FillBarWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                           FillWidget="StaminaFill" ClipContents="true"
-                           InitialAmountAsFloat="@StaminaCurrent" MaxAmountAsFloat="@StaminaMax">
+            <!-- ==================== 法力条 ==================== -->
+            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30"
+                    MarginBottom="8">
               <Children>
-                <Widget Id="StaminaFill" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                        HorizontalAlignment="Left"
-                        Sprite="BlankWhiteSquare_9" Color="#CC9933FF" />
-              </Children>
-            </FillBarWidget>
-            <!-- 耐力文字居中 -->
-            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
-                        Text="@StaminaText"
-                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Brush="MPLobbyCurrentCharacterDifficultyTitle" />
-          </Children>
-        </Widget>
 
+                <!-- 外框 -->
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        Sprite="BlankWhiteSquare_9" Color="#000000FF" AlphaFactor="0.62" />
+
+                <!-- 槽内底 -->
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        MarginLeft="2" MarginRight="2" MarginTop="2" MarginBottom="2"
+                        Sprite="BlankWhiteSquare_9" Color="#0A1428FF" AlphaFactor="0.85" />
+
+                <!-- 填充 -->
+                <FillBar WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                         MarginLeft="2" MarginRight="2" MarginTop="2" MarginBottom="2"
+                         Sprite="BlankWhiteSquare_9" Color="#3C78D8FF"
+                         CurrentAmount="@ManaCurrent" MaxAmount="@ManaMax" />
+
+                <!-- 顶部高光 -->
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="2"
+                        MarginLeft="2" MarginRight="2" MarginTop="2" VerticalAlignment="Top"
+                        Sprite="BlankWhiteSquare_9" Color="#8CB4F0FF" AlphaFactor="0.5" />
+
+                <!-- 文本 -->
+                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            MarginLeft="12" HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Brush="Clan.Card.Text" Color="#EAF2FFFF" Text="@ManaText" />
+              </Children>
+            </Widget>
+
+            <!-- ==================== 耐力条 ==================== -->
+            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30">
+              <Children>
+
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        Sprite="BlankWhiteSquare_9" Color="#000000FF" AlphaFactor="0.62" />
+
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        MarginLeft="2" MarginRight="2" MarginTop="2" MarginBottom="2"
+                        Sprite="BlankWhiteSquare_9" Color="#14200AFF" AlphaFactor="0.85" />
+
+                <FillBar WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                         MarginLeft="2" MarginRight="2" MarginTop="2" MarginBottom="2"
+                         Sprite="BlankWhiteSquare_9" Color="#66B04AFF"
+                         CurrentAmount="@StaminaCurrent" MaxAmount="@StaminaMax" />
+
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="2"
+                        MarginLeft="2" MarginRight="2" MarginTop="2" VerticalAlignment="Top"
+                        Sprite="BlankWhiteSquare_9" Color="#B6E89AFF" AlphaFactor="0.5" />
+
+                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            MarginLeft="12" HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Brush="Clan.Card.Text" Color="#EEF7E6FF" Text="@StaminaText" />
+              </Children>
+            </Widget>
+          </Children>
+        </ListPanel>
       </Children>
     </Widget>
   </Window>

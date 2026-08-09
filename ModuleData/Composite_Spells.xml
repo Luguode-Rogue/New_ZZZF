@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 法术锻造：组合法术库（运行时由代码动态生成并注册；此文件为可读备份/存档样例） -->
+<CompositeSpells>
+  <!-- 样例：烈焰火球（由官方组合 combo_fireball 铸造得到） -->
+  <CompositeSpell Id="Composite_sample_fireball" Name="烈焰火球" BaseSkill="Fireball">
+    <Components>
+      <Component Id="elm_fire" />
+      <Component Id="dmg_burst" />
+    </Components>
+    <Description>火球 + 火焰元素 + 爆发伤害。</Description>
+  </CompositeSpell>
+</CompositeSpells>

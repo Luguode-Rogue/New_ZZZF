@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Prefab>
+  <Window>
+
+    <!-- ============================================================
+         SpellForgeScreen  —  法术锻造 (重制版)
+         DataSource : New_ZZZF.SpellForgeVM
+           AvailableNodes / CurrentBuild / AllSpells  : MBBindingList<ForgeEntryVM>
+           NewSpellName / BuildDescription / ValidationMessage : string
+           ExecuteClearBuild / ExecuteConfirmSpell / ExecuteClose
+         ItemTemplate DataSource : New_ZZZF.ForgeEntryVM
+           SkillName / Description
+           ExecuteAddNode / ExecuteRemoveNode / ExecuteEquipSpell / ExecuteEditSpell
+
+         布局：左 [组件库] | 中 [组装台 + 命名 + 验证] | 右 [全部魔法]
+         ============================================================ -->
+
+    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent">
+      <Children>
+
+        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                Sprite="BlankWhiteSquare_9" Color="#000000FF" AlphaFactor="0.8" />
+
+        <!-- ==================== 主面板 ==================== -->
+        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                SuggestedWidth="1780" SuggestedHeight="960"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+          <Children>
+
+            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                    Sprite="BlankWhiteSquare_9" Color="#0F0C14FF" AlphaFactor="0.98" />
+            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                    Sprite="StdAssets\selection_border_9" Color="#7C5AA8FF" />
+
+            <!-- = 标题栏 = -->
+            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="70"
+                    VerticalAlignment="Top">
+              <Children>
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        Sprite="BlankWhiteSquare_9" Color="#1C1526FF" />
+
+                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                            MarginLeft="30" HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Brush="Clan.Header.Text" Text="法术锻造" />
+
+                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                            MarginLeft="200" HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Brush="Clan.Card.Text" Color="#8B7BA8"
+                            Text="节点 · 组件 · 法术 → 组合为新的复合法术" />
+
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                              SuggestedWidth="44" SuggestedHeight="44"
+                              MarginRight="14" HorizontalAlignment="Right" VerticalAlignment="Center"
+                              Brush="ButtonBrush2" Command.Click="ExecuteClose"
+                              DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+                  <Children>
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Brush="Clan.Card.Name" Text="X" />
+                  </Children>
+                </ButtonWidget>
+              </Children>
+            </Widget>
+
+            <!-- = 三栏内容区 = -->
+            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                    MarginTop="70" MarginBottom="86" MarginLeft="18" MarginRight="18">
+              <Children>
+
+                <!-- ========== 左栏：组件库 ========== -->
+                <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                        SuggestedWidth="500" HorizontalAlignment="Left">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            Sprite="BlankWhiteSquare_9" Color="#171224FF" />
+
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                SuggestedHeight="42" VerticalAlignment="Top"
+                                Brush="Clan.Card.Name" Color="#B090E0FF" Text="组件库" />
+
+                    <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                     MarginTop="46" MarginBottom="8"
+                                     ClipRect="NodeClip" InnerPanel="NodeClip\NodeInner"
+                                     AutoHideScrollBars="false" VerticalScrollbar="..\NodeScrollbar">
+                      <Children>
+                        <Widget Id="NodeClip" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                ClipContents="true">
+                          <Children>
+                            <ListPanel Id="NodeInner" WidthSizePolicy="StretchToParent"
+                                       HeightSizePolicy="CoverChildren"
+                                       LayoutImp.LayoutMethod="VerticalBottomToTop"
+                                       DataSource="{AvailableNodes}">
+                              <ItemTemplate>
+                                <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                              SuggestedHeight="62" MarginBottom="4"
+                                              MarginLeft="8" MarginRight="8"
+                                              Brush="ButtonBrush2" Command.Click="ExecuteAddNode"
+                                              DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+                                  <Children>
+                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                                SuggestedHeight="26" VerticalAlignment="Top" MarginTop="5"
+                                                MarginLeft="12" MarginRight="40" HorizontalAlignment="Left"
+                                                Brush="Clan.Card.Name" Text="@SkillName" />
+
+                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                                SuggestedHeight="24" VerticalAlignment="Bottom" MarginBottom="5"
+                                                MarginLeft="12" MarginRight="40" HorizontalAlignment="Left"
+                                                Brush="Clan.Card.Text" Color="#8B8296" Text="@Description" />
+
+                                    <TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                                                SuggestedWidth="30" MarginRight="8"
+                                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                Brush="Clan.Card.Name" Color="#70D080FF" Text="+" />
+                                  </Children>
+                                </ButtonWidget>
+                              </ItemTemplate>
+                            </ListPanel>
+                          </Children>
+                        </Widget>
+                      </Children>
+                    </ScrollablePanel>
+
+                    <ScrollbarWidget Id="NodeScrollbar" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                                     SuggestedWidth="12" HorizontalAlignment="Right"
+                                     MarginTop="50" MarginBottom="10" MarginRight="4"
+                                     AlignmentAxis="Vertical" MinValue="0" MaxValue="100"
+                                     Handle="NodeHandle">
+                      <Children>
+                        <Widget Id="NodeHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                MinHeight="20" Sprite="BlankWhiteSquare_9" Color="#7C5AA8FF" />
+                      </Children>
+                    </ScrollbarWidget>
+                  </Children>
+                </Widget>
+
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        MarginLeft="512" MarginRight="512">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            Sprite="BlankWhiteSquare_9" Color="#1B1430FF" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            Sprite="StdAssets\selection_border_9" Color="#7C5AA8FF" AlphaFactor="0.7" />
+
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                SuggestedHeight="42" VerticalAlignment="Top"
+                                Brush="Clan.Card.Name" Color="#D0B0FFFF" Text="组装台" />
+
+                    <!-- 命名输入 -->
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="42"
+                            VerticalAlignment="Top" MarginTop="46" MarginLeft="14" MarginRight="14">
+                      <Children>
+                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Sprite="BlankWhiteSquare_9" Color="#0A0810FF" />
+                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Sprite="StdAssets\selection_border_9" Color="#5A4478FF" />
+
+                        <TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                                    SuggestedWidth="90" MarginLeft="10"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center"
+                                    Brush="Clan.Card.Text" Color="#8B7BA8" Text="法术名" />
+
+                        <EditableTextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                            MarginLeft="100" MarginRight="12"
+                                            Brush="Clan.Card.Text" Text="@NewSpellName" />
+                      </Children>
+                    </Widget>
+
+                    <!-- 组装列表 -->
+                    <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                     MarginTop="96" MarginBottom="176" MarginLeft="10" MarginRight="10"
+                                     ClipRect="BuildClip" InnerPanel="BuildInner"
+                                     AutoHideScrollBars="false" VerticalScrollbar="..\BuildScrollbar">
+                      <Children>
+                        <Widget Id="BuildClip" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                ClipContents="true">
+                          <Children>
+                            <ListPanel Id="BuildInner" WidthSizePolicy="StretchToParent"
+                                       HeightSizePolicy="CoverChildren"
+                                       LayoutImp.LayoutMethod="VerticalBottomToTop"
+                                       DataSource="{CurrentBuild}">
+                              <ItemTemplate>
+                                <ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                              SuggestedHeight="56" MarginBottom="4"
+                                              MarginLeft="8" MarginRight="8"
+                                              Brush="ButtonBrush2" Command.Click="ExecuteRemoveNode"
+                                              DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+                                  <Children>
+                                    <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                                            SuggestedWidth="4" HorizontalAlignment="Left"
+                                            Sprite="BlankWhiteSquare_9" Color="#B090E0FF" />
+
+                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                                SuggestedHeight="26" VerticalAlignment="Top" MarginTop="3"
+                                                MarginLeft="16" MarginRight="40" HorizontalAlignment="Left"
+                                                Brush="Clan.Card.Name" Text="@SkillName" />
+
+                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                                SuggestedHeight="22" VerticalAlignment="Bottom" MarginBottom="3"
+                                                MarginLeft="16" MarginRight="40" HorizontalAlignment="Left"
+                                                Brush="Clan.Card.Text" Color="#8B8296" Text="@Description" />
+
+                                    <TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                                                SuggestedWidth="30" MarginRight="8"
+                                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                Brush="Clan.Card.Name" Color="#E06060FF" Text="×" />
+                                  </Children>
+                                </ButtonWidget>
+                              </ItemTemplate>
+                            </ListPanel>
+                          </Children>
+                        </Widget>
+                      </Children>
+                    </ScrollablePanel>
+
+                    <ScrollbarWidget Id="BuildScrollbar" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                                     SuggestedWidth="12" HorizontalAlignment="Right"
+                                     MarginTop="50" MarginBottom="10" MarginRight="4"
+                                     AlignmentAxis="Vertical" MinValue="0" MaxValue="100"
+                                     Handle="BuildHandle">
+                      <Children>
+                        <Widget Id="BuildHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                MinHeight="20" Sprite="BlankWhiteSquare_9" Color="#7C5AA8FF" />
+                      </Children>
+                    </ScrollbarWidget>
+
+                    <!-- 构建描述 + 验证信息 -->
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="112"
+                            VerticalAlignment="Bottom" MarginBottom="60" MarginLeft="12" MarginRight="12">
+                      <Children>
+                        <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Sprite="BlankWhiteSquare_9" Color="#0A0810FF" />
+
+                        <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                    SuggestedHeight="68" VerticalAlignment="Top" MarginTop="6"
+                                    MarginLeft="12" MarginRight="12" HorizontalAlignment="Left"
+                                    Brush="Clan.Card.Text" Color="#A098B0" Text="@BuildDescription" />
+
+                        <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                    SuggestedHeight="30" VerticalAlignment="Bottom" MarginBottom="4"
+                                    MarginLeft="12" MarginRight="12" HorizontalAlignment="Left"
+                                    Brush="Clan.Card.Text" Color="#E0A030FF" Text="@ValidationMessage" />
+                      </Children>
+                    </Widget>
+
+                    <!-- 组装台操作 -->
+                    <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="52"
+                               VerticalAlignment="Bottom" MarginBottom="6" HorizontalAlignment="Center"
+                               LayoutImp.LayoutMethod="HorizontalLeftToRight">
+                      <Children>
+                        <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                      SuggestedWidth="150" SuggestedHeight="44" MarginRight="14"
+                                      VerticalAlignment="Center" Brush="ButtonBrush2"
+                                      Command.Click="ExecuteClearBuild"
+                                      DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+                          <Children>
+                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                        Brush="Clan.Card.Text" Text="清空" />
+                          </Children>
+                        </ButtonWidget>
+
+                        <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                      SuggestedWidth="190" SuggestedHeight="44"
+                                      VerticalAlignment="Center" Brush="ButtonBrush1"
+                                      Command.Click="ExecuteConfirmSpell"
+                                      DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+                          <Children>
+                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                        Brush="Clan.Card.Name" Text="锻造法术" />
+                          </Children>
+                        </ButtonWidget>
+                      </Children>
+                    </ListPanel>
+                  </Children>
+                </Widget>
+
+                <!-- ========== 右栏：全部魔法 ========== -->
+                <Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                        SuggestedWidth="500" HorizontalAlignment="Right">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            Sprite="BlankWhiteSquare_9" Color="#171224FF" />
+
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                SuggestedHeight="42" VerticalAlignment="Top"
+                                Brush="Clan.Card.Name" Color="#B090E0FF" Text="全部魔法" />
+
+                    <ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                     MarginTop="46" MarginBottom="8"
+                                     ClipRect="SpellClip" InnerPanel="SpellClip\SpellInner"
+                                     AutoHideScrollBars="false" VerticalScrollbar="..\SpellScrollbar">
+                      <Children>
+                        <Widget Id="SpellClip" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                ClipContents="true">
+                          <Children>
+                            <ListPanel Id="SpellInner" WidthSizePolicy="StretchToParent"
+                                       HeightSizePolicy="CoverChildren"
+                                       LayoutImp.LayoutMethod="VerticalBottomToTop"
+                                       DataSource="{AllSpells}">
+                              <ItemTemplate>
+                                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                        SuggestedHeight="76" MarginBottom="4"
+                                        MarginLeft="8" MarginRight="8">
+                                  <Children>
+                                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                            Sprite="BlankWhiteSquare_9" Color="#211A33FF" />
+
+                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                                SuggestedHeight="26" VerticalAlignment="Top" MarginTop="5"
+                                                MarginLeft="12" MarginRight="12" HorizontalAlignment="Left"
+                                                Brush="Clan.Card.Name" Text="@SkillName" />
+
+                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                                SuggestedHeight="22" VerticalAlignment="Top" MarginTop="30"
+                                                MarginLeft="12" MarginRight="200" HorizontalAlignment="Left"
+                                                Brush="Clan.Card.Text" Color="#8B8296" Text="@Description" />
+
+                                    <!-- 行内操作 -->
+                                    <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed"
+                                               SuggestedHeight="30" VerticalAlignment="Bottom" MarginBottom="6"
+                                               MarginRight="10" HorizontalAlignment="Right"
+                                               LayoutImp.LayoutMethod="HorizontalLeftToRight">
+                                      <Children>
+                                        <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                                      SuggestedWidth="84" SuggestedHeight="30" MarginRight="8"
+                                                      Brush="ButtonBrush2" Command.Click="ExecuteEditSpell"
+                                                      DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+                                          <Children>
+                                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                                        Brush="Clan.Card.Text" Text="编辑" />
+                                          </Children>
+                                        </ButtonWidget>
+
+                                        <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                                      SuggestedWidth="84" SuggestedHeight="30"
+                                                      Brush="ButtonBrush1" Command.Click="ExecuteEquipSpell"
+                                                      DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+                                          <Children>
+                                            <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                                        Brush="Clan.Card.Text" Text="装备" />
+                                          </Children>
+                                        </ButtonWidget>
+                                      </Children>
+                                    </ListPanel>
+                                  </Children>
+                                </Widget>
+                              </ItemTemplate>
+                            </ListPanel>
+                          </Children>
+                        </Widget>
+                      </Children>
+                    </ScrollablePanel>
+
+                    <ScrollbarWidget Id="SpellScrollbar" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent"
+                                     SuggestedWidth="12" HorizontalAlignment="Right"
+                                     MarginTop="50" MarginBottom="10" MarginRight="4"
+                                     AlignmentAxis="Vertical" MinValue="0" MaxValue="100"
+                                     Handle="SpellHandle">
+                      <Children>
+                        <Widget Id="SpellHandle" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed"
+                                MinHeight="20" Sprite="BlankWhiteSquare_9" Color="#7C5AA8FF" />
+                      </Children>
+                    </ScrollbarWidget>
+                  </Children>
+                </Widget>
+              </Children>
+            </Widget>
+
+            <!-- = 底部 = -->
+            <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="86"
+                    VerticalAlignment="Bottom">
+              <Children>
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                        Sprite="BlankWhiteSquare_9" Color="#1C1526FF" />
+
+                <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                            MarginLeft="30" HorizontalAlignment="Left" VerticalAlignment="Center"
+                            Brush="Clan.Card.Text" Color="#6E6480"
+                            Text="左栏点击加入组装 · 中栏点击移除 · 右栏可编辑或装备" />
+
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                              SuggestedWidth="160" SuggestedHeight="48"
+                              MarginRight="26" HorizontalAlignment="Right" VerticalAlignment="Center"
+                              Brush="ButtonBrush2" Command.Click="ExecuteClose"
+                              DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+                  <Children>
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                Brush="Clan.Card.Text" Text="返回" />
+                  </Children>
+                </ButtonWidget>
+              </Children>
+            </Widget>
+          </Children>
+        </Widget>
+      </Children>
+    </Widget>
+  </Window>
+</Prefab>

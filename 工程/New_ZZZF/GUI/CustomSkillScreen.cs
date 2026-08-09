@@ -165,6 +165,13 @@ namespace New_ZZZF
                     return;
                 }
 
+                // 法术锻造入口快捷键：F8 打开组合法术界面（按钮失效时的兜底）
+                if (Input.IsKeyReleased(InputKey.F8))
+                {
+                    _dataSource.ExecuteOpenSpellForge();
+                    return;
+                }
+
                 // v2: Tab → 循环目标类型
                 if (Input.IsKeyReleased(InputKey.Tab))
                 {

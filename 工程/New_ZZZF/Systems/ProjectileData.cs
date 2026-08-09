@@ -30,5 +30,11 @@ namespace New_ZZZF
         // 动态计算属性
         public float Age => Mission.Current.CurrentTime - SpawnTime;
         public float RemainingTime => Lifetime - Age;
+
+        // —— 法术锻造扩展字段 ——
+        /// <summary>命中判定半径（用于 O(1) 射线/范围命中）</summary>
+        public float Radius = 0.5f;
+        /// <summary>携带运行时法术参数，供 CompositeSpell.GameEntityDamage 命中结算使用</summary>
+        public object Resolved;
     }
 }

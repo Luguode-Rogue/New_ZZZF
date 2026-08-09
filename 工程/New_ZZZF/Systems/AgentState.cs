@@ -192,6 +192,105 @@ namespace New_ZZZF
             agent.StopParticleEffect("du");
         }
     }
-    
-    
+
+    /// <summary>
+    /// 冰冻减速状态：生效时降低目标移动速度，到期恢复。
+    /// 复用模组既有的 agent.AgentDrivenProperties.MaxSpeedMultiplier 覆盖（安全容错）。
+    /// </summary>
+    public class FreezeState : AgentBuff
+    {
+        private readonly float _slowFactor; // 0.5 = 减速50%
+        private float _originalMul = -1f;
+        public FreezeState(float duration, float slowFactor, Agent source)
+        {
+            StateId = "forge_freeze";
+            Duration = duration;
+            _slowFactor = TaleWorlds.Library.MathF.Clamp(slowFactor, 0.1f, 0.95f);
+            SourceAgent = source;
+        }
+
+        public override void OnApply(Agent agent)
+        {
+            agent.PlayParticleEffect("zzzf_freeze");
+            try
+            {
+                float cur = agent.AgentDrivenProperties.MaxSpeedMultiplier;
+                _originalMul = cur;
+                agent.AgentDrivenProperties.MaxSpeedMultiplier = cur * (1f - _slowFactor);
+            }
+            catch { }
+        }
+
+        public override void OnUpdate(Agent agent, float dt) { }
+
+        public override void OnRemove(Agent agent)
+        {
+            agent.StopParticleEffect("zzzf_freeze");
+            try
+            {
+                if (_originalMul > 0f)
+                    agent.AgentDrivenProperties.MaxSpeedMultiplier = _originalMul;
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>中毒状态：持续造成火焰/毒素伤害（DOT）。</summary>
+    public class WeakenState : AgentBuff
+    {
+        private readonly float _damagePerSecond;
+        private float _timeSinceLastTick;
+        public WeakenState(float duration, float dps, Agent source)
+        {
+            StateId = "forge_poison";
+            Duration = duration;
+            _damagePerSecond = dps;
+            SourceAgent = source;
+            _timeSinceLastTick = 0;
+        }
+
+        public override void OnApply(Agent agent) => agent.PlayParticleEffect("du");
+
+        public override void OnUpdate(Agent agent, float dt)
+        {
+            _timeSinceLastTick += dt;
+            if (_timeSinceLastTick >= 1f)
+            {
+                Script.CalculateFinalMagicDamage(SourceAgent, agent, _damagePerSecond, DamageType.TOXIN_DAMAGE);
+                _timeSinceLastTick -= 1f;
+            }
+        }
+
+        public override void OnRemove(Agent agent) => agent.StopParticleEffect("du");
+    }
+
+    /// <summary>治疗状态：持续回复生命值（HOT）。</summary>
+    public class HealState : AgentBuff
+    {
+        private readonly Agent _source;
+        private float _timeSinceLastTick;
+        public HealState(float duration, Agent source)
+        {
+            StateId = "forge_heal";
+            Duration = duration;
+            _source = source;
+            _timeSinceLastTick = 0;
+        }
+
+        public override void OnApply(Agent agent) => agent.PlayParticleEffect("zzzf_heal");
+
+        public override void OnUpdate(Agent agent, float dt)
+        {
+            _timeSinceLastTick += dt;
+            if (_timeSinceLastTick >= 1f)
+            {
+                float heal = 12f;
+                agent.Health = TaleWorlds.Library.MathF.Clamp(agent.Health + heal, 0f, agent.HealthLimit);
+                _timeSinceLastTick -= 1f;
+            }
+        }
+
+        public override void OnRemove(Agent agent) => agent.StopParticleEffect("zzzf_heal");
+    }
+
 }

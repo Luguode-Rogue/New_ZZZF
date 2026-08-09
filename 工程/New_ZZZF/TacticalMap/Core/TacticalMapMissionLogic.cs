@@ -26,6 +26,13 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 base.OnAfterMissionCreated();
                 if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 功能被关闭 (EnableMinimap=false)")); _initialized = true; return; }
+                if (!MissionSceneGuard.IsTacticalMapSupported(Mission))
+                {
+                    InformationManager.DisplayMessage(new InformationMessage("[TMap] 跳过初始化：当前场景无地形（酒馆/城镇等）"));
+                    _initialized = true;
+                    _ready = false;
+                    return;
+                }
                 _controller = new TacticalMapController(Mission);
                 _ready = _controller.Initialize(Mission);
                 _initialized = true;
@@ -50,6 +57,13 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 try
                 {
+                    if (!MissionSceneGuard.IsTacticalMapSupported(Mission))
+                    {
+                        InformationManager.DisplayMessage(new InformationMessage("[TMap] 跳过懒初始化：当前场景无地形（酒馆/城镇等）"));
+                        _initialized = true;
+                        _ready = false;
+                        return;
+                    }
                     _controller = new TacticalMapController(Mission);
                     _ready = _controller.Initialize(Mission);
                     _initialized = true;

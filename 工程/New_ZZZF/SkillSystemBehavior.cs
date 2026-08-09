@@ -856,7 +856,7 @@ namespace New_ZZZF
 
 
         }
-        private static void DestroyProjectile(GameEntity proj)
+        public static void DestroyProjectile(GameEntity proj)
         {
             if (WoW_ProjectileDB.TryGetValue(proj, out ProjectileData data))
             {

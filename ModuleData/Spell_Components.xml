@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 法术锻造：组件库（与 New_ZZZF/工程/New_ZZZF/Skills/CompositeSpell.cs 中 SpellForgeData 一致） -->
+<SpellComponents>
+  <!-- 元素 -->
+  <Component Id="elm_fire"   Name="火焰元素" Category="element" EffectType="fire"        Description="命中附加燃烧 DOT。" />
+  <Component Id="elm_ice"    Name="冰霜元素" Category="element" EffectType="ice"         Description="命中附加减速。" />
+  <Component Id="elm_elec"   Name="雷电元素" Category="element" EffectType="electricity" Description="命中附加麻痹。" />
+  <Component Id="elm_toxin"  Name="毒素元素" Category="element" EffectType="toxin"       Description="命中附加中毒 DOT。" />
+  <!-- 伤害 -->
+  <Component Id="dmg_burst"  Name="爆发伤害" Category="damage"  ParamValue="0.5" Description="提升基础伤害 50%。" />
+  <Component Id="dmg_pierce" Name="穿透"     Category="damage"  Description="命中可贯穿至后方目标。" />
+  <!-- 触发器 -->
+  <Component Id="trig_projectile" Name="弹道触发" Category="trigger" EffectType="projectile" Description="以制导飞弹形式发射法术。" />
+  <Component Id="trig_aoe"       Name="范围触发" Category="trigger" EffectType="aoe"       Description="在落点生成范围效果。" />
+  <!-- 状态 -->
+  <Component Id="st_burn"   Name="点燃"   Category="status"  EffectType="fire"       Description="施加燃烧状态。" />
+  <Component Id="st_freeze" Name="冰冻"   Category="status"  EffectType="ice"        Description="施加减速冻结。" />
+  <Component Id="st_poison" Name="中毒"   Category="status"  EffectType="toxin"      Description="施加中毒状态。" />
+  <!-- 控制 -->
+  <Component Id="ctrl_stun" Name="眩晕"   Category="control" ParamValue="1.5" Description="短时间使目标无法行动。" />
+  <!-- 增益（对友方） -->
+  <Component Id="buff_shield" Name="护盾" Category="buff" EffectType="shield" Description="对友方施放时提供护盾。" />
+  <Component Id="buff_heal"   Name="治疗" Category="buff" EffectType="heal"   Description="对友方施放时回复生命。" />
+  <!-- 强化 -->
+  <Component Id="aug_multishot" Name="多重发射" Category="augment" ParamValue="3"   Description="同时发射多枚弹道（散射）。" />
+  <Component Id="aug_homing"    Name="追踪"     Category="augment"                Description="弹道自动追踪最近敌人。" />
+  <Component Id="aug_cooldown"  Name="急速"     Category="augment" ParamValue="0.3" Description="降低冷却 30%。" />
+</SpellComponents>

@@ -41,7 +41,7 @@ WoW/
     ├── TroopSkill.cs             # 测试兵种技能硬编码
     ├── WoW_DefaultPartySpeedCalculatingModel.cs  # 大地图移速
     ├── WoW_HideoutCampaignBehavior.cs            # 藏身处难度
-    ├── WoW_DefaultClanTierModel.cs               # 家族同伴翻倍
+    ├── WoW_DefaultClanTierModel.cs               # 家族同伴翻倍（已废弃，被 CompanionDualLimit 取代）
     └── WoW_MainAgentStatus.cs    # 自定义HUD ViewModel
 ```
 
@@ -68,7 +68,7 @@ public override void InitializeGameStarter(Game game, IGameStarter gameStarterOb
     // 仅战役模式
     if (game.GameType is Campaign)
     {
-        gameStarterObject.AddModel(new WoW_DefaultClanTierModel());
+        // 原: gameStarterObject.AddModel(new WoW_DefaultClanTierModel()); // 已废弃，见 CompanionDualLimit/ZZZFClanTierModel
         gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
         gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
         gameStarterObject.AddModel(new WOW_SandboxAgentStatCalculateModel());

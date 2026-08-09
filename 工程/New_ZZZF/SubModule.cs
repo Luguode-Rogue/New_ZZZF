@@ -120,7 +120,6 @@ namespace New_ZZZF
             if (game.GameType is Campaign)
             {
                 //战役里使用的代码
-                //gameStarterObject.AddModel(new WoW_DefaultClanTierModel());
                 gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
                 gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
                 gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());

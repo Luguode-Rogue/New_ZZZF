@@ -1,6 +1,9 @@
 using System;
+using System.Runtime.ExceptionServices;
+using System.Security;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
+using New_ZZZF.TacticalMap.Core;
 
 namespace New_ZZZF.TacticalMap.Terrain
 {
@@ -40,9 +43,29 @@ namespace New_ZZZF.TacticalMap.Terrain
             _settings = settings;
         }
 
+        /// <summary>
+        /// 烘焙地形。若场景无地形（酒馆/城镇/竞技场等）直接返回 false，不触碰任何地形原生 API。
+        /// </summary>
+        /// <remarks>
+        /// HandleProcessCorruptedStateExceptions 是最后一道保险：引擎侧地形接口在异常场景下
+        /// 可能抛出 AccessViolationException，该异常默认不会被 catch(Exception) 捕获，
+        /// 加上此特性后至少能降级为“地图不显示”而不是整个游戏崩溃。
+        /// </remarks>
+        [HandleProcessCorruptedStateExceptions]
+        [SecurityCritical]
         public bool TryBake(Scene scene)
         {
             _scene = scene;
+            if (scene == null) { LastError = "scene 为 null"; return false; }
+
+            // 关键前置检查：无地形场景中调用 GetTerrainData 会导致引擎侧空指针访问。
+            if (!MissionSceneGuard.IsSceneTerrainReady(scene))
+            {
+                LastError = "当前场景无地形数据（酒馆/城镇等室内场景）";
+                _baked = false;
+                return false;
+            }
+
             try
             {
                 scene.GetTerrainData(out Vec2i nodeDim, out float nodeSize, out _, out _);

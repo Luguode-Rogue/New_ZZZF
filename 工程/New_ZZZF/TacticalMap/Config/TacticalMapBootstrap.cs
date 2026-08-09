@@ -27,6 +27,15 @@ namespace New_ZZZF.TacticalMap.Config
         public static void OnMissionStart(Mission mission)
         {
             if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 未注入 MissionBehavior：FeatureGate(EnableMinimap) 关闭")); return; }
+
+            // 酒馆/城镇/竞技场等场景没有地形数据，烘焙会触发引擎侧 AccessViolationException（无法被 C# 捕获），
+            // 因此这里直接不注入 MissionBehavior。
+            if (!MissionSceneGuard.IsTacticalMapSupported(mission))
+            {
+                InformationManager.DisplayMessage(new InformationMessage("[TMap] 未注入 MissionBehavior：非战场场景（无地形）"));
+                return;
+            }
+
             mission.AddMissionBehavior(new TacticalMapMissionLogic());
             InformationManager.DisplayMessage(new InformationMessage("[TMap] 已注入 TacticalMapMissionLogic"));
         }

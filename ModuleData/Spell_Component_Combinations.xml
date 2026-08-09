@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 法术锻造：节点库 + 官方法术组合（与 CompositeSpell.cs 中 SpellForgeData 一致） -->
+<SpellForgeConfig>
+  <!-- 节点（锻造台上的可放置格子） -->
+  <Nodes>
+    <Node Id="core_node"     Name="核心节点"   MaxComponents="3" Categories="element,damage,augment"  Description="法术的根节点，承载主元素与基础伤害。" />
+    <Node Id="trigger_node"  Name="触发器节点" MaxComponents="2" Categories="trigger,augment"         Description="决定法术的触发方式（弹道/范围/即时）。" />
+    <Node Id="effect_node"   Name="效果节点"   MaxComponents="3" Categories="status,control,buff,augment" Description="附加持续效果、控制与增益。" />
+    <Node Id="modifier_node" Name="修正节点"   MaxComponents="2" Categories="augment,modifier"        Description="强化、削弱或改变法术形态（散射/追踪/穿透）。" />
+  </Nodes>
+
+  <!-- 官方法术组合（预设配方） -->
+  <Combinations>
+    <Combination Id="combo_fireball"  Name="烈焰火球" BaseSkillId="Fireball" Components="elm_fire,dmg_burst" Description="火球 + 火焰元素 + 爆发伤害。" />
+    <Combination Id="combo_frostnova" Name="冰霜新星" BaseSkillId="lingmashaodi" Components="elm_ice,trig_aoe,st_freeze" Description="冰霜元素 + 范围触发 + 冰冻。" />
+    <Combination Id="combo_storm"     Name="雷暴弹幕" BaseSkillId="LeiJi" Components="elm_elec,aug_multishot,aug_homing" Description="雷电元素 + 多重发射 + 追踪。" />
+  </Combinations>
+</SpellForgeConfig>

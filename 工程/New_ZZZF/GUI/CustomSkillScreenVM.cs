@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
+using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using TaleWorlds.ObjectSystem;
+using TaleWorlds.ScreenSystem;
 
 namespace New_ZZZF
 {
@@ -140,7 +142,6 @@ namespace New_ZZZF
     /// <summary>
     /// 技能槽位 ViewModel —— 表示 MainActive / SubActive / Passive / CombatArt / Spell 等槽位。
     /// 每个槽位可以装备一个 SkillUIData（或空）。
-    /// v2: 新增 IsActiveSlot 属性（目录视图打开时标识当前编辑的槽位）。
     /// </summary>
     public class SkillSlotVM : ViewModel
     {
@@ -531,7 +532,7 @@ namespace New_ZZZF
         [DataSourceProperty]
         public bool IsShowingSlots => !_isInCatalogView;
 
-        /// <summary>v2: 当前编辑中的技能槽位（目录视图的上下文）</summary>
+        /// <summary>v2: 当前编辑中的技能槽位（目录视图的上下文，仅逻辑使用，不驱动UI）</summary>
         [DataSourceProperty]
         public SkillSlotVM ActiveSlot
         {
@@ -540,13 +541,7 @@ namespace New_ZZZF
             {
                 if (value != _activeSlot)
                 {
-                    // 取消旧槽位的高亮
-                    if (_activeSlot != null)
-                        _activeSlot.IsActiveSlot = false;
                     _activeSlot = value;
-                    // 高亮新槽位
-                    if (_activeSlot != null)
-                        _activeSlot.IsActiveSlot = true;
                     OnPropertyChangedWithValue(value, nameof(ActiveSlot));
                 }
             }
@@ -655,6 +650,9 @@ namespace New_ZZZF
         /// <summary>当前目标的技能配置（可编辑副本）</summary>
         private HeroSkillData _currentHeroSkillData;
 
+        /// <summary>供『法术锻造』界面读取/写入英雄法术槽（旧系统 HeroSkillData 为准）</summary>
+        public HeroSkillData CurrentHeroSkillData => _currentHeroSkillData;
+
         /// <summary>脏标记</summary>
         private bool _isDirty;
 
@@ -674,7 +672,6 @@ namespace New_ZZZF
         public CustomSkillScreenVM()
         {
             Catalog = SkillCatalog.LoadFromFactory();
-
             Roster = new MBBindingList<HeroVM>();
             Skills = new MBBindingList<SkillSlotVM>();
             Proficiencies = new MBBindingList<SkillProficiencyVM>();
@@ -905,6 +902,9 @@ namespace New_ZZZF
             CurrentHeroId = target.HeroId;
             target.IsSelected = true;
 
+            // 清除旧槽位高亮（切换目标时必须重置 ActiveSlot）
+            ActiveSlot = null;
+
             // 同步 Roster 绑定到当前目标列表
             var currentList = GetCurrentTargetList();
             if (Roster != currentList)
@@ -1058,6 +1058,10 @@ namespace New_ZZZF
             var filterType = slotVM.SlotFilterType;
             string searchLower = (_searchText ?? string.Empty).Trim().ToLower();
 
+            // 先全部置为不可选
+            foreach (var all in _allSkillItemVMs)
+                all.IsSelectable = false;
+
             foreach (var itemVM in _allSkillItemVMs)
             {
                 // 类型过滤
@@ -1072,6 +1076,7 @@ namespace New_ZZZF
                         continue;
                 }
 
+                itemVM.IsSelectable = true;
                 CatalogItems.Add(itemVM);
             }
         }
@@ -1214,6 +1219,84 @@ namespace New_ZZZF
             if (!_isDirty) return;
             SaveCurrentHeroSkills();
             IsDirty = false;
+        }
+
+        // —— 法术锻造接入：从“新技能界面”按钮打开组合法术界面 ——
+        private bool _isSpellForgeOpen;
+        [DataSourceProperty]
+        public bool IsSpellForgeOpen
+        {
+            get => _isSpellForgeOpen;
+            set
+            {
+                if (value != _isSpellForgeOpen)
+                {
+                    _isSpellForgeOpen = value;
+                    OnPropertyChangedWithValue(value, nameof(IsSpellForgeOpen));
+                    OnPropertyChangedWithValue(!value, nameof(IsSpellForgeClosed));
+                }
+            }
+        }
+
+        [DataSourceProperty]
+        public bool IsSpellForgeClosed => !_isSpellForgeOpen;
+
+        /// <summary>新技能界面“法术锻造”按钮：打开组合法术界面。</summary>
+        public void ExecuteOpenSpellForge()
+        {
+            if (_isSpellForgeOpen) return;
+            IsSpellForgeOpen = true;
+            // 回调：法术锻造界面关闭后刷新当前界面状态，不自装备（新法术已在全部魔法列表中供玩家手动选择）
+            System.Action onCommit = () =>
+            {
+                if (CurrentHero != null)
+                    LoadSkillsForTarget(CurrentHero.HeroId);
+            };
+            ScreenManager.PushScreen(new New_ZZZF.SpellForge.SpellForgeScreen(this, onCommit));
+        }
+
+        /// <summary>由 SpellForgeScreen 在关闭时调用，同步状态。</summary>
+        public void NotifySpellForgeClosed()
+        {
+            IsSpellForgeOpen = false;
+        }
+
+        /// <summary>供法术锻造：获取当前英雄已装备的法术槽数据（Spell0~Spell3）。</summary>
+        public HeroSkillData GetCurrentHeroSkillData()
+        {
+            return _currentHeroSkillData;
+        }
+
+        /// <summary>供法术锻造：把合成法术写入当前英雄第一个空法术槽（无空槽则覆盖最后一个）。</summary>
+        public void EquipCompositeSpellToCurrentHero(SkillUIData compositeUiData)
+        {
+            if (_currentHeroSkillData == null || compositeUiData == null) return;
+            SkillSlotVM target = FirstEmptySpellSlot();
+            if (target == null) return;
+            AssignSkillToSlot(target, compositeUiData);
+            SaveCurrentHeroSkills();
+            if (CurrentHero != null)
+                LoadSkillsForTarget(CurrentHero.HeroId);
+        }
+
+        /// <summary>查找当前英雄第一个空法术槽（Spell0~Spell3）。</summary>
+        private SkillSlotVM FirstEmptySpellSlot()
+        {
+            foreach (var s in _skills)
+            {
+                if (s.SlotId != null && s.SlotId.StartsWith("Spell")
+                    && (s.Skill == null || s.Skill.IsEmpty))
+                {
+                    return s;
+                }
+            }
+            // 没有空槽则返回最后一个法术槽（覆盖）
+            for (int i = _skills.Count - 1; i >= 0; i--)
+            {
+                if (_skills[i].SlotId != null && _skills[i].SlotId.StartsWith("Spell"))
+                    return _skills[i];
+            }
+            return null;
         }
 
         /// <summary>

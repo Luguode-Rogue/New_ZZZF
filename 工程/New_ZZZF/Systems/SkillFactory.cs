@@ -149,7 +149,16 @@ namespace New_ZZZF
             return null;
         }
 
-
+        /// <summary>
+        /// 动态注册技能（供『法术锻造』合成法术使用，以旧系统为准）。
+        /// 合成出的 CompositeSpell 注册后即可被 Create / 装备 / 存档逻辑识别。
+        /// </summary>
+        public static void RegisterSkill(string id, SkillBase skill)
+        {
+            if (string.IsNullOrWhiteSpace(id) || skill == null) return;
+            _skillRegistry[id] = skill;
+            Debug.Print($"[SkillFactory] 动态注册法术: {id}");
+        }
 
         /// <summary>
         /// 空技能占位类（防止因配置错误导致崩溃）

@@ -15,7 +15,9 @@ namespace New_ZZZF
     public class SkillItemVM : ViewModel
     {
         private readonly SkillUIData _skillData;
+        private readonly SkillBase _skillBase;
         private readonly Action<SkillUIData> _onSelect;
+        private readonly Action<SkillItemVM> _onSelectItem;
 
         private string _skillId;
         private string _skillName;
@@ -26,6 +28,7 @@ namespace New_ZZZF
         private string _cooldownText;
         private string _costText;
         private bool _isHighlighted;
+        private bool _isSelectable;
 
         /// <summary>技能唯一标识符</summary>
         [DataSourceProperty]
@@ -178,28 +181,60 @@ namespace New_ZZZF
             }
         }
 
-        /// <summary>原始技能数据（供父级 ViewModel 读取）</summary>
+        /// <summary>原始技能数据（UI 包装）</summary>
         public SkillUIData SkillData => _skillData;
 
+        /// <summary>旧系统原始 SkillBase（供法术锻造等需要真实技能实例的逻辑使用）</summary>
+        public SkillBase SkillBase => _skillBase;
+
+        /// <summary>是否显示选择/装备按钮</summary>
+        [DataSourceProperty]
+        public bool IsSelectable
+        {
+            get => _isSelectable;
+            set
+            {
+                if (value != _isSelectable)
+                {
+                    _isSelectable = value;
+                    OnPropertyChangedWithValue(value, nameof(IsSelectable));
+                }
+            }
+        }
+
         /// <summary>
-        /// 创建技能项 ViewModel
+        /// 创建技能项 ViewModel（旧接口，保留兼容）
         /// </summary>
-        /// <param name="skillData">技能数据</param>
-        /// <param name="onSelect">选择回调</param>
         public SkillItemVM(SkillUIData skillData, Action<SkillUIData> onSelect)
         {
             _skillData = skillData ?? SkillUIData.Empty;
+            _skillBase = null;
             _onSelect = onSelect;
+            InitFromSkillData(_skillData);
+        }
 
+        /// <summary>
+        /// 创建技能项 ViewModel（新接口，直接接受旧系统 SkillBase）
+        /// </summary>
+        public SkillItemVM(SkillBase skillBase, Action<SkillItemVM> onSelectItem)
+        {
+            _skillBase = skillBase;
+            _skillData = SkillUIData.FromSkillBase(skillBase);
+            _onSelectItem = onSelectItem;
+            InitFromSkillData(_skillData);
+        }
+
+        private void InitFromSkillData(SkillUIData data)
+        {
             // 初始化绑定属性
-            _skillId = _skillData.SkillId ?? string.Empty;
-            _skillName = _skillData.SkillName ?? string.Empty;
-            _description = _skillData.Description ?? string.Empty;
-            _iconItemId = _skillData.IconItemId ?? string.Empty;
-            _type = (int)_skillData.Type;
+            _skillId = data.SkillId ?? string.Empty;
+            _skillName = data.SkillName ?? string.Empty;
+            _description = data.Description ?? string.Empty;
+            _iconItemId = data.IconItemId ?? string.Empty;
+            _type = (int)data.Type;
 
             // TypeText
-            _typeText = _skillData.Type switch
+            _typeText = data.Type switch
             {
                 SPSkillType.MainActive => "主主动",
                 SPSkillType.SubActive => "副主动",
@@ -210,14 +245,12 @@ namespace New_ZZZF
             };
 
             // CooldownText
-            float cd = _skillData.Cooldown;
+            float cd = data.Cooldown;
             _cooldownText = cd > 0f ? cd.ToString("F1") + "s" : "-";
 
             // CostText
-            float cost = _skillData.ResourceCost;
+            float cost = data.ResourceCost;
             _costText = cost > 0f ? cost.ToString("F0") : "-";
-
-            // DebugConstructorLog();
         }
 
         // 调试：全局计数器（前3个输出详细日志）-- 暂时停用
@@ -237,6 +270,7 @@ namespace New_ZZZF
         public void ExecuteSelect()
         {
             _onSelect?.Invoke(_skillData);
+            _onSelectItem?.Invoke(this);
         }
     }
 }

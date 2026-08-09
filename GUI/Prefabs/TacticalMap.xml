@@ -1,20 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Prefab>
   <Window>
-    <Widget Id="Root" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent">
+
+    <!-- ============================================================
+         TacticalMap  —  战术小地图 (重制版)
+         DataSource : New_ZZZF.TacticalMap.UI.TacticalMapVM
+           Title : string
+           ShowRisk : bool
+
+         【硬性契约 - 请勿修改】TacticalMapLayer.cs 依赖以下两个 Id：
+           1. "MinimapPanel"  普通 Widget。运行时会被强制设为
+                              Fixed / SuggestedWidth = SuggestedHeight = TacticalSettings.MapSize。
+                              HitTestMinimap() 用它的 AreaRect 整块矩形做 UV(0..1) 映射，
+                              因此该 Widget 内部【只能】放地图绘制面，
+                              标题 / 图例等装饰必须放在它【外部】，否则点击坐标会偏移。
+           2. "MinimapTex"    必须是 MinimapWidget 类型（自定义绘制控件）。
+                              运行时会被强制设为 StretchToParent 并注入 Controller。
+
+         定位：右上角，边距由本 XML 的 HorizontalAlignment/MarginRight/MarginTop 控制
+              （C# 侧刻意不使用 PosOffset 以规避版本差异）。
+         ============================================================ -->
+
+    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+            IsEnabled="false">
       <Children>
-        <Widget Id="MinimapPanel" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="320" SuggestedHeight="320" HorizontalAlignment="Right" VerticalAlignment="Top" MarginRight="20" MarginTop="20">
+
+        <!-- ========== 小地图总容器（右上角锚点） ========== -->
+        <Widget WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                MarginRight="28" MarginTop="28">
           <Children>
-            <MinimapWidget Id="MinimapTex" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" />
+
+            <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="CoverChildren"
+                       LayoutImp.LayoutMethod="VerticalBottomToTop">
+              <Children>
+
+                <!-- = 标题条（在 MinimapPanel 之外） = -->
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            Sprite="BlankWhiteSquare_9" Color="#0B0906FF" AlphaFactor="0.82" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="2"
+                            VerticalAlignment="Top"
+                            Sprite="BlankWhiteSquare_9" Color="#C89B4AFF" AlphaFactor="0.9" />
+
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                                MarginLeft="10" MarginRight="10"
+                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                                Brush="Clan.Card.Text" Color="#E4D2A6FF" Text="@Title" />
+                  </Children>
+                </Widget>
+
+                <!-- ==========================================================
+                     地图绘制面
+                     MinimapPanel 的尺寸由 C# 强制覆盖为 MapSize×MapSize。
+                     这里给出的 512 只是编辑期占位，保证 CoverChildren 父级有初值。
+                     内部严禁放置任何非地图元素（会破坏 UV 命中映射）。
+                     ========================================================== -->
+                <Widget Id="MinimapPanel"
+                        WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                        SuggestedWidth="512" SuggestedHeight="512">
+                  <Children>
+
+                    <!-- 地图底色（位于自定义绘制之下） -->
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            Sprite="BlankWhiteSquare_9" Color="#080B06FF" AlphaFactor="0.86" />
+
+                    <!-- 自定义绘制控件：Controller 由 TacticalMapLayer 注入 -->
+                    <MinimapWidget Id="MinimapTex"
+                                   WidthSizePolicy="StretchToParent"
+                                   HeightSizePolicy="StretchToParent" />
+                  </Children>
+                </Widget>
+
+                <!-- = 边框（覆盖在地图面上方，不影响命中） = -->
+                <!-- 说明：边框独立成行会挤压布局，故改为标题下方的细描边条，
+                     视觉上与地图面贴合，且不进入 MinimapPanel 内部。 -->
+
+                <!-- = 图例（在 MinimapPanel 之外） = -->
+                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30"
+                        IsVisible="@ShowRisk">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent"
+                            Sprite="BlankWhiteSquare_9" Color="#0B0906FF" AlphaFactor="0.82" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="2"
+                            VerticalAlignment="Bottom"
+                            Sprite="BlankWhiteSquare_9" Color="#C89B4AFF" AlphaFactor="0.9" />
+
+                    <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                               MarginLeft="10" HorizontalAlignment="Left" VerticalAlignment="Center"
+                               LayoutImp.LayoutMethod="HorizontalLeftToRight">
+                      <Children>
+
+                        <!-- 我方 -->
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                SuggestedWidth="10" SuggestedHeight="10" MarginRight="5"
+                                VerticalAlignment="Center"
+                                Sprite="BlankWhiteSquare_9" Color="#4C90E0FF" />
+                        <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                                    MarginRight="16" VerticalAlignment="Center"
+                                    Brush="Clan.Card.Text" Color="#B8AE9CFF" Text="我方" />
+
+                        <!-- 敌方 -->
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                SuggestedWidth="10" SuggestedHeight="10" MarginRight="5"
+                                VerticalAlignment="Center"
+                                Sprite="BlankWhiteSquare_9" Color="#D04040FF" />
+                        <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                                    MarginRight="16" VerticalAlignment="Center"
+                                    Brush="Clan.Card.Text" Color="#B8AE9CFF" Text="敌方" />
+
+                        <!-- 危险区 -->
+                        <Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed"
+                                SuggestedWidth="10" SuggestedHeight="10" MarginRight="5"
+                                VerticalAlignment="Center"
+                                Sprite="BlankWhiteSquare_9" Color="#E0A030FF" />
+                        <TextWidget WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent"
+                                    VerticalAlignment="Center"
+                                    Brush="Clan.Card.Text" Color="#B8AE9CFF" Text="危险" />
+                      </Children>
+                    </ListPanel>
+                  </Children>
+                </Widget>
+              </Children>
+            </ListPanel>
           </Children>
         </Widget>
-        <TextWidget Id="TMapLegend" WidthSizePolicy="Fixed" SuggestedWidth="232" HeightSizePolicy="CoverChildren" HorizontalAlignment="Right" VerticalAlignment="Top" MarginRight="350" MarginTop="20" DoNotAcceptEvents="true" Brush="SPOptions.Description.Text" FontSize="13" Color="#FFE9C8FF" Text="战术地图 图例
-青环+黄心 = 玩家
-红/绿框 = 敌/友编队
-红/蓝点 = 敌/我方
-橙菱形 = 相机目标
-N 开关   C 联动镜头
-左键移动   右键朝向
-Shift+左 = 攻击移动" />
       </Children>
     </Widget>
   </Window>
