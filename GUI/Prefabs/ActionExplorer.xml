@@ -1,15 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Prefab>
   <Window>
+
+    <!-- =========================================================
+         Root
+         ========================================================= -->
     <Widget
       WidthSizePolicy="StretchToParent"
       HeightSizePolicy="StretchToParent">
 
       <Children>
 
-        <!-- ========================================================= -->
-        <!-- 全屏黑色遮罩：纯视觉，不接受鼠标事件 -->
-        <!-- ========================================================= -->
+        <!-- =====================================================
+             全屏遮罩（不接收事件，仅压暗背景）
+             ===================================================== -->
         <Widget
           WidthSizePolicy="StretchToParent"
           HeightSizePolicy="StretchToParent"
@@ -18,9 +22,10 @@
           AlphaFactor="0.75"
           DoNotAcceptEvents="true" />
 
-        <!-- ========================================================= -->
-        <!-- 主窗口 -->
-        <!-- ========================================================= -->
+
+        <!-- =====================================================
+             主窗口
+             ===================================================== -->
         <Widget
           WidthSizePolicy="Fixed"
           HeightSizePolicy="Fixed"
@@ -41,9 +46,8 @@
               Color="#9C7A3CFF"
               DoNotAcceptEvents="true" />
 
-            <!-- ===================================================== -->
+
             <!-- 标题 -->
-            <!-- ===================================================== -->
             <TextWidget
               WidthSizePolicy="StretchToParent"
               HeightSizePolicy="Fixed"
@@ -54,6 +58,7 @@
               Text="Action Explorer"
               Brush="Clan.Card.Name"
               DoNotAcceptEvents="true" />
+
 
             <!-- 状态 -->
             <TextWidget
@@ -67,11 +72,10 @@
               Brush="Clan.Card.Name"
               DoNotAcceptEvents="true" />
 
-            <!-- ===================================================== -->
-            <!-- 左侧 4×5 Action 区域 -->
-            <!-- ===================================================== -->
 
-            <!-- 区域背景 -->
+            <!-- =================================================
+                 左侧 Action Grid 外框
+                 ================================================= -->
             <Widget
               WidthSizePolicy="Fixed"
               HeightSizePolicy="Fixed"
@@ -82,504 +86,399 @@
               MarginLeft="30"
               MarginTop="120"
               Sprite="BlankWhiteSquare_9"
-              Color="#15120EFF"
-              DoNotAcceptEvents="true" />
-
-            <!-- 区域外框 -->
-            <Widget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="850"
-              SuggestedHeight="650"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="30"
-              MarginTop="120"
-              Sprite="StdAssets\selection_border_9"
-              Color="#6E572FFF"
-              DoNotAcceptEvents="true" />
-
-            <!-- ===================================================== -->
-            <!-- 第一行 -->
-            <!-- ===================================================== -->
-
-            <!-- 01 -->
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="30"
-              MarginTop="120"
-              Command.Click="@ExecuteSelect0">
+              Color="#0F0D0AFF"
+              DoNotAcceptEvents="true">
 
               <Children>
 
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="BlankWhiteSquare_9"
-                  Color="#221C12FF"
-                  DoNotAcceptEvents="true" />
-
+                <!-- Grid 外框 -->
                 <Widget
                   WidthSizePolicy="StretchToParent"
                   HeightSizePolicy="StretchToParent"
                   Sprite="StdAssets\selection_border_9"
-                  Color="#6E572FFF"
+                  Color="#9C7A3CFF"
                   DoNotAcceptEvents="true" />
 
-                <TextWidget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Text="Action 001"
-                  Brush="Clan.Card.Name"
-                  DoNotAcceptEvents="true" />
+
+                <!-- =================================================
+                     第 1 行
+                     ================================================= -->
+
+                <!-- 1 -->
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="195"
+                  SuggestedHeight="120"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  MarginLeft="10"
+                  MarginTop="10"
+                  Command.Click="@ExecuteSelect01">
+
+                  <Children>
+
+                    <Widget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      Sprite="BlankWhiteSquare_9"
+                      Color="#221C12FF"
+                      DoNotAcceptEvents="true" />
+
+                    <Widget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      Sprite="StdAssets\selection_border_9"
+                      Color="#9C7A3CFF"
+                      IsVisible="@Slot01Selected"
+                      DoNotAcceptEvents="true" />
+
+                    <TextWidget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Text="@Slot01Text"
+                      Brush="Clan.Card.Name"
+                      DoNotAcceptEvents="true" />
+
+                  </Children>
+                </ButtonWidget>
+
+
+                <!-- 2 -->
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="195"
+                  SuggestedHeight="120"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  MarginLeft="215"
+                  MarginTop="10"
+                  Command.Click="@ExecuteSelect02">
+
+                  <Children>
+
+                    <Widget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      Sprite="BlankWhiteSquare_9"
+                      Color="#221C12FF"
+                      DoNotAcceptEvents="true" />
+
+                    <Widget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      Sprite="StdAssets\selection_border_9"
+                      Color="#9C7A3CFF"
+                      IsVisible="@Slot02Selected"
+                      DoNotAcceptEvents="true" />
+
+                    <TextWidget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Text="@Slot02Text"
+                      Brush="Clan.Card.Name"
+                      DoNotAcceptEvents="true" />
+
+                  </Children>
+                </ButtonWidget>
+
+
+                <!-- 3 -->
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="195"
+                  SuggestedHeight="120"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  MarginLeft="420"
+                  MarginTop="10"
+                  Command.Click="@ExecuteSelect03">
+
+                  <Children>
+
+                    <Widget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      Sprite="BlankWhiteSquare_9"
+                      Color="#221C12FF"
+                      DoNotAcceptEvents="true" />
+
+                    <Widget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      Sprite="StdAssets\selection_border_9"
+                      Color="#9C7A3CFF"
+                      IsVisible="@Slot03Selected"
+                      DoNotAcceptEvents="true" />
+
+                    <TextWidget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Text="@Slot03Text"
+                      Brush="Clan.Card.Name"
+                      DoNotAcceptEvents="true" />
+
+                  </Children>
+                </ButtonWidget>
+
+
+                <!-- 4 -->
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="195"
+                  SuggestedHeight="120"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  MarginLeft="625"
+                  MarginTop="10"
+                  Command.Click="@ExecuteSelect04">
+
+                  <Children>
+
+                    <Widget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      Sprite="BlankWhiteSquare_9"
+                      Color="#221C12FF"
+                      DoNotAcceptEvents="true" />
+
+                    <Widget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      Sprite="StdAssets\selection_border_9"
+                      Color="#9C7A3CFF"
+                      IsVisible="@Slot04Selected"
+                      DoNotAcceptEvents="true" />
+
+                    <TextWidget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Text="@Slot04Text"
+                      Brush="Clan.Card.Name"
+                      DoNotAcceptEvents="true" />
+
+                  </Children>
+                </ButtonWidget>
+
+
+                <!-- =================================================
+                     第 2 行
+                     ================================================= -->
+
+                <!-- 5 -->
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="195"
+                  SuggestedHeight="120"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  MarginLeft="10"
+                  MarginTop="135"
+                  Command.Click="@ExecuteSelect05">
+
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot05Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot05Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 6 -->
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="195"
+                  SuggestedHeight="120"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  MarginLeft="215"
+                  MarginTop="135"
+                  Command.Click="@ExecuteSelect06">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot06Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot06Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 7 -->
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="195"
+                  SuggestedHeight="120"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  MarginLeft="420"
+                  MarginTop="135"
+                  Command.Click="@ExecuteSelect07">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot07Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot07Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 8 -->
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="195"
+                  SuggestedHeight="120"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Top"
+                  MarginLeft="625"
+                  MarginTop="135"
+                  Command.Click="@ExecuteSelect08">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot08Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot08Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+
+                <!-- =================================================
+                     第 3 行
+                     ================================================= -->
+
+                <!-- 9 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="10" MarginTop="260" Command.Click="@ExecuteSelect09">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot09Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot09Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 10 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="215" MarginTop="260" Command.Click="@ExecuteSelect10">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot10Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot10Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 11 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="420" MarginTop="260" Command.Click="@ExecuteSelect11">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot11Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot11Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 12 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="625" MarginTop="260" Command.Click="@ExecuteSelect12">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot12Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot12Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+
+                <!-- =================================================
+                     第 4 行
+                     ================================================= -->
+
+                <!-- 13 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="10" MarginTop="385" Command.Click="@ExecuteSelect13">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot13Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot13Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 14 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="215" MarginTop="385" Command.Click="@ExecuteSelect14">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot14Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot14Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 15 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="420" MarginTop="385" Command.Click="@ExecuteSelect15">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot15Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot15Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 16 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="625" MarginTop="385" Command.Click="@ExecuteSelect16">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot16Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot16Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+
+                <!-- =================================================
+                     第 5 行
+                     ================================================= -->
+
+                <!-- 17 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="10" MarginTop="510" Command.Click="@ExecuteSelect17">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot17Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot17Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 18 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="215" MarginTop="510" Command.Click="@ExecuteSelect18">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot18Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot18Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 19 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="420" MarginTop="510" Command.Click="@ExecuteSelect19">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot19Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot19Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
+                <!-- 20 -->
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="195" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="625" MarginTop="510" Command.Click="@ExecuteSelect20">
+                  <Children>
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
+                    <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#9C7A3CFF" IsVisible="@Slot20Selected" DoNotAcceptEvents="true" />
+                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="@Slot20Text" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
 
               </Children>
-            </ButtonWidget>
+            </Widget>
 
-            <!-- 02 -->
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="240"
-              MarginTop="120"
-              Command.Click="@ExecuteSelect1">
 
-              <Children>
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="BlankWhiteSquare_9"
-                  Color="#221C12FF"
-                  DoNotAcceptEvents="true" />
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="StdAssets\selection_border_9"
-                  Color="#6E572FFF"
-                  DoNotAcceptEvents="true" />
-
-                <TextWidget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Text="Action 002"
-                  Brush="Clan.Card.Name"
-                  DoNotAcceptEvents="true" />
-
-              </Children>
-            </ButtonWidget>
-
-            <!-- 03 -->
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="450"
-              MarginTop="120"
-              Command.Click="@ExecuteSelect2">
-
-              <Children>
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="BlankWhiteSquare_9"
-                  Color="#221C12FF"
-                  DoNotAcceptEvents="true" />
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="StdAssets\selection_border_9"
-                  Color="#6E572FFF"
-                  DoNotAcceptEvents="true" />
-
-                <TextWidget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Text="Action 003"
-                  Brush="Clan.Card.Name"
-                  DoNotAcceptEvents="true" />
-
-              </Children>
-            </ButtonWidget>
-
-            <!-- 04 -->
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="660"
-              MarginTop="120"
-              Command.Click="@ExecuteSelect3">
-
-              <Children>
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="BlankWhiteSquare_9"
-                  Color="#221C12FF"
-                  DoNotAcceptEvents="true" />
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="StdAssets\selection_border_9"
-                  Color="#6E572FFF"
-                  DoNotAcceptEvents="true" />
-
-                <TextWidget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Text="Action 004"
-                  Brush="Clan.Card.Name"
-                  DoNotAcceptEvents="true" />
-
-              </Children>
-            </ButtonWidget>
-
-
-            <!-- ===================================================== -->
-            <!-- 第二行 -->
-            <!-- ===================================================== -->
-
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="30"
-              MarginTop="245"
-              Command.Click="@ExecuteSelect4">
-
-              <Children>
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="BlankWhiteSquare_9"
-                  Color="#221C12FF"
-                  DoNotAcceptEvents="true" />
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="StdAssets\selection_border_9"
-                  Color="#6E572FFF"
-                  DoNotAcceptEvents="true" />
-
-                <TextWidget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Text="Action 005"
-                  Brush="Clan.Card.Name"
-                  DoNotAcceptEvents="true" />
-
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="240"
-              MarginTop="245"
-              Command.Click="@ExecuteSelect5">
-
-              <Children>
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="BlankWhiteSquare_9"
-                  Color="#221C12FF"
-                  DoNotAcceptEvents="true" />
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="StdAssets\selection_border_9"
-                  Color="#6E572FFF"
-                  DoNotAcceptEvents="true" />
-
-                <TextWidget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Text="Action 006"
-                  Brush="Clan.Card.Name"
-                  DoNotAcceptEvents="true" />
-
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="450"
-              MarginTop="245"
-              Command.Click="@ExecuteSelect6">
-
-              <Children>
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="BlankWhiteSquare_9"
-                  Color="#221C12FF"
-                  DoNotAcceptEvents="true" />
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="StdAssets\selection_border_9"
-                  Color="#6E572FFF"
-                  DoNotAcceptEvents="true" />
-
-                <TextWidget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Text="Action 007"
-                  Brush="Clan.Card.Name"
-                  DoNotAcceptEvents="true" />
-
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="660"
-              MarginTop="245"
-              Command.Click="@ExecuteSelect7">
-
-              <Children>
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="BlankWhiteSquare_9"
-                  Color="#221C12FF"
-                  DoNotAcceptEvents="true" />
-
-                <Widget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  Sprite="StdAssets\selection_border_9"
-                  Color="#6E572FFF"
-                  DoNotAcceptEvents="true" />
-
-                <TextWidget
-                  WidthSizePolicy="StretchToParent"
-                  HeightSizePolicy="StretchToParent"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Text="Action 008"
-                  Brush="Clan.Card.Name"
-                  DoNotAcceptEvents="true" />
-
-              </Children>
-            </ButtonWidget>
-
-
-            <!-- ===================================================== -->
-            <!-- 第三行 -->
-            <!-- ===================================================== -->
-
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="30"
-              MarginTop="370"
-              Command.Click="@ExecuteSelect8">
-
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 009" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="240"
-              MarginTop="370"
-              Command.Click="@ExecuteSelect9">
-
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 010" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="450"
-              MarginTop="370"
-              Command.Click="@ExecuteSelect10">
-
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 011" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget
-              WidthSizePolicy="Fixed"
-              HeightSizePolicy="Fixed"
-              SuggestedWidth="200"
-              SuggestedHeight="120"
-              HorizontalAlignment="Left"
-              VerticalAlignment="Top"
-              MarginLeft="660"
-              MarginTop="370"
-              Command.Click="@ExecuteSelect11">
-
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 012" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-
-            <!-- ===================================================== -->
-            <!-- 第四行 -->
-            <!-- ===================================================== -->
-
-            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="200" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="30" MarginTop="495" Command.Click="@ExecuteSelect12">
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 013" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="200" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="240" MarginTop="495" Command.Click="@ExecuteSelect13">
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 014" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="200" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="450" MarginTop="495" Command.Click="@ExecuteSelect14">
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 015" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="200" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="660" MarginTop="495" Command.Click="@ExecuteSelect15">
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 016" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-
-            <!-- ===================================================== -->
-            <!-- 第五行 -->
-            <!-- ===================================================== -->
-
-            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="200" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="30" MarginTop="620" Command.Click="@ExecuteSelect16">
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 017" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="200" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="240" MarginTop="620" Command.Click="@ExecuteSelect17">
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 018" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="200" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="450" MarginTop="620" Command.Click="@ExecuteSelect18">
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 019" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="200" SuggestedHeight="120" HorizontalAlignment="Left" VerticalAlignment="Top" MarginLeft="660" MarginTop="620" Command.Click="@ExecuteSelect19">
-              <Children>
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="BlankWhiteSquare_9" Color="#221C12FF" DoNotAcceptEvents="true" />
-                <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="StdAssets\selection_border_9" Color="#6E572FFF" DoNotAcceptEvents="true" />
-                <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" Text="Action 020" Brush="Clan.Card.Name" DoNotAcceptEvents="true" />
-              </Children>
-            </ButtonWidget>
-
-
-            <!-- ===================================================== -->
-            <!-- Preview -->
-            <!-- ===================================================== -->
-
+            <!-- =====================================================
+                 右侧 Preview
+                 ===================================================== -->
             <Widget
               WidthSizePolicy="Fixed"
               HeightSizePolicy="Fixed"
@@ -628,10 +527,11 @@
             </Widget>
 
 
-            <!-- ===================================================== -->
-            <!-- 上一页 -->
-            <!-- ===================================================== -->
+            <!-- =====================================================
+                 底部控制
+                 ===================================================== -->
 
+            <!-- 上一页 -->
             <ButtonWidget
               WidthSizePolicy="Fixed"
               HeightSizePolicy="Fixed"

@@ -19,6 +19,13 @@ namespace New_ZZZF.ActionExplorer.M0_Probe
 
         public static void Info(string msg) => Write("INFO", msg);
         public static void Warn(string msg) => Write("WARN", msg);
+
+        /// <summary>
+        /// 带异常对象的 Warn 重载（ActionDatabase 反射扫描失败时使用）。
+        /// </summary>
+        public static void Warn(string msg, Exception ex)
+            => Write("WARN", msg + " error=" + (ex == null ? "null" : ex.ToString()));
+
         public static void Error(string msg) => Write("ERROR", msg);
 
         /// <summary>
