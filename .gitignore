@@ -14,3 +14,11 @@
 
 # .git
 .git/
+
+# 代码收集/导出临时文件
+*_files_content.txt
+cpp_files_content.txt
+cs_files_content.txt
+h_files_content.txt
+export_cs.bat
+build_log.txt
