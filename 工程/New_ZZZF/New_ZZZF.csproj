@@ -33,6 +33,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='_RGL_KEEP_ASSERTS|net6|x64'" />
 
   <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="$(GameFolder)\bin\Win64_Shipping_Client\Newtonsoft.Json.dll">
       <HintPath>%(Identity)</HintPath>
       <Private>False</Private>

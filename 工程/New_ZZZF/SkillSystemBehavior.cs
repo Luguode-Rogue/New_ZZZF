@@ -1,4 +1,4 @@
-﻿using New_ZZZF.Skills;
+using New_ZZZF.Skills;
 using SandBox.Missions.MissionLogics;
 using SandBox.View.Missions;
 using System;
@@ -40,12 +40,6 @@ namespace New_ZZZF
         public static Dictionary<int, AgentSkillComponent> ActiveComponents = new Dictionary<int, AgentSkillComponent>();
 
 
-        public static Dictionary<float, GameEntity> WoW_Line = new Dictionary<float, GameEntity>()
-        {
-
-
-        }
-        ;
         public static Dictionary<float, GameEntity> WoW_Ring = new Dictionary<float, GameEntity>()
         {
 
@@ -607,7 +601,6 @@ namespace New_ZZZF
 
             if (Agent.Main != null)
             {
-                ProjectileTrajectorySystem.UpdateTrajectoryRangeWeapon(Agent.Main);
                 UsableMissionObject currentlyUsedGameObject = Agent.Main.CurrentlyUsedGameObject;
                 WeakGameEntity? nullableEntity = currentlyUsedGameObject?.GameEntity;
                 WeakGameEntity gameEntity = nullableEntity.HasValue ? nullableEntity.Value : Agent.Main.GetSteppedEntity();
@@ -621,9 +614,6 @@ namespace New_ZZZF
                 {
                     rangedSiege = gameEntity.GetFirstScriptOfType<RangedSiegeWeapon>();
                 }
-                // 在每帧更新中调用（如MissionBehavior的OnMissionTick）
-                ProjectileTrajectorySystem.UpdateTrajectory(Agent.Main, rangedSiege);
-
             }
         }
 
@@ -653,7 +643,6 @@ namespace New_ZZZF
             //WoW_WeaponMissile.Clear();
             //WoW_SmartMisslie.Clear();
             WoW_ProjectileDB.Clear();
-            WoW_Line.Clear();
             WoW_Ring.Clear();
             //WoW_gameEntityOwnedByAgent.Clear();
             WoW_CustomGameEntity.Clear();
@@ -669,7 +658,6 @@ namespace New_ZZZF
             //WoW_WeaponMissile.Clear();
             //WoW_SmartMisslie.Clear();
             WoW_ProjectileDB.Clear();
-            WoW_Line.Clear();
             WoW_Ring.Clear();
             //WoW_gameEntityOwnedByAgent.Clear();
             WoW_CustomGameEntity.Clear();

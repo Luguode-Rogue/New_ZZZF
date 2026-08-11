@@ -1,4 +1,4 @@
-﻿using NetworkMessages.FromServer;
+using NetworkMessages.FromServer;
 using SandBox.Missions.MissionLogics;
 using SandBox;
 using System;
@@ -1134,113 +1134,9 @@ namespace New_ZZZF
             firingSolution.Normalize();
             return firingSolution;
         }
-        public static void missionWeapondandaoxianshi(Agent agent)
-        {
-            // 获取Agent主手中武器的Index索引
-            EquipmentIndex mainHandIndex = agent.GetPrimaryWieldedItemIndex();
-            if (mainHandIndex == EquipmentIndex.None)
-            {
-                return;
-            }
-            // EquipmentIndex转MissionWeapon
-            MissionWeapon mainHandEquipmentElement = agent.Equipment[mainHandIndex];
-            float baseSpeed = -1;
-            SkillSystemBehavior.WoW_AgentMissileSpeedData.TryGetValue(agent.Index, out var list);
-            if (list == null)
-            {
-                baseSpeed = mainHandEquipmentElement.GetModifiedMissileSpeedForCurrentUsage();
-            }
-            else
-            {
-                foreach (AgentMissileSpeedData item in list)
-                {
-                    if (item.Weapon.Item.Id == mainHandEquipmentElement.Item.Id)
-                    {
-                        baseSpeed = item.MissileSpeed;
-                    }
-                }
-            }
-            if (mainHandEquipmentElement.CurrentUsageItem.IsRangedWeapon)
-            {
-                for (float i = 0.3f; i <= 5; i = i + 0.15f)
-                {
-                    Vec3 v3 = Script.CalculatePositionAtTime(Agent.Main.GetEyeGlobalPosition(), Agent.Main.LookDirection, baseSpeed, i);
-                }
-
-            }
-
-
-            return;
-        }
 
 
         
-        /// <summary>
-        /// 弹道显示
-        /// </summary>
-        public static Vec3 CalculatePositionAtTime(Vec3 initialPosition, Vec3 direction, float initialSpeed, float time)//弹道显示
-        {
-            // 确保方向向量是单位向量
-            direction.Normalize();
-
-            // 计算x, y, z坐标
-            float x = initialPosition.x + direction.x * initialSpeed * time;
-            float y = initialPosition.y + direction.y * initialSpeed * time;
-            // 对于z坐标，考虑重力影响
-            float z = initialPosition.z + direction.z * initialSpeed * time - 0.5f * 9.81f * time * time;
-            if (SkillSystemBehavior.WoW_Line.Count < 30)
-            {
-                GameEntity gameEntity = GameEntity.CreateEmpty(Mission.Current.Scene);
-                //gameEntity.SetContourColor(new uint?(4294901760U), true);
-                //gameEntity.AddMesh(Mesh.GetFromResource("ballista_projectile_flying"));
-                gameEntity.AddAllMeshesOfGameEntity(GameEntity.Instantiate(Mission.Current.Scene, "mangonel_mapicon_projectile", true));
-                MatrixFrame matrixFrame = new MatrixFrame(new Mat3(new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)), new Vec3((float)x, (float)y, (float)z));
-                gameEntity.SetGlobalFrame(matrixFrame);
-                SkillSystemBehavior.WoW_CustomGameEntity.Add(gameEntity);
-                SkillSystemBehavior.WoW_Line.Add(time, gameEntity);
-                gameEntity.SetLocalPosition(new Vec3((float)x, (float)y, (float)z));
-            }
-            else
-            {
-                foreach (var dict in SkillSystemBehavior.WoW_Line)
-                {
-                    if (dict.Key == time)
-                    {
-                        float f = 0;
-                        Vec3 vec3 = new Vec3((float)x, (float)y, (float)z);
-                        Vec3 vec31= new Vec3((float)x, (float)y, (float)z);
-                        //Mission.Current.Scene.RayCastForClosestEntityOrTerrain(new Vec3((float)x, (float)y, (float)z), new Vec3((float)x, (float)y, (float)z) + MultiplyVectorByScalar(-Vec3.Up, 50f), out f, out vec3);
-                        //if (f <= 50||f==float.NaN)
-                        //{ vec31 = vec3; }
-                        //else
-                        //{  }    
-                        if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(vec3, vec3 + MultiplyVectorByScalar(Vec3.Up, 5000f), out var collisionDistance1, out var closestPoint1, out var gameE1, 1f))
-                        {
-
-                            if (collisionDistance1 <5f||true)
-                            {
-                                vec31 = closestPoint1;
-                                Script.SysOut("撞击地面", Agent.Main);
-                            }
-                        }
-                        //if (Mission.Current.Scene.RayCastForClosestEntityOrTerrain(vec3, vec3 + MultiplyVectorByScalar(-Vec3.Up, 5000f), out var collisionDistance2, out _, out _, 1f))
-                        //{
-
-                        //    if (collisionDistance2 < 0.5f)
-                        //    {
-                        //        vec31 = closestPoint1;
-                        //        Script.SysOut("撞击地面", Agent.Main);
-                        //    }
-                        //}
-                        dict.Value.SetGlobalFrame(new MatrixFrame(new Mat3(new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)), vec31));
-                        dict.Value.SetLocalPosition(vec31);
-                    }
-                }
-            }
-
-
-            return new Vec3(x, y, z);
-        }
         /// <summary>
         /// 查找目标地点，周围敌人数量最多的一个agent
         /// </summary>
