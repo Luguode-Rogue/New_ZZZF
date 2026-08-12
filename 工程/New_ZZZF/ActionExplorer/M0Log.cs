@@ -11,9 +11,7 @@ namespace New_ZZZF.ActionExplorer.M0_Probe
     internal static class M0Log
     {
         private static readonly string LogPath =
-            Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "Modules", "New_ZZZF", "工程", "ActionExplorer_diag.log");
+            @"E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\ActionExplorer_diag.log";
 
         private static readonly object Lock = new object();
 

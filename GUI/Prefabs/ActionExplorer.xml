@@ -478,6 +478,8 @@
 
             <!-- =====================================================
                  右侧 Preview
+                 M6：使用内置 CharacterTableauWidget（Tableau / SceneTextureProvider 路线）
+                 由 VM 的 PreviewActionId / PreviewShouldLoop 驱动播放。
                  ===================================================== -->
             <Widget
               WidthSizePolicy="Fixed"
@@ -511,15 +513,45 @@
                   Brush="Clan.Card.Name"
                   DoNotAcceptEvents="true" />
 
+                <!-- =================================================
+                     M6 3D 角色预览（Tableau 渲染）
+                     CustomAnimation 传完整 act_xxx
+                     ShouldLoopCustomAnimation 循环播放
+                     ================================================= -->
+                <CharacterTableauWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="400"
+                  SuggestedHeight="420"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Top"
+                  MarginTop="90"
+                  BodyProperties="@PreviewBodyProperties"
+                  CustomAnimation="@PreviewActionId"
+                  ShouldLoopCustomAnimation="@PreviewShouldLoop"
+                  DoNotAcceptEvents="true" />
+
+                <!-- 短名 -->
                 <TextWidget
                   WidthSizePolicy="StretchToParent"
                   HeightSizePolicy="Fixed"
-                  SuggestedHeight="80"
-                  MarginLeft="20"
-                  MarginRight="20"
-                  MarginTop="100"
+                  SuggestedHeight="50"
                   HorizontalAlignment="Center"
+                  VerticalAlignment="Bottom"
+                  MarginBottom="50"
                   Text="@SelectedActionText"
+                  Brush="Clan.Card.Name"
+                  DoNotAcceptEvents="true" />
+
+                <!-- 完整 Action ID -->
+                <TextWidget
+                  WidthSizePolicy="StretchToParent"
+                  HeightSizePolicy="Fixed"
+                  SuggestedHeight="30"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Bottom"
+                  MarginBottom="20"
+                  Text="@SelectedActionId"
                   Brush="Clan.Card.Name"
                   DoNotAcceptEvents="true" />
 

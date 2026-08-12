@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TaleWorlds.CampaignSystem;
 using TaleWorlds.Library;
 
 namespace New_ZZZF.ActionExplorer
@@ -37,6 +38,20 @@ namespace New_ZZZF.ActionExplorer
         private string _statusText;
         private string _pageText;
         private string _selectedActionText;
+
+        // =========================================================
+        // M6：Preview 绑定属性
+        //     PreviewActionId  -> 完整 act_xxx，驱动 Tableau 播放
+        //     PreviewShouldLoop -> 循环播放（M6 第一阶段开启）
+        // =========================================================
+
+        private string _selectedActionId = "";
+        private string _previewActionId = "";
+        private bool _previewShouldLoop = true;
+        private string _previewBodyProperties = "";
+
+        // M6：预览适配层（VM 不直接操作播放 / Agent / Camera）
+        private readonly ActionPreview _preview;
 
         private bool _canPreviousPage;
         private bool _canNextPage;
@@ -775,12 +790,43 @@ namespace New_ZZZF.ActionExplorer
             _pageText = "1 / " + _totalPages;
             _selectedActionText = "请选择 Action";
 
+            // M6：初始化预览适配层（渲染由 XML 的 Tableau 完成）
+            _preview = new ActionPreview();
+
+            // M6：提供预览角色身体属性。
+            // CharacterTableau 内部 _agentVisuals.SetVisible(_bodyProperties != BodyProperties.Default)
+            // 必须给有效 BodyProperties 否则角色被隐藏 -> 黑屏。
+            // 取 Hero.MainHero（战役中必存在）；若战役外则回退到一个固定有效 code。
+            try
+            {
+                if (Hero.MainHero != null && Hero.MainHero.BodyProperties != null)
+                {
+                    PreviewBodyProperties = Hero.MainHero.BodyProperties.ToString();
+                }
+                else
+                {
+                    // 回退：典型男性英雄 body properties code
+                    PreviewBodyProperties = "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+                }
+                M0_Probe.M0Log.Lifecycle(
+                    "M6",
+                    "PREVIEW_BODY_PROPS set len=" + PreviewBodyProperties.Length);
+            }
+            catch (System.Exception ex)
+            {
+                M0_Probe.M0Log.Warn("PREVIEW_BODY_PROPS failed: " + ex);
+            }
+
             RefreshPage();
 
             M0_Probe.M0Log.Lifecycle(
                 "M4",
                 "VM_READY actions=" + _allActions.Count +
                 " pages=" + _totalPages);
+
+            M0_Probe.M0Log.Lifecycle(
+                "M6",
+                "VM_READY preview=tableau");
         }
 
         [DataSourceProperty]
@@ -822,6 +868,84 @@ namespace New_ZZZF.ActionExplorer
 
                 _selectedActionText = value;
                 OnPropertyChanged(nameof(SelectedActionText));
+            }
+        }
+
+        // =========================================================
+        // M6：完整 Action ID（act_xxx），调试用
+        // =========================================================
+
+        [DataSourceProperty]
+        public string SelectedActionId
+        {
+            get { return _selectedActionId; }
+            set
+            {
+                if (_selectedActionId == value)
+                    return;
+
+                _selectedActionId = value;
+                OnPropertyChanged(nameof(SelectedActionId));
+            }
+        }
+
+        // =========================================================
+        // M6：Preview 播放驱动属性
+        //
+        // 绑定到 XML 中 CharacterTableauWidget 的
+        // CustomAnimation / ShouldLoopCustomAnimation。
+        // 只传完整 act_xxx，由内置 Tableau 渲染播放。
+        // =========================================================
+
+        [DataSourceProperty]
+        public string PreviewActionId
+        {
+            get { return _previewActionId; }
+            set
+            {
+                if (_previewActionId == value)
+                    return;
+
+                _previewActionId = value;
+                OnPropertyChanged(nameof(PreviewActionId));
+            }
+        }
+
+        [DataSourceProperty]
+        public bool PreviewShouldLoop
+        {
+            get { return _previewShouldLoop; }
+            set
+            {
+                if (_previewShouldLoop == value)
+                    return;
+
+                _previewShouldLoop = value;
+                OnPropertyChanged(nameof(PreviewShouldLoop));
+            }
+        }
+
+        // =========================================================
+        // M6：预览角色身体属性（BodyProperties code）
+        //
+        // 关键修复：CharacterTableau 内部角色可见性判断是
+        //     _agentVisuals.SetVisible(_bodyProperties != BodyProperties.Default)
+        // 若不提供 BodyProperties，角色被 SetVisible(false) -> 黑屏。
+        // 这里默认取 Hero.MainHero 的身体属性 code，
+        // 保证 Tableau 内有有效角色可渲染。
+        // =========================================================
+
+        [DataSourceProperty]
+        public string PreviewBodyProperties
+        {
+            get { return _previewBodyProperties; }
+            set
+            {
+                if (_previewBodyProperties == value)
+                    return;
+
+                _previewBodyProperties = value;
+                OnPropertyChanged(nameof(PreviewBodyProperties));
             }
         }
 
@@ -1203,22 +1327,49 @@ namespace New_ZZZF.ActionExplorer
             ActionInfo action =
                 _allActions[globalIndex];
 
+            // =====================================================
+            // M5：UI 信息（短名逻辑保持不动）
+            // =====================================================
+
             SelectedActionText =
                 action.Name;
 
+            SelectedActionId =
+                action.Id;
+
             StatusText =
                 "SELECTED: " +
-                action.Name;
+                action.Id;
 
             UpdateSelectionVisuals();
 
+            // =====================================================
+            // M6：Preview 驱动
+            //
+            // 永远使用完整 Action ID（act_xxx）。
+            // 绑定到 XML 的 CharacterTableauWidget，
+            // 由内置 CharacterTableauTextureProvider 播放。
+            // =====================================================
+
+            PreviewActionId =
+                action.Id;
+
+            // M6 日志验收点（不改播放行为，真实渲染由 Tableau 完成）
+            _preview.PlayAction(action.Id);
+
+            StatusText =
+                "PLAYING: " +
+                action.Id;
+
             M0_Probe.M0Log.Info(
-                "M4_ACTION_SELECTED index=" +
+                "M6_ACTION_SELECTED index=" +
                 globalIndex +
                 " id=" +
                 action.Id +
-                " name=" +
-                action.Name);
+                " display=" +
+                action.Name +
+                " preview=" +
+                action.Id);
         }
 
         // =========================================================
@@ -1337,6 +1488,9 @@ namespace New_ZZZF.ActionExplorer
                 "M4",
                 "CLOSE_COMMAND");
 
+            // M6：关闭前停止预览
+            _preview.Stop();
+
             CloseRequested?.Invoke();
         }
 
@@ -1374,6 +1528,9 @@ namespace New_ZZZF.ActionExplorer
             M0_Probe.M0Log.Lifecycle(
                 "M4",
                 "VM_FINALIZE");
+
+            // M6：清理预览适配层
+            _preview.Dispose();
 
             CloseRequested = null;
 
