@@ -4,12 +4,19 @@ using TaleWorlds.Core;
 namespace New_ZZZF.ActionExplorer
 {
     /// <summary>
-    /// M6 Action Preview 控制器（轻量适配层）。
+    /// M6 Action Preview 控制器（轻量适配层，收口版）。
     ///
-    /// 职责：
+    /// 收口后的 M6 职责很干净：
+    ///   用户点击左侧 Action -> VM 设 PreviewActionId ->
+    ///   XML 的 CharacterTableauWidget.CustomAnimation 绑定变化 ->
+    ///   内置 CharacterTableauTextureProvider 立即执行该 Action。
+    ///
+    /// 本类只做：
     /// 1. 校验 Action ID 合法性（必须是 act_xxx）
-    /// 2. 缓存当前预览 Action ID
-    /// 3. 输出参考实现里统一的 M6 日志，便于验收
+    /// 2. 缓存当前预览 Action ID（供日志/调试）
+    /// 3. 输出统一 M6 日志，便于验收
+    ///
+    /// 明确不做：播放/暂停/停止/循环 等控制接口。
     ///
     /// 设计要点：
     /// - VM 不直接操作播放 / Agent / Camera。
@@ -63,7 +70,8 @@ namespace New_ZZZF.ActionExplorer
         }
 
         // =========================================================
-        // 选择播放（仅记录并输出日志，真实播放由 Tableau 完成）
+        // 记录待播放 Action（仅记录 + 日志，
+        // 真实播放由 Tableau 绑定驱动，无"播放"控制概念）
         // =========================================================
 
         public bool PlayAction(string actionId)
@@ -83,27 +91,14 @@ namespace New_ZZZF.ActionExplorer
         }
 
         // =========================================================
-        // 停止
-        // =========================================================
-
-        public void Stop()
-        {
-            if (_currentActionId == null)
-                return;
-
-            _currentActionId = null;
-
-            M0_Probe.M0Log.Info(
-                "M6_PREVIEW_STOP");
-        }
-
-        // =========================================================
-        // 清理
+        // 生命周期清理（仅解除引用，非"停止"控制）
+        // UI 关闭时 CharacterTableauWidget 随面板自动销毁，
+        // 模型纹理自然释放，这里只做日志与引用置空。
         // =========================================================
 
         public void Dispose()
         {
-            Stop();
+            _currentActionId = null;
 
             M0_Probe.M0Log.Lifecycle(
                 "M6",

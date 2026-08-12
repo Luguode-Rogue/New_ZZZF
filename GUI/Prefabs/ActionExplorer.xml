@@ -513,10 +513,44 @@
                   Brush="Clan.Card.Name"
                   DoNotAcceptEvents="true" />
 
+                <!-- M6：模型性别显示 + 男/女切换按钮 -->
+                <TextWidget
+                  WidthSizePolicy="StretchToParent"
+                  HeightSizePolicy="Fixed"
+                  SuggestedHeight="30"
+                  MarginTop="8"
+                  HorizontalAlignment="Center"
+                  Text="{=!GenderLabel}模型性别：@PreviewGenderText"
+                  Brush="Clan.Card.Name"
+                  DoNotAcceptEvents="true" />
+
+                <ButtonWidget
+                  WidthSizePolicy="Fixed"
+                  HeightSizePolicy="Fixed"
+                  SuggestedWidth="120"
+                  SuggestedHeight="34"
+                  MarginTop="8"
+                  HorizontalAlignment="Center"
+                  Command.Click="@ExecuteToggleGender"
+                  Brush="ButtonBrush2"
+                  IsEnabled="true">
+                  <Children>
+                    <TextWidget
+                      WidthSizePolicy="StretchToParent"
+                      HeightSizePolicy="StretchToParent"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Brush.FontSize="16"
+                      Text="{=!ToggleGender}切换性别"
+                      DoNotAcceptEvents="true" />
+                  </Children>
+                </ButtonWidget>
+
                 <!-- =================================================
                      M6 3D 角色预览（Tableau 渲染）
                      CustomAnimation 传完整 act_xxx
                      ShouldLoopCustomAnimation 循环播放
+                     IsFemale 控制女/男骨架与 action set 后缀
                      ================================================= -->
                 <CharacterTableauWidget
                   WidthSizePolicy="Fixed"
@@ -527,8 +561,10 @@
                   VerticalAlignment="Top"
                   MarginTop="90"
                   BodyProperties="@PreviewBodyProperties"
+                  IsFemale="@PreviewIsFemale"
                   CustomAnimation="@PreviewActionId"
-                  ShouldLoopCustomAnimation="@PreviewShouldLoop"
+                  IsPlayingCustomAnimations="@PreviewIsPlaying"
+                  ShouldLoopCustomAnimation="true"
                   DoNotAcceptEvents="true" />
 
                 <!-- 短名 -->

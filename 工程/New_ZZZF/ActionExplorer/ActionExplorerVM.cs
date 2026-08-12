@@ -42,13 +42,27 @@ namespace New_ZZZF.ActionExplorer
         // =========================================================
         // M6：Preview 绑定属性
         //     PreviewActionId  -> 完整 act_xxx，驱动 Tableau 播放
-        //     PreviewShouldLoop -> 循环播放（M6 第一阶段开启）
+        //
+        // 设计收缩（M6 收口）：
+        //   不做播放/暂停/停止按钮，不做循环控制按钮。
+        //   用户点击左侧 Action -> PreviewActionId 变化 ->
+        //   内置 CharacterTableauWidget 立即执行该 Action。
+        //   循环由 Tableau 内部固定开启（渲染需要，非用户可控控件）。
         // =========================================================
 
         private string _selectedActionId = "";
         private string _previewActionId = "";
-        private bool _previewShouldLoop = true;
+        private bool _previewIsPlaying;
         private string _previewBodyProperties = "";
+
+        // M6：性别切换（男/女 Preview 模型）
+        // 源码机制：CharacterTableau 角色性别由独立字段 _isFemale 控制
+        // （CharacterTableauWidget.IsFemale 绑定入口，源码已确认），
+        // 影响 SkeletonType.Female/Male 与 action set 后缀。
+        // BodyProperties 字符串本身不含性别，因此切换只改 IsFemale，
+        // 复用同一套体型即可渲染对应性别骨架 + 对应性别动作。
+        private bool _previewIsFemale;
+        private string _previewGenderText = "男";
 
         // M6：预览适配层（VM 不直接操作播放 / Agent / Camera）
         private readonly ActionPreview _preview;
@@ -817,6 +831,22 @@ namespace New_ZZZF.ActionExplorer
                 M0_Probe.M0Log.Warn("PREVIEW_BODY_PROPS failed: " + ex);
             }
 
+            // M6：性别默认跟随 MainHero 真实性别（战役外回退为男）。
+            // 后续可用 ExecuteToggleGender() 在男/女之间手动切换。
+            try
+            {
+                PreviewIsFemale =
+                    Hero.MainHero != null && Hero.MainHero.IsFemale;
+                M0_Probe.M0Log.Lifecycle(
+                    "M6",
+                    "PREVIEW_GENDER init isFemale=" + PreviewIsFemale);
+            }
+            catch (System.Exception ex)
+            {
+                PreviewIsFemale = false;
+                M0_Probe.M0Log.Warn("PREVIEW_GENDER init failed: " + ex);
+            }
+
             RefreshPage();
 
             M0_Probe.M0Log.Lifecycle(
@@ -911,17 +941,30 @@ namespace New_ZZZF.ActionExplorer
             }
         }
 
+        // =========================================================
+        // M6：播放触发开关（对应 CharacterTableauWidget.IsPlayingCustomAnimations）
+        //
+        // 关键修复（对照官方 CharacterViewModel.ExecuteStartCustomAnimation）：
+        //   只绑 CustomAnimation 不会播放！tableau 的 StartCustomAnimation
+        //   仅在 IsPlayingCustomAnimations 被置 true 时才调用。
+        //   CustomAnimation 的 setter 只设动作名，不调度播放。
+        // 因此 SelectAction 必须：先 false(停旧) -> 设动作名 ->
+        //   true(触发 StartCustomAnimation) 才能真正播放。
+        // =========================================================
+
         [DataSourceProperty]
-        public bool PreviewShouldLoop
+        public bool PreviewIsPlaying
         {
-            get { return _previewShouldLoop; }
+            get { return _previewIsPlaying; }
             set
             {
-                if (_previewShouldLoop == value)
+                if (_previewIsPlaying == value)
                     return;
 
-                _previewShouldLoop = value;
-                OnPropertyChanged(nameof(PreviewShouldLoop));
+                _previewIsPlaying = value;
+                OnPropertyChanged(nameof(PreviewIsPlaying));
+                M0_Probe.M0Log.Info(
+                    "M6_PREVIEW_PLAYING isPlaying=" + value);
             }
         }
 
@@ -946,6 +989,49 @@ namespace New_ZZZF.ActionExplorer
 
                 _previewBodyProperties = value;
                 OnPropertyChanged(nameof(PreviewBodyProperties));
+            }
+        }
+
+        // =========================================================
+        // M6：预览性别（男/女模型切换）
+        //
+        // 源码机制（CharacterTableau.cs）：
+        //     _isFemale 决定 SkeletonType.Female/Male 与 action set 后缀
+        //     （女性动作后缀 _warrior / 对应 female 骨架）。
+        // CharacterTableauWidget 已暴露 IsFemale 属性（源码确认），
+        // 经 SetTextureProviderProperty("IsFemale", value) 传入 tableau。
+        // BodyProperties 字符串不含性别，故切换只改 IsFemale，
+        // 复用同一套体型即可渲染对应性别模型。
+        // =========================================================
+
+        [DataSourceProperty]
+        public bool PreviewIsFemale
+        {
+            get { return _previewIsFemale; }
+            set
+            {
+                if (_previewIsFemale == value)
+                    return;
+
+                _previewIsFemale = value;
+                PreviewGenderText = value ? "女" : "男";
+                OnPropertyChanged(nameof(PreviewIsFemale));
+                M0_Probe.M0Log.Info(
+                    "M6_GENDER_TOGGLE isFemale=" + value);
+            }
+        }
+
+        [DataSourceProperty]
+        public string PreviewGenderText
+        {
+            get { return _previewGenderText; }
+            set
+            {
+                if (_previewGenderText == value)
+                    return;
+
+                _previewGenderText = value;
+                OnPropertyChanged(nameof(PreviewGenderText));
             }
         }
 
@@ -1344,17 +1430,31 @@ namespace New_ZZZF.ActionExplorer
             UpdateSelectionVisuals();
 
             // =====================================================
-            // M6：Preview 驱动
+            // M6：Preview 驱动（收口版，对齐官方 Tableau 播放流程）
             //
-            // 永远使用完整 Action ID（act_xxx）。
-            // 绑定到 XML 的 CharacterTableauWidget，
-            // 由内置 CharacterTableauTextureProvider 播放。
+            // 关键修复：只绑 CustomAnimation 不会播放！
+            // CharacterTableau 的 StartCustomAnimation 只在
+            // IsPlayingCustomAnimations 被置 true 时才调用。
+            // 官方 CharacterViewModel.ExecuteStartCustomAnimation 流程：
+            //   1) 先停旧动画 (IsPlayingCustomAnimations = false)
+            //   2) 设 CustomAnimation = 动作名
+            //   3) 再置 IsPlayingCustomAnimations = true 触发播放
+            //
+            // 不做播放/暂停/停止按钮，不做循环控制按钮。
+            // "点击即播"由这里内部自动完成。
             // =====================================================
 
+            // 1) 停掉上一个动画（值变化时才会触发 widget 复位）
+            PreviewIsPlaying = false;
+
+            // 2) 设动作名（驱动 CustomAnimation 绑定）
             PreviewActionId =
                 action.Id;
 
-            // M6 日志验收点（不改播放行为，真实渲染由 Tableau 完成）
+            // 3) 触发播放（置 true -> widget 调 StartCustomAnimation）
+            PreviewIsPlaying = true;
+
+            // M6 日志验收点
             _preview.PlayAction(action.Id);
 
             StatusText =
@@ -1479,6 +1579,21 @@ namespace New_ZZZF.ActionExplorer
         }
 
         // =========================================================
+        // M6：男/女模型切换
+        // =========================================================
+
+        public void ExecuteToggleGender()
+        {
+            // 直接翻转性别；BodyProperties 复用同一套体型，
+            // 由 CharacterTableau 的 IsFemale 决定女/男骨架与动作。
+            PreviewIsFemale = !PreviewIsFemale;
+
+            M0_Probe.M0Log.Info(
+                "M6_GENDER_SWITCH -> " +
+                (PreviewIsFemale ? "FEMALE" : "MALE"));
+        }
+
+        // =========================================================
         // 关闭
         // =========================================================
 
@@ -1488,8 +1603,10 @@ namespace New_ZZZF.ActionExplorer
                 "M4",
                 "CLOSE_COMMAND");
 
-            // M6：关闭前停止预览
-            _preview.Stop();
+            // M6 收口：不做"停止"控制。
+            // 关闭时 CharacterTableauWidget 随面板自动销毁，
+            // 模型纹理自然释放，无需手动停止动作。
+            // （引用清理在 OnFinalize -> _preview.Dispose 完成）
 
             CloseRequested?.Invoke();
         }
