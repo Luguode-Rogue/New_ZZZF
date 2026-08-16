@@ -207,8 +207,9 @@ namespace New_ZZZF
                 //    }
                 //}
 
-                // ---- 新版技能界面（M键，纯MVVM，不依赖物品系统） ----
-                if (Input.IsKeyPressed(InputKey.M) && Campaign.Current != null
+                // ---- 新版技能界面（Shift+M，纯MVVM，不依赖物品系统） ----
+                bool shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
+                if (shiftDown && Input.IsKeyPressed(InputKey.M) && Campaign.Current != null
                     && Mission.Current == null
                     && !Game.Current.GameStateManager.ActiveState.IsMenuState
                     && !(ScreenManager.TopScreen is CustomSkillScreen))
