@@ -43,7 +43,9 @@ namespace New_ZZZF.TacticalMap.UI
             try
             {
                 string assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
-                string uiRoot = Path.Combine(assemblyDir, "TacticalMapUI");
+                string uiRoot = ResolveUiRoot(assemblyDir);
+                if (!Directory.Exists(uiRoot))
+                    throw new DirectoryNotFoundException($"TacticalMap HtmlUI content root not found. Runtime='{Path.Combine(assemblyDir, "TacticalMapUI")}'");
 
                 _scope = HtmlUiService.CreateScope(OwnerId);
                 _rootId = _scope.RegisterContentRoot(ContentRootName, uiRoot);
@@ -85,6 +87,27 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 InformationManager.DisplayMessage(new InformationMessage($"[TMap][HtmlUI] 注册失败: {ex.GetType().Name}: {ex.Message}"));
             }
+        }
+
+        private static string ResolveUiRoot(string assemblyDir)
+        {
+            string runtimeRoot = Path.Combine(assemblyDir, "TacticalMapUI");
+            if (Directory.Exists(runtimeRoot))
+                return runtimeRoot;
+
+            // Developer/source-tree fallback. This keeps local VS builds runnable even
+            // when the MSBuild content-copy target was not invoked by the selected build.
+            string sourceRoot = Path.GetFullPath(Path.Combine(
+                assemblyDir,
+                "..", "..", "..", "工程", "New_ZZZF", "TacticalMap", "HtmlUI"));
+            if (Directory.Exists(sourceRoot))
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "[TMap][HtmlUI] 运行时 UI 未部署，使用工程 HtmlUI 源目录回退路径。"));
+                return sourceRoot;
+            }
+
+            return runtimeRoot;
         }
 
         public void AttachController(TacticalMapController controller)
