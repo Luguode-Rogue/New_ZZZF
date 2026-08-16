@@ -13,6 +13,7 @@ namespace New_ZZZF.TacticalMap.UI
             .GetField("_controller", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private static TacticalMapController _controller;
+        private static TacticalMapMissionLogic _logicInstance;
 
         public static void Patch(Harmony harmony)
         {
@@ -35,10 +36,7 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                _controller = ControllerField.GetValue(__instance) as TacticalMapController;
-                TacticalMapBootstrap.HtmlUi?.AttachController(_controller);
-                if (_controller != null && _controller.IsVisible)
-                    TacticalMapBootstrap.HtmlUi?.SetVisible(true);
+                AttachFromInstance(__instance);
             }
             catch (Exception ex)
             {
@@ -46,10 +44,16 @@ namespace New_ZZZF.TacticalMap.UI
             }
         }
 
-        private static void OnMissionTickPostfix()
+        private static void OnMissionTickPostfix(TacticalMapMissionLogic __instance)
         {
             try
             {
+                // 某些 Bannerlord 生命周期路径不会调用 OnAfterMissionCreated，
+                // 但原 TacticalMapMissionLogic 会在首个 MissionTick 中懒初始化 _controller。
+                // 因此在 Tick postfix 再同步一次，确保旧 UI 与 HtmlUI 并行。
+                if (!ReferenceEquals(_logicInstance, __instance) || _controller == null)
+                    AttachFromInstance(__instance);
+
                 var ui = TacticalMapBootstrap.HtmlUi;
                 if (ui == null || _controller == null) return;
 
@@ -65,6 +69,25 @@ namespace New_ZZZF.TacticalMap.UI
             }
         }
 
+        private static void AttachFromInstance(TacticalMapMissionLogic instance)
+        {
+            if (instance == null || ControllerField == null) return;
+
+            var controller = ControllerField.GetValue(instance) as TacticalMapController;
+            if (controller == null) return;
+
+            bool changed = !ReferenceEquals(_logicInstance, instance) || !ReferenceEquals(_controller, controller);
+            _logicInstance = instance;
+            _controller = controller;
+
+            if (changed)
+            {
+                TacticalMapBootstrap.HtmlUi?.AttachController(controller);
+                if (controller.IsVisible)
+                    TacticalMapBootstrap.HtmlUi?.SetVisible(true);
+            }
+        }
+
         private static void OnEndMissionPostfix()
         {
             try
@@ -75,6 +98,7 @@ namespace New_ZZZF.TacticalMap.UI
             catch { }
             finally
             {
+                _logicInstance = null;
                 _controller = null;
             }
         }
