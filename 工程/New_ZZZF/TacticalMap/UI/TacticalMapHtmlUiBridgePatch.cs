@@ -7,10 +7,6 @@ using New_ZZZF.TacticalMap.Config;
 
 namespace New_ZZZF.TacticalMap.UI
 {
-    /// <summary>
-    /// 用 Harmony 旁路连接旧 TacticalMapMissionLogic 与新的 HtmlUI。
-    /// 不修改旧 MissionLogic 文件，保证旧 Gauntlet UI 可以原样保留。
-    /// </summary>
     internal static class TacticalMapHtmlUiBridgePatch
     {
         private static readonly FieldInfo ControllerField = typeof(TacticalMapMissionLogic)
@@ -23,15 +19,15 @@ namespace New_ZZZF.TacticalMap.UI
             if (harmony == null || ControllerField == null) return;
 
             harmony.Patch(
-                AccessTools.Method(typeof(TacticalMapMissionLogic), nameof(TacticalMapMissionLogic.OnAfterMissionCreated)),
+                AccessTools.Method(typeof(TacticalMapMissionLogic), "OnAfterMissionCreated"),
                 postfix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(OnAfterMissionCreatedPostfix)));
 
             harmony.Patch(
-                AccessTools.Method(typeof(TacticalMapMissionLogic), nameof(TacticalMapMissionLogic.OnMissionTick)),
+                AccessTools.Method(typeof(TacticalMapMissionLogic), "OnMissionTick"),
                 postfix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(OnMissionTickPostfix)));
 
             harmony.Patch(
-                AccessTools.Method(typeof(TacticalMapMissionLogic), nameof(TacticalMapMissionLogic.OnEndMission)),
+                AccessTools.Method(typeof(TacticalMapMissionLogic), "OnEndMission"),
                 postfix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(OnEndMissionPostfix)));
         }
 
