@@ -61,7 +61,7 @@ namespace New_ZZZF.TacticalMap.UI
 
                 _scope.RegisterCommand("setCameraLink", payload =>
                 {
-                    bool enabled = payload?["enabled"]?.Value<bool>() ?? !_cameraLink;
+                    bool enabled = payload?["enabled"]?.ToObject<bool?>() ?? !_cameraLink;
                     if (_controller == null) return;
                     if (enabled != _cameraLink) _controller.ToggleCameraFollow();
                     _cameraLink = enabled;
@@ -71,13 +71,12 @@ namespace New_ZZZF.TacticalMap.UI
                 _scope.RegisterCommand("mapClick", payload =>
                 {
                     if (_controller == null) return;
-                    float u = payload?["u"]?.Value<float>() ?? -1f;
-                    float v = payload?["v"]?.Value<float>() ?? -1f;
-                    string mode = payload?["mode"]?.Value<string>() ?? "move";
+                    float u = payload?["u"]?.ToObject<float?>() ?? -1f;
+                    float v = payload?["v"]?.ToObject<float?>() ?? -1f;
+                    string mode = payload?["mode"]?.ToObject<string>() ?? "move";
                     _controller.HandleHtmlMapClick(u, v, mode);
                 });
 
-                _scope.RegisterCommand("close", _ => SetVisible(false));
                 _scope.RegisterCommand("refresh", _ => PublishState(forceTerrain: true));
 
                 _scope.RegisterRequest("getMapData", _ => Task.FromResult<object>(BuildMapData()));
@@ -115,9 +114,9 @@ namespace New_ZZZF.TacticalMap.UI
                     HtmlUiService.Pages.Open(_pageId);
                     PublishState(forceTerrain: !_terrainPublished);
                 }
-                else
+                else if (HtmlUiService.Pages.CurrentPageId == _pageId)
                 {
-                    HtmlUiService.Pages.Close(_pageId);
+                    HtmlUiService.Pages.CloseCurrent();
                 }
             }
             catch (Exception ex)
@@ -239,7 +238,6 @@ namespace New_ZZZF.TacticalMap.UI
                 }
             }
 
-            // Rescale alpha against the actual max density so sparse scenes remain visible.
             for (int i = 0; i < rgba.Length; i += 4)
             {
                 int raw = rgba[i + 3];
