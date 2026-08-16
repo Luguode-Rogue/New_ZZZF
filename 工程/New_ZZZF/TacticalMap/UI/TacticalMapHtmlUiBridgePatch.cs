@@ -2,12 +2,9 @@ using System;
 using System.Drawing;
 using System.Reflection;
 using HarmonyLib;
-using Microsoft.Web.WebView2.Core;
-using Microsoft.Web.WebView2.WinForms;
 using System.Windows.Forms;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Core;
-using New_ZZZF.TacticalMap.Config;
 using BannerlordHtmlUI;
 
 namespace New_ZZZF.TacticalMap.UI
@@ -36,8 +33,6 @@ namespace New_ZZZF.TacticalMap.UI
                 AccessTools.Method(typeof(TacticalMapMissionLogic), "OnEndMission"),
                 postfix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(OnEndMissionPostfix)));
 
-            // HtmlUiHost uses the same WebView2 overlay host for all pages. Configure the
-            // host immediately before navigation so TacticalMap can render over the game.
             var navigate = AccessTools.Method(typeof(HtmlUiHost), "Navigate");
             if (navigate != null)
             {
@@ -127,7 +122,7 @@ namespace New_ZZZF.TacticalMap.UI
             var hostType = typeof(HtmlUiHost);
             var webField = hostType.GetField("_web", BindingFlags.Instance | BindingFlags.NonPublic);
             var formField = hostType.GetField("_form", BindingFlags.Instance | BindingFlags.NonPublic);
-            var web = webField?.GetValue(host) as WebView2;
+            var web = webField?.GetValue(host);
             var form = formField?.GetValue(host) as Form;
 
             if (web == null || form == null)
@@ -135,31 +130,36 @@ namespace New_ZZZF.TacticalMap.UI
 
             Action apply = () =>
             {
+                var webType = web.GetType();
+                var controllerField = FindControllerField(webType);
+                var controller = controllerField?.GetValue(web);
+
+                if (controller == null)
+                    throw new InvalidOperationException("WebView2 internal CoreWebView2Controller was not found.");
+
+                var defaultBackgroundColor = controller.GetType().GetProperty(
+                    "DefaultBackgroundColor",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+                if (defaultBackgroundColor == null || !defaultBackgroundColor.CanWrite)
+                    throw new InvalidOperationException("WebView2 controller does not expose DefaultBackgroundColor.");
+
+                var colorType = defaultBackgroundColor.PropertyType;
                 if (transparent)
                 {
                     const int magenta = 0x00FF00FF;
-                    var keyColor = Color.FromArgb(magenta);
+                    var keyColor = System.Drawing.Color.FromArgb(magenta);
                     form.BackColor = keyColor;
                     form.TransparencyKey = keyColor;
                     form.Opacity = 1.0;
-
-                    var controllerField = FindControllerField(web.GetType());
-                    var controller = controllerField?.GetValue(web) as CoreWebView2Controller;
-                    if (controller == null)
-                        throw new InvalidOperationException("WebView2 internal CoreWebView2Controller was not found.");
-
-                    controller.DefaultBackgroundColor = Color.Transparent;
+                    defaultBackgroundColor.SetValue(controller, CreateWebView2Color(colorType, 0, 0, 0, 0), null);
                 }
                 else
                 {
-                    form.TransparencyKey = Color.Empty;
-                    form.BackColor = Color.Black;
+                    form.TransparencyKey = System.Drawing.Color.Empty;
+                    form.BackColor = System.Drawing.Color.Black;
                     form.Opacity = 1.0;
-
-                    var controllerField = FindControllerField(web.GetType());
-                    var controller = controllerField?.GetValue(web) as CoreWebView2Controller;
-                    if (controller != null)
-                        controller.DefaultBackgroundColor = Color.Black;
+                    defaultBackgroundColor.SetValue(controller, CreateWebView2Color(colorType, 255, 0, 0, 0), null);
                 }
             };
 
@@ -169,15 +169,30 @@ namespace New_ZZZF.TacticalMap.UI
                 apply();
         }
 
+        private static object CreateWebView2Color(Type colorType, byte a, byte r, byte g, byte b)
+        {
+            var argb = colorType.GetMethod("FromArgb", BindingFlags.Public | BindingFlags.Static, null,
+                new[] { typeof(byte), typeof(byte), typeof(byte), typeof(byte) }, null);
+            if (argb != null)
+                return argb.Invoke(null, new object[] { a, r, g, b });
+
+            var ctor = colorType.GetConstructor(new[] { typeof(byte), typeof(byte), typeof(byte), typeof(byte) });
+            if (ctor != null)
+                return ctor.Invoke(new object[] { a, r, g, b });
+
+            throw new InvalidOperationException("Unable to construct WebView2 color type: " + colorType.FullName);
+        }
+
         private static FieldInfo FindControllerField(Type webType)
         {
-            foreach (var field in webType.GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
+            for (var type = webType; type != null; type = type.BaseType)
             {
-                if (typeof(CoreWebView2Controller).IsAssignableFrom(field.FieldType))
-                    return field;
-
-                if (field.Name.IndexOf("corewebview2controller", StringComparison.OrdinalIgnoreCase) >= 0)
-                    return field;
+                foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public))
+                {
+                    if (field.Name.IndexOf("corewebview2controller", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        field.Name.IndexOf("controller", StringComparison.OrdinalIgnoreCase) >= 0)
+                        return field;
+                }
             }
 
             return null;
