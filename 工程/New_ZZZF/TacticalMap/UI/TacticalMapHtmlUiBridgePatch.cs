@@ -24,11 +24,9 @@ namespace New_ZZZF.TacticalMap.UI
             harmony.Patch(
                 AccessTools.Method(typeof(TacticalMapMissionLogic), "OnAfterMissionCreated"),
                 postfix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(OnAfterMissionCreatedPostfix)));
-
             harmony.Patch(
                 AccessTools.Method(typeof(TacticalMapMissionLogic), "OnMissionTick"),
                 postfix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(OnMissionTickPostfix)));
-
             harmony.Patch(
                 AccessTools.Method(typeof(TacticalMapMissionLogic), "OnEndMission"),
                 postfix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(OnEndMissionPostfix)));
@@ -60,10 +58,8 @@ namespace New_ZZZF.TacticalMap.UI
 
                 var ui = TacticalMapBootstrap.HtmlUi;
                 if (ui == null || _controller == null) return;
-
                 if (ui.IsVisible != _controller.IsVisible)
                     ui.SetVisible(_controller.IsVisible);
-
                 if (_controller.IsVisible)
                     ui.Tick();
             }
@@ -76,14 +72,12 @@ namespace New_ZZZF.TacticalMap.UI
         private static void AttachFromInstance(TacticalMapMissionLogic instance)
         {
             if (instance == null || ControllerField == null) return;
-
             var controller = ControllerField.GetValue(instance) as TacticalMapController;
             if (controller == null) return;
 
             bool changed = !ReferenceEquals(_logicInstance, instance) || !ReferenceEquals(_controller, controller);
             _logicInstance = instance;
             _controller = controller;
-
             if (changed)
             {
                 TacticalMapBootstrap.HtmlUi?.AttachController(controller);
@@ -95,20 +89,17 @@ namespace New_ZZZF.TacticalMap.UI
         private static void HtmlUiNavigatePrefix(HtmlUiPage page)
         {
             if (page == null) return;
-
             try
             {
-                bool transparent = string.Equals(
-                    page.OwnerId,
-                    "New_ZZZF.TacticalMap",
-                    StringComparison.OrdinalIgnoreCase);
-
+                bool transparent =
+                    string.Equals(page.OwnerId, "New_ZZZF.TacticalMap", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(page.OwnerId, "New_ZZZF.CustomSkill", StringComparison.OrdinalIgnoreCase);
                 ConfigureOverlayBackground(HtmlUiService.Host, transparent);
             }
             catch (Exception ex)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[TMap][HtmlUI] Overlay background 配置失败: {ex.GetType().Name}: {ex.Message}"));
+                    $"[HtmlUI] Overlay background 配置失败: {ex.GetType().Name}: {ex.Message}"));
             }
         }
 
@@ -121,40 +112,27 @@ namespace New_ZZZF.TacticalMap.UI
             var formField = hostType.GetField("_form", BindingFlags.Instance | BindingFlags.NonPublic);
             var web = webField?.GetValue(host);
             var form = formField?.GetValue(host) as Form;
-
             if (web == null || form == null)
                 throw new InvalidOperationException("HtmlUiHost WebView2/form is not available.");
 
             var webType = web.GetType();
-            var controllerField = webType.GetField(
-                "_coreWebView2Controller",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-
+            var controllerField = webType.GetField("_coreWebView2Controller", BindingFlags.Instance | BindingFlags.NonPublic);
             if (controllerField == null)
-            {
-                throw new InvalidOperationException(
-                    "WebView2 private field '_coreWebView2Controller' was not found. Runtime type=" + webType.FullName);
-            }
+                throw new InvalidOperationException("WebView2 private field '_coreWebView2Controller' was not found. Runtime type=" + webType.FullName);
 
             var controller = controllerField.GetValue(web);
             if (controller == null)
                 throw new InvalidOperationException("WebView2 _coreWebView2Controller is null.");
 
-            var controllerType = controller.GetType();
-            var backgroundProperty = controllerType.GetProperty(
-                "DefaultBackgroundColor",
-                BindingFlags.Instance | BindingFlags.Public);
-
+            var backgroundProperty = controller.GetType().GetProperty("DefaultBackgroundColor", BindingFlags.Instance | BindingFlags.Public);
             if (backgroundProperty == null || !backgroundProperty.CanWrite)
-                throw new InvalidOperationException(
-                    "CoreWebView2Controller.DefaultBackgroundColor was not found on " + controllerType.FullName);
+                throw new InvalidOperationException("CoreWebView2Controller.DefaultBackgroundColor was not found on " + controller.GetType().FullName);
 
             Action apply = () =>
             {
-                var background = transparent
-                    ? System.Drawing.Color.Transparent
-                    : System.Drawing.Color.Black;
-                backgroundProperty.SetValue(controller, background, null);
+                backgroundProperty.SetValue(controller,
+                    transparent ? System.Drawing.Color.Transparent : System.Drawing.Color.Black,
+                    null);
 
                 if (transparent)
                 {
@@ -171,10 +149,8 @@ namespace New_ZZZF.TacticalMap.UI
                 }
             };
 
-            if (form.InvokeRequired)
-                form.BeginInvoke(apply);
-            else
-                apply();
+            if (form.InvokeRequired) form.BeginInvoke(apply);
+            else apply();
         }
 
         private static void OnEndMissionPostfix()
@@ -183,7 +159,7 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 TacticalMapBootstrap.HtmlUi?.SetVisible(false);
                 TacticalMapBootstrap.HtmlUi?.AttachController(null);
-                try { ConfigureOverlayBackground(HtmlUiService.Host, transparent: false); } catch { }
+                try { ConfigureOverlayBackground(HtmlUiService.Host, false); } catch { }
             }
             catch { }
             finally
