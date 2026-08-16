@@ -38,6 +38,7 @@ namespace New_ZZZF.TacticalMap.Core
         public Vec2? PlayerPos => _playerPos;
         public Vec2? CameraTarget => _camTarget;
         public Vec2 PlayerFacing => _playerFacing;
+        public bool CameraLinkEnabled => _cameraLink;
         // 动态单位层（每个 agent 一个点），供 MinimapWidget 烘焙成纹理
         public byte[] AgentRGBA => _cache.AgentRGBA;
         public int AgentDataVersion => _agentVersion;
@@ -116,17 +117,40 @@ namespace New_ZZZF.TacticalMap.Core
         {
             if (_layer == null) return;
             if (!_layer.HitTestMinimap(mousePixel, out Vec2 uv)) return;
-            Vec2 world = _cache.UVToWorld(uv);
+            IssueOrderAtWorld(_cache.UVToWorld(uv), rightButton ? TacticalClickMode.Face : shift ? TacticalClickMode.AttackMove : TacticalClickMode.Move);
+        }
 
-            TacticalClickMode mode = rightButton ? TacticalClickMode.Face
-                : shift ? TacticalClickMode.AttackMove
-                : TacticalClickMode.Move;
+        /// <summary>HtmlUI 地图点击适配器：把 0..1 UV 转换为世界坐标后复用现有 OrderSystem。</summary>
+        public void HandleHtmlMapClick(float u, float v, string mode)
+        {
+            if (!_visible || !_cache.IsBaked) return;
+            if (u < 0f || u > 1f || v < 0f || v > 1f) return;
+
+            TacticalClickMode clickMode;
+            switch ((mode ?? "move").ToLowerInvariant())
+            {
+                case "face":
+                    clickMode = TacticalClickMode.Face;
+                    break;
+                case "attack":
+                case "attackmove":
+                    clickMode = TacticalClickMode.AttackMove;
+                    break;
+                default:
+                    clickMode = TacticalClickMode.Move;
+                    break;
+            }
+
+            Vec2 world = _cache.UVToWorld(new Vec2(u, v));
+            IssueOrderAtWorld(world, clickMode);
+        }
+
+        private void IssueOrderAtWorld(Vec2 world, TacticalClickMode mode)
+        {
             _orderSystem.IssueOrder(_mission, world, mode);
 
             if (FeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
-            {
                 CameraController.Instance.Enable(world);
-            }
         }
 
         /// <summary>C 键：切换“小地图点击联动镜头”模式。</summary>
