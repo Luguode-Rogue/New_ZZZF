@@ -1,91 +1,28 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ZZZF 技能配置</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ZZZF 技能配置</title>
 <style>
-:root{font-family:"Segoe UI","Microsoft YaHei",sans-serif;color:#eadfce;background:transparent}
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}
-body{display:flex;align-items:center;justify-content:center;padding:32px}
-#shell{width:min(1660px,94vw);height:min(900px,91vh);display:grid;grid-template-columns:270px minmax(0,1fr) 300px;grid-template-rows:62px minmax(0,1fr) 66px;gap:1px;border:1px solid rgba(198,158,76,.8);border-radius:12px;overflow:hidden;background:rgba(14,12,9,.985);box-shadow:0 22px 60px rgba(0,0,0,.55)}
-#header{grid-column:1/4;display:flex;align-items:center;padding:0 20px;background:linear-gradient(180deg,#2a2318,#1d1810);border-bottom:1px solid rgba(198,158,76,.35)}
-#title{font-size:22px;font-weight:700;letter-spacing:1.5px;color:#f0d59d}.sub{margin-left:20px;color:#b8a98f;font-size:13px}.spacer{flex:1}
-.badge{padding:6px 10px;border:1px solid rgba(213,173,90,.35);border-radius:999px;color:#d6b774;background:#231d14;font-size:12px}
-button,input{font:inherit}button{border:1px solid rgba(213,173,90,.35);border-radius:7px;background:#211c15;color:#eadfce;cursor:pointer}button:hover{background:#31271a;border-color:rgba(213,173,90,.65)}button.active{background:#5b4319;border-color:#e2b85e;color:#fff0be}
-#roster{grid-column:1;background:#18130d;border-right:1px solid rgba(198,158,76,.2);padding:14px;display:flex;flex-direction:column;min-width:0}#roster h3,#right h3{margin:0 0 10px;font-size:14px;color:#d9c28f;letter-spacing:.7px}.targetBar{display:flex;gap:6px;margin-bottom:10px}.targetBar button{flex:1;padding:7px 5px;font-size:11px}.debug{margin-bottom:10px;padding:6px 8px;font-size:11px;color:#c9ae78}
-.list{overflow:auto;padding-right:4px}.hero{padding:10px 11px;margin-bottom:6px;text-align:left;width:100%;min-height:58px}.hero .name{font-weight:700;font-size:13px}.hero .meta{font-size:11px;color:#8f8578;margin-top:4px}.hero.selected{background:#4d3a18;border-color:#d4a954;box-shadow:inset 3px 0 #e5bb65}
-#center{position:relative;background:#151109;padding:14px;min-width:0;display:flex;flex-direction:column}.centerHeader{display:flex;align-items:center;margin-bottom:10px}.centerHeader h2{margin:0;font-size:17px;color:#f1d79f}.centerHeader .spacer{flex:1}.toolbar{display:flex;gap:6px}.toolbar button{padding:7px 10px;font-size:12px}
-#slots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;overflow:auto}.slot{min-height:112px;padding:11px;text-align:left;display:flex;flex-direction:column}.slot .slotLabel{font-size:11px;color:#c5a665}.slot .skill{margin-top:12px;font-weight:700;font-size:15px}.slot .empty{margin-top:22px;color:#696056;font-size:13px}.slot .stats{margin-top:auto;font-size:11px;color:#8d9fbe;display:flex;gap:10px}.slot.active{outline:2px solid #e7bf66;outline-offset:-2px;background:#382913}
-#catalog{display:none;flex:1;flex-direction:column;min-height:0}.catalogTop{display:flex;gap:8px;margin-bottom:10px}.catalogTop button{padding:8px 11px}.catalogTop input{flex:1;min-width:0;padding:9px 11px;border:1px solid rgba(213,173,90,.3);border-radius:7px;background:#0c0a07;color:#eee4d6;outline:none}.catalogTop input:focus{border-color:#d8ad5c}
-#catalogGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;overflow:auto}.skillCard{min-height:155px;padding:10px;text-align:left;display:flex;flex-direction:column}.skillCard .n{font-size:14px;font-weight:700}.skillCard .t{margin-top:5px;font-size:11px;color:#d4ad63}.skillCard .d{margin-top:8px;font-size:11px;line-height:1.4;color:#9f9689;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}.skillCard .s{margin-top:auto;font-size:10px;color:#8e9db4;display:flex;gap:10px}.skillCard.highlighted{outline:2px solid #f0c060;outline-offset:-2px;background:#392a14}.skillCard.disabled{opacity:.45;cursor:default}
-#right{grid-column:3;background:#18130d;border-left:1px solid rgba(198,158,76,.2);padding:14px;display:flex;flex-direction:column;min-width:0}.current{padding:12px;border:1px solid rgba(213,173,90,.22);border-radius:9px;background:#211a12;margin-bottom:12px}.current .label{font-size:11px;color:#9b917f}.current .value{margin-top:4px;font-size:17px;font-weight:700;color:#efd59b}.profList{overflow:auto}.prof{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px}.prof .pname{flex:1;color:#b8ad9f}.prof .pval{color:#d9bf80;font-weight:700}
-#footer{grid-column:1/4;display:flex;align-items:center;padding:0 16px;background:linear-gradient(180deg,#241d14,#1b1610);border-top:1px solid rgba(198,158,76,.35)}#footer .hint{color:#8f867b;font-size:11px}.footerButtons{margin-left:auto;display:flex;gap:7px}.footerButtons button{padding:8px 13px}.dirty{color:#e2a84f;margin-left:15px;font-size:11px}.status{margin-left:12px;color:#9aa6b4;font-size:11px}
-@media(max-width:1250px){#shell{grid-template-columns:220px minmax(0,1fr) 230px}.slot{min-height:100px}.slot .skill{font-size:13px}.catalogTop input{min-width:130px}}
-</style>
-</head>
+:root{font-family:"Segoe UI","Microsoft YaHei",sans-serif;color:#eadfce;background:transparent}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;overflow:hidden;pointer-events:auto}body{display:flex;align-items:center;justify-content:center;padding:32px;pointer-events:auto}
+#shell{width:min(1660px,94vw);height:min(900px,91vh);display:grid;grid-template-columns:270px minmax(0,1fr) 300px;grid-template-rows:62px minmax(0,1fr) 66px;gap:1px;border:1px solid rgba(198,158,76,.8);border-radius:12px;overflow:hidden;background:rgba(14,12,9,.985);box-shadow:0 22px 60px rgba(0,0,0,.55);pointer-events:auto}
+#header{grid-column:1/4;display:flex;align-items:center;padding:0 20px;background:linear-gradient(180deg,#2a2318,#1d1810);border-bottom:1px solid rgba(198,158,76,.35)}#title{font-size:22px;font-weight:700;letter-spacing:1.5px;color:#f0d59d}.sub{margin-left:20px;color:#b8a98f;font-size:13px}.spacer{flex:1}.badge{padding:6px 10px;border:1px solid rgba(213,173,90,.35);border-radius:999px;color:#d6b774;background:#231d14;font-size:12px}button,input{font:inherit}button{border:1px solid rgba(213,173,90,.35);border-radius:7px;background:#211c15;color:#eadfce;cursor:pointer;pointer-events:auto}button:hover{background:#31271a;border-color:rgba(213,173,90,.65)}button.active{background:#5b4319;border-color:#e2b85e;color:#fff0be}
+#roster{grid-column:1;background:#18130d;border-right:1px solid rgba(198,158,76,.2);padding:14px;display:flex;flex-direction:column;min-width:0;pointer-events:auto}#roster h3,#right h3{margin:0 0 10px;font-size:14px;color:#d9c28f;letter-spacing:.7px}.targetBar{display:flex;gap:6px;margin-bottom:10px}.targetBar button{flex:1;padding:7px 5px;font-size:11px}.debug{margin-bottom:10px;padding:6px 8px;font-size:11px;color:#c9ae78}.list{overflow:auto;padding-right:4px}.hero{padding:10px 11px;margin-bottom:6px;text-align:left;width:100%;min-height:58px}.hero .name{font-weight:700;font-size:13px}.hero .meta{font-size:11px;color:#8f8578;margin-top:4px}.hero.selected{background:#4d3a18;border-color:#d4a954;box-shadow:inset 3px 0 #e5bb65}
+#center{position:relative;background:#151109;padding:14px;min-width:0;display:flex;flex-direction:column;pointer-events:auto}.centerHeader{display:flex;align-items:center;margin-bottom:10px}.centerHeader h2{margin:0;font-size:17px;color:#f1d79f}.centerHeader .spacer{flex:1}.toolbar{display:flex;gap:6px}.toolbar button{padding:7px 10px;font-size:12px}#slots{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;overflow:auto}.slot{min-height:112px;padding:11px;text-align:left;display:flex;flex-direction:column}.slot .slotLabel{font-size:11px;color:#c5a665}.slot .skill{margin-top:12px;font-weight:700;font-size:15px}.slot .empty{margin-top:22px;color:#696056;font-size:13px}.slot .stats{margin-top:auto;font-size:11px;color:#8d9fbe;display:flex;gap:10px}.slot.active{outline:2px solid #e7bf66;outline-offset:-2px;background:#382913}
+#catalog{display:none;flex:1;flex-direction:column;min-height:0;pointer-events:auto}.catalogTop{display:flex;gap:8px;margin-bottom:10px}.catalogTop button{padding:8px 11px}.catalogTop input{flex:1;min-width:0;padding:9px 11px;border:1px solid rgba(213,173,90,.3);border-radius:7px;background:#0c0a07;color:#eee4d6;outline:none}.catalogTop input:focus{border-color:#d8ad5c}#catalogGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;overflow:auto}.skillCard{min-height:155px;padding:10px;text-align:left;display:flex;flex-direction:column}.skillCard .n{font-size:14px;font-weight:700}.skillCard .t{margin-top:5px;font-size:11px;color:#d4ad63}.skillCard .d{margin-top:8px;font-size:11px;line-height:1.4;color:#9f9689;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}.skillCard .s{margin-top:auto;font-size:10px;color:#8e9db4;display:flex;gap:10px}.skillCard.highlighted{outline:2px solid #f0c060;outline-offset:-2px;background:#392a14}.skillCard.disabled{opacity:.45;cursor:default}
+#right{grid-column:3;background:#18130d;border-left:1px solid rgba(198,158,76,.2);padding:14px;display:flex;flex-direction:column;min-width:0;pointer-events:auto}.current{padding:12px;border:1px solid rgba(213,173,90,.22);border-radius:9px;background:#211a12;margin-bottom:12px}.current .label{font-size:11px;color:#9b917f}.current .value{margin-top:4px;font-size:17px;font-weight:700;color:#efd59b}.profList{overflow:auto}.prof{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px}.prof .pname{flex:1;color:#b8ad9f}.prof .pval{color:#d9bf80;font-weight:700}
+#footer{grid-column:1/4;display:flex;align-items:center;padding:0 16px;background:linear-gradient(180deg,#241d14,#1b1610);border-top:1px solid rgba(198,158,76,.35);pointer-events:auto}#footer .hint{color:#8f867b;font-size:11px}.footerButtons{margin-left:auto;display:flex;gap:7px}.footerButtons button{padding:8px 13px}.dirty{color:#e2a84f;margin-left:15px;font-size:11px}.status{margin-left:12px;color:#9aa6b4;font-size:11px}@media(max-width:1250px){#shell{grid-template-columns:220px minmax(0,1fr) 230px}.slot{min-height:100px}.slot .skill{font-size:13px}.catalogTop input{min-width:130px}}
+</style></head>
 <body>
-<div id="shell">
-  <div id="header"><div id="title">技能配置</div><div class="sub" id="heroTitle">—</div><div class="spacer"></div><div class="badge" id="targetBadge">队伍成员</div><div class="dirty" id="dirty">● 未修改</div><div class="status" id="status">连接中…</div></div>
-
-  <aside id="roster">
-    <h3>目标</h3>
-    <div class="targetBar"><button data-type="0">队伍</button><button data-type="1">兵种</button><button data-type="2">领主</button></div>
-    <button class="debug" id="debug">调试模式：关</button>
-    <div class="list" id="heroList"></div>
-  </aside>
-
-  <main id="center">
-    <div id="slotView" style="display:flex;flex:1;flex-direction:column;min-height:0">
-      <div class="centerHeader"><h2>技能槽位</h2><div class="spacer"></div><div class="toolbar"><button id="forge">法术锻造</button></div></div>
-      <div id="slots"></div>
-    </div>
-    <section id="catalog">
-      <div class="catalogTop"><button id="back">← 返回</button><input id="search" placeholder="搜索技能名称或描述…"/><button id="catPrev">↑</button><button id="catNext">↓</button></div>
-      <div id="catalogGrid"></div>
-    </section>
-  </main>
-
-  <aside id="right">
-    <h3>当前目标</h3>
-    <div class="current"><div class="label">名称</div><div class="value" id="currentName">—</div><div class="label" style="margin-top:10px">当前编辑槽位</div><div class="value" id="activeSlot">—</div></div>
-    <h3>技能熟练度</h3><div class="profList" id="proficiencies"></div>
-  </aside>
-
-  <footer id="footer"><div class="hint">↑↓ 选择目标 · 1~8 打开技能槽 · Enter 确认 · Esc 返回/关闭</div><div class="footerButtons"><button id="undo">撤销</button><button id="export">导出</button><button id="apply">应用</button><button id="close">关闭</button></div></footer>
-</div>
+<div id="shell"><div id="header"><div id="title">技能配置</div><div class="sub" id="heroTitle">—</div><div class="spacer"></div><div class="badge" id="targetBadge">队伍成员</div><div class="dirty" id="dirty">● 未修改</div><div class="status" id="status">连接中…</div></div>
+<aside id="roster"><h3>目标</h3><div class="targetBar"><button data-type="0">队伍</button><button data-type="1">兵种</button><button data-type="2">领主</button></div><button class="debug" id="debug">调试模式：关</button><div class="list" id="heroList"></div></aside>
+<main id="center"><div id="slotView" style="display:flex;flex:1;flex-direction:column;min-height:0"><div class="centerHeader"><h2>技能槽位</h2><div class="spacer"></div><div class="toolbar"><button id="forge">法术锻造</button></div></div><div id="slots"></div></div><section id="catalog"><div class="catalogTop"><button id="back">← 返回</button><input id="search" placeholder="搜索技能名称或描述…"/><button id="catPrev">↑</button><button id="catNext">↓</button></div><div id="catalogGrid"></div></section></main>
+<aside id="right"><h3>当前目标</h3><div class="current"><div class="label">名称</div><div class="value" id="currentName">—</div><div class="label" style="margin-top:10px">当前编辑槽位</div><div class="value" id="activeSlot">—</div></div><h3>技能熟练度</h3><div class="profList" id="proficiencies"></div></aside>
+<footer id="footer"><div class="hint">↑↓ 选择目标 · 1~8 打开技能槽 · Enter 确认 · Esc 返回/关闭</div><div class="footerButtons"><button id="undo">撤销</button><button id="export">导出</button><button id="apply">应用</button><button id="close">关闭</button></div></footer></div>
 <script>
-const app=window.game.app;
-let state=null;
-const $=id=>document.getElementById(id);
-function call(name,payload={}){return app.call(name,payload).catch?.(e=>console.error(name,e));}
+const app=window.game.app;let state=null;const $=id=>document.getElementById(id);
+function ensureInput(){try{window.focus?.();app.input?.capture?.()}catch(_){} }
+function call(name,payload={}){ensureInput();try{return Promise.resolve(app.call(name,payload)).catch(e=>console.error('[CustomSkill] '+name,e))}catch(e){console.error('[CustomSkill] '+name,e);return Promise.reject(e)}}
 function escapeHtml(s){return String(s??'').replace(/[&<>\"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\\':'&#39;'}[m]))}
-function render(s){
-  state=s||null;if(!state)return;
-  $('heroTitle').textContent=state.currentHeroName||'—';$('targetBadge').textContent=state.targetTypeText||'—';$('currentName').textContent=state.currentHeroName||'—';$('activeSlot').textContent=state.activeSlot||'—';$('dirty').textContent=state.dirty?'● 未保存':'● 已保存';$('dirty').style.color=state.dirty?'#e2a84f':'#6f8b70';$('status').textContent='已连接';$('debug').textContent='调试模式：'+(state.debugMode?'开':'关');
-  document.querySelectorAll('.targetBar button').forEach(b=>b.classList.toggle('active',Number(b.dataset.type)===Number(state.targetType)));
-  $('heroList').innerHTML=(state.heroes||[]).map(h=>`<button class="hero ${h.selected?'selected':''}" data-i="${h.index}"><div class="name">${escapeHtml(h.name)}</div><div class="meta">${escapeHtml(h.subtitle)}</div></button>`).join('');
-  $('heroList').querySelectorAll('.hero').forEach(b=>b.onclick=()=>call('selectHero',{index:Number(b.dataset.i)}));
-
-  const inCatalog=!!state.inCatalog;$('slotView').style.display=inCatalog?'none':'flex';$('catalog').style.display=inCatalog?'flex':'none';
-  $('search').value=state.searchText||'';
-  if(!inCatalog){
-    $('slots').innerHTML=(state.slots||[]).map(sv=>`<button class="slot ${sv.active?'active':''}" data-i="${sv.index}"><div class="slotLabel">${escapeHtml(sv.label)}</div>${sv.empty?'<div class="empty">— 空槽 —</div>':`<div class="skill">${escapeHtml(sv.skillName)}</div><div class="stats"><span>${escapeHtml(sv.cooldown)}</span><span>${escapeHtml(sv.cost)}</span></div>`}</button>`).join('');
-    $('slots').querySelectorAll('.slot').forEach(b=>b.onclick=()=>call('selectSlot',{index:Number(b.dataset.i)}));
-  }else{
-    $('catalogGrid').innerHTML=(state.catalog||[]).map(c=>`<button class="skillCard ${c.highlighted?'highlighted':''} ${c.selectable?'':'disabled'}" data-i="${c.index}" ${c.selectable?'':'disabled'}><div class="n">${escapeHtml(c.name)}</div><div class="t">${escapeHtml(c.type)}</div><div class="d">${escapeHtml(c.description)}</div><div class="s"><span>${escapeHtml(c.cooldown)}</span><span>${escapeHtml(c.cost)}</span></div></button>`).join('');
-    $('catalogGrid').querySelectorAll('.skillCard').forEach(b=>{if(!b.disabled)b.onclick=()=>call('catalogSelect',{index:Number(b.dataset.i)})});
-  }
-  $('proficiencies').innerHTML=(state.proficiencies||[]).map(p=>`<div class="prof"><span class="pname">${escapeHtml(p.name)}</span><span class="pval">${escapeHtml(p.text)}</span></div>`).join('');
-  if(state.exportStatus){$('status').textContent=state.exportStatus}
-}
-app.state.subscribe('customSkill',render);
-$('debug').onclick=()=>call('toggleDebug');$('forge').onclick=()=>call('openSpellForge');$('back').onclick=()=>call('catalogBack');$('catPrev').onclick=()=>call('catalogPrev');$('catNext').onclick=()=>call('catalogNext');$('undo').onclick=()=>call('undo');$('apply').onclick=()=>call('apply');$('export').onclick=()=>call('export');$('close').onclick=()=>call('close');
-$('search').addEventListener('input',()=>call('search',{text:$('search').value}));
-document.querySelectorAll('.targetBar button').forEach(b=>b.onclick=()=>call('setTargetType',{value:Number(b.dataset.type)}));
-window.addEventListener('keydown',e=>{if(e.key==='Escape'){if(state?.inCatalog)call('catalogBack');else call('close');e.preventDefault();return;}if(!state)return;if(state.inCatalog){if(e.key==='ArrowDown'){call('catalogNext');e.preventDefault()}else if(e.key==='ArrowUp'){call('catalogPrev');e.preventDefault()}else if(e.key==='ArrowLeft'){call('catalogLeft');e.preventDefault()}else if(e.key==='ArrowRight'){call('catalogRight');e.preventDefault()}else if(e.key==='Enter'){call('catalogConfirm');e.preventDefault()}}else{if(e.key>='1'&&e.key<='8'){call('selectSlot',{index:Number(e.key)-1});e.preventDefault()}}});
-(async()=>{try{const initial=await app.request('getState');render(initial)}catch(e){$('status').textContent='桥接失败';console.error(e)}})();
-</script>
-</body>
-</html>
+function render(s){state=s||null;if(!state)return;$('heroTitle').textContent=state.currentHeroName||'—';$('targetBadge').textContent=state.targetTypeText||'—';$('currentName').textContent=state.currentHeroName||'—';$('activeSlot').textContent=state.activeSlot||'—';$('dirty').textContent=state.dirty?'● 未保存':'● 已保存';$('dirty').style.color=state.dirty?'#e2a84f':'#6f8b70';$('status').textContent='已连接';$('debug').textContent='调试模式：'+(state.debugMode?'开':'关');document.querySelectorAll('.targetBar button').forEach(b=>b.classList.toggle('active',Number(b.dataset.type)===Number(state.targetType)));$('heroList').innerHTML=(state.heroes||[]).map(h=>`<button class="hero ${h.selected?'selected':''}" data-i="${h.index}"><div class="name">${escapeHtml(h.name)}</div><div class="meta">${escapeHtml(h.subtitle)}</div></button>`).join('');$('heroList').querySelectorAll('.hero').forEach(b=>b.onclick=()=>call('selectHero',{index:Number(b.dataset.i)}));const inCatalog=!!state.inCatalog;$('slotView').style.display=inCatalog?'none':'flex';$('catalog').style.display=inCatalog?'flex':'none';$('search').value=state.searchText||'';if(!inCatalog){$('slots').innerHTML=(state.slots||[]).map(sv=>`<button class="slot ${sv.active?'active':''}" data-i="${sv.index}"><div class="slotLabel">${escapeHtml(sv.label)}</div>${sv.empty?'<div class="empty">— 空槽 —</div>':`<div class="skill">${escapeHtml(sv.skillName)}</div><div class="stats"><span>${escapeHtml(sv.cooldown)}</span><span>${escapeHtml(sv.cost)}</span></div>`}</button>`).join('');$('slots').querySelectorAll('.slot').forEach(b=>b.onclick=()=>call('selectSlot',{index:Number(b.dataset.i)}))}else{$('catalogGrid').innerHTML=(state.catalog||[]).map(c=>`<button class="skillCard ${c.highlighted?'highlighted':''} ${c.selectable?'':'disabled'}" data-i="${c.index}" ${c.selectable?'':'disabled'}><div class="n">${escapeHtml(c.name)}</div><div class="t">${escapeHtml(c.type)}</div><div class="d">${escapeHtml(c.description)}</div><div class="s"><span>${escapeHtml(c.cooldown)}</span><span>${escapeHtml(c.cost)}</span></div></button>`).join('');$('catalogGrid').querySelectorAll('.skillCard').forEach(b=>{if(!b.disabled)b.onclick=()=>call('catalogSelect',{index:Number(b.dataset.i)})})}$('proficiencies').innerHTML=(state.proficiencies||[]).map(p=>`<div class="prof"><span class="pname">${escapeHtml(p.name)}</span><span class="pval">${escapeHtml(p.text)}</span></div>`).join('');if(state.exportStatus)$('status').textContent=state.exportStatus}
+app.state.subscribe('customSkill',render);$('debug').onclick=()=>call('toggleDebug');$('forge').onclick=()=>call('openSpellForge');$('back').onclick=()=>call('catalogBack');$('catPrev').onclick=()=>call('catalogPrev');$('catNext').onclick=()=>call('catalogNext');$('undo').onclick=()=>call('undo');$('apply').onclick=()=>call('apply');$('export').onclick=()=>call('export');$('close').onclick=()=>call('close');$('search').addEventListener('input',()=>call('search',{text:$('search').value}));document.querySelectorAll('.targetBar button').forEach(b=>b.onclick=()=>call('setTargetType',{value:Number(b.dataset.type)}));document.addEventListener('pointerdown',ensureInput,true);window.addEventListener('keydown',e=>{ensureInput();if(e.key==='Escape'){if(state?.inCatalog)call('catalogBack');else call('close');e.preventDefault();return}if(!state)return;if(state.inCatalog){if(e.key==='ArrowDown'){call('catalogNext');e.preventDefault()}else if(e.key==='ArrowUp'){call('catalogPrev');e.preventDefault()}else if(e.key==='ArrowLeft'){call('catalogLeft');e.preventDefault()}else if(e.key==='ArrowRight'){call('catalogRight');e.preventDefault()}else if(e.key==='Enter'){call('catalogConfirm');e.preventDefault()}}else if(e.key>='1'&&e.key<='8'){call('selectSlot',{index:Number(e.key)-1});e.preventDefault()}});(async()=>{try{ensureInput();const initial=await app.request('getState');render(initial)}catch(e){$('status').textContent='桥接失败';console.error(e)}})();
+</script></body></html>
