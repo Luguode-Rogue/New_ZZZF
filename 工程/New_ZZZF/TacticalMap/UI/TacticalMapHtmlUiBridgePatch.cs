@@ -1,9 +1,14 @@
 using System;
+using System.Drawing;
 using System.Reflection;
 using HarmonyLib;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
+using System.Windows.Forms;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Core;
 using New_ZZZF.TacticalMap.Config;
+using BannerlordHtmlUI;
 
 namespace New_ZZZF.TacticalMap.UI
 {
@@ -30,6 +35,16 @@ namespace New_ZZZF.TacticalMap.UI
             harmony.Patch(
                 AccessTools.Method(typeof(TacticalMapMissionLogic), "OnEndMission"),
                 postfix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(OnEndMissionPostfix)));
+
+            // HtmlUiHost uses the same WebView2 overlay host for all pages. Configure the
+            // host immediately before navigation so TacticalMap can render over the game.
+            var navigate = AccessTools.Method(typeof(HtmlUiHost), "Navigate");
+            if (navigate != null)
+            {
+                harmony.Patch(
+                    navigate,
+                    prefix: new HarmonyMethod(typeof(TacticalMapHtmlUiBridgePatch), nameof(HtmlUiNavigatePrefix)));
+            }
         }
 
         private static void OnAfterMissionCreatedPostfix(TacticalMapMissionLogic __instance)
@@ -48,9 +63,6 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                // 某些 Bannerlord 生命周期路径不会调用 OnAfterMissionCreated，
-                // 但原 TacticalMapMissionLogic 会在首个 MissionTick 中懒初始化 _controller。
-                // 因此在 Tick postfix 再同步一次，确保旧 UI 与 HtmlUI 并行。
                 if (!ReferenceEquals(_logicInstance, __instance) || _controller == null)
                     AttachFromInstance(__instance);
 
@@ -88,12 +100,101 @@ namespace New_ZZZF.TacticalMap.UI
             }
         }
 
+        private static void HtmlUiNavigatePrefix(HtmlUiPage page)
+        {
+            if (page == null) return;
+
+            try
+            {
+                bool transparent = string.Equals(
+                    page.OwnerId,
+                    "New_ZZZF.TacticalMap",
+                    StringComparison.OrdinalIgnoreCase);
+
+                ConfigureOverlayBackground(HtmlUiService.Host, transparent);
+            }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    $"[TMap][HtmlUI] Overlay background 配置失败: {ex.GetType().Name}: {ex.Message}"));
+            }
+        }
+
+        private static void ConfigureOverlayBackground(HtmlUiHost host, bool transparent)
+        {
+            if (host == null) return;
+
+            var hostType = typeof(HtmlUiHost);
+            var webField = hostType.GetField("_web", BindingFlags.Instance | BindingFlags.NonPublic);
+            var formField = hostType.GetField("_form", BindingFlags.Instance | BindingFlags.NonPublic);
+            var web = webField?.GetValue(host) as WebView2;
+            var form = formField?.GetValue(host) as Form;
+
+            if (web == null || form == null)
+                throw new InvalidOperationException("HtmlUiHost WebView2/form is not available.");
+
+            Action apply = () =>
+            {
+                if (transparent)
+                {
+                    const int magenta = 0x00FF00FF;
+                    var keyColor = Color.FromArgb(magenta);
+                    form.BackColor = keyColor;
+                    form.TransparencyKey = keyColor;
+                    form.Opacity = 1.0;
+
+                    var controllerField = FindControllerField(web.GetType());
+                    var controller = controllerField?.GetValue(web) as CoreWebView2Controller;
+                    if (controller == null)
+                        throw new InvalidOperationException("WebView2 internal CoreWebView2Controller was not found.");
+
+                    controller.DefaultBackgroundColor = Color.Transparent;
+                }
+                else
+                {
+                    form.TransparencyKey = Color.Empty;
+                    form.BackColor = Color.Black;
+                    form.Opacity = 1.0;
+
+                    var controllerField = FindControllerField(web.GetType());
+                    var controller = controllerField?.GetValue(web) as CoreWebView2Controller;
+                    if (controller != null)
+                        controller.DefaultBackgroundColor = Color.Black;
+                }
+            };
+
+            if (form.InvokeRequired)
+                form.BeginInvoke(apply);
+            else
+                apply();
+        }
+
+        private static FieldInfo FindControllerField(Type webType)
+        {
+            foreach (var field in webType.GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
+            {
+                if (typeof(CoreWebView2Controller).IsAssignableFrom(field.FieldType))
+                    return field;
+
+                if (field.Name.IndexOf("corewebview2controller", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return field;
+            }
+
+            return null;
+        }
+
         private static void OnEndMissionPostfix()
         {
             try
             {
                 TacticalMapBootstrap.HtmlUi?.SetVisible(false);
                 TacticalMapBootstrap.HtmlUi?.AttachController(null);
+
+                try
+                {
+                    ConfigureOverlayBackground(HtmlUiService.Host, transparent: false);
+                }
+                catch { }
             }
             catch { }
             finally
