@@ -3,13 +3,11 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System.Reflection;
-using System.Text;
-using Newtonsoft.Json.Linq;
 using BannerlordHtmlUI;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Core;
+using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
 
 namespace New_ZZZF.TacticalMap.UI
@@ -32,6 +30,7 @@ namespace New_ZZZF.TacticalMap.UI
         private bool _cameraLink;
         private bool _terrainPublished;
         private int _lastAgentVersion = -1;
+        private float _stateAccum;
 
         public bool IsRegistered => _registered;
         public bool IsVisible => _visible;
@@ -96,6 +95,9 @@ namespace New_ZZZF.TacticalMap.UI
         public void AttachController(TacticalMapController controller)
         {
             _controller = controller;
+            _terrainPublished = false;
+            _lastAgentVersion = -1;
+            _stateAccum = 0f;
             if (_registered && _visible)
                 PublishState(forceTerrain: true);
         }
@@ -124,9 +126,12 @@ namespace New_ZZZF.TacticalMap.UI
             }
         }
 
-        public void Tick()
+        public void Tick(float dt = 0.016f)
         {
             if (!_visible || !_registered || _controller == null) return;
+            _stateAccum += dt;
+            if (_stateAccum < 0.10f && _terrainPublished && _controller.AgentDataVersion == _lastAgentVersion) return;
+            _stateAccum = 0f;
             PublishState(forceTerrain: !_terrainPublished);
         }
 
@@ -155,6 +160,7 @@ namespace New_ZZZF.TacticalMap.UI
             Vec2? player = _controller.PlayerPos;
             Vec2? camera = _controller.CameraTarget;
             Vec2 facing = _controller.PlayerFacing;
+            int agentVersion = _controller.AgentDataVersion;
 
             _scope.SetState("map", new
             {
@@ -173,7 +179,8 @@ namespace New_ZZZF.TacticalMap.UI
                     uvy = cache.WorldToUV(camera.Value).Y
                 } : null,
                 formations,
-                agentVersion = _controller.AgentDataVersion
+                agentVersion,
+                density = agentVersion != _lastAgentVersion ? BuildDensityData(cache, 64) : null
             });
 
             if (forceTerrain && cache.IsBaked)
@@ -182,7 +189,7 @@ namespace New_ZZZF.TacticalMap.UI
                 _terrainPublished = true;
             }
 
-            _lastAgentVersion = _controller.AgentDataVersion;
+            _lastAgentVersion = agentVersion;
         }
 
         private object BuildMapData()
@@ -209,9 +216,42 @@ namespace New_ZZZF.TacticalMap.UI
             };
         }
 
+        private static object BuildDensityData(TerrainCache cache, int output)
+        {
+            byte[] rgba = new byte[output * output * 4];
+            int max = 1;
+            for (int y = 0; y < output; y++)
+            {
+                for (int x = 0; x < output; x++)
+                {
+                    int x0 = x * cache.Width / output;
+                    int x1 = Math.Min(cache.Width, (x + 1) * cache.Width / output);
+                    int y0 = y * cache.Height / output;
+                    int y1 = Math.Min(cache.Height, (y + 1) * cache.Height / output);
+                    int sum = 0;
+                    for (int sx = x0; sx < Math.Max(x1, x0 + 1); sx++)
+                    for (int sy = y0; sy < Math.Max(y1, y0 + 1); sy++)
+                        sum += cache.Cells[sx, sy].DensityAgentCount;
+                    max = Math.Max(max, sum);
+                    int i = (y * output + x) * 4;
+                    rgba[i] = 255; rgba[i + 1] = 153; rgba[i + 2] = 42;
+                    rgba[i + 3] = (byte)Math.Min(180, sum * 180 / Math.Max(1, 12));
+                }
+            }
+
+            // Rescale alpha against the actual max density so sparse scenes remain visible.
+            for (int i = 0; i < rgba.Length; i += 4)
+            {
+                int raw = rgba[i + 3];
+                rgba[i + 3] = (byte)Math.Min(180, raw * 12 / Math.Max(1, max));
+            }
+
+            return new { width = output, height = output, rgba = Convert.ToBase64String(rgba) };
+        }
+
         private static byte[] DownsampleRgba(byte[] source, int sw, int sh, int dw, int dh)
         {
-            if (source == null || sw <= 0 || sh <= 0) return Array.Empty<byte>();
+            if (source == null || sw <= 0 || sh <= 0) return new byte[0];
             byte[] output = new byte[dw * dh * 4];
             for (int y = 0; y < dh; y++)
             {
@@ -246,6 +286,7 @@ namespace New_ZZZF.TacticalMap.UI
                 _visible = false;
                 _terrainPublished = false;
                 _lastAgentVersion = -1;
+                _stateAccum = 0f;
             }
         }
     }
