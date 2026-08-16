@@ -5,16 +5,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using BannerlordHtmlUI;
 using TaleWorlds.Library;
-using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Core;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
 
 namespace New_ZZZF.TacticalMap.UI
 {
-    /// <summary>
-    /// TacticalMap 的第二套 HTML UI。旧 Gauntlet UI 保留并行运行；本类只负责 HtmlUI Bridge/UI 生命周期。
-    /// </summary>
     public sealed class TacticalMapHtmlUi : IDisposable
     {
         private const string OwnerId = "New_ZZZF.TacticalMap";
@@ -114,9 +110,9 @@ namespace New_ZZZF.TacticalMap.UI
                     HtmlUiService.Pages.Open(_pageId);
                     PublishState(forceTerrain: !_terrainPublished);
                 }
-                else if (HtmlUiService.Pages.CurrentPageId == _pageId)
+                else
                 {
-                    HtmlUiService.Pages.CloseCurrent();
+                    HtmlUiService.Pages.Close(_pageId);
                 }
             }
             catch (Exception ex)
