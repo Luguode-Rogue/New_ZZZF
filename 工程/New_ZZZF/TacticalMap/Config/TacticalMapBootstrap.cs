@@ -21,6 +21,7 @@ namespace New_ZZZF.TacticalMap.Config
             if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导跳过：FeatureGate(EnableMinimap) 关闭")); return; }
             _harmony = new Harmony("TacticalMap");
             TacticalCameraPatch.Patch(_harmony);
+            TacticalMapHtmlUiBridgePatch.Patch(_harmony);
 
             _htmlUi = new TacticalMapHtmlUi();
             _htmlUi.InitializeOnFrameworkReady();
