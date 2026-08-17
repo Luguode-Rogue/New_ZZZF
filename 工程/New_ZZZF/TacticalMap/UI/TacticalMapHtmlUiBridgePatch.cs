@@ -5,6 +5,7 @@ using HarmonyLib;
 using System.Windows.Forms;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Core;
+using New_ZZZF.TacticalMap.Config;
 using BannerlordHtmlUI;
 
 namespace New_ZZZF.TacticalMap.UI
