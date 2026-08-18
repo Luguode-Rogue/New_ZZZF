@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Core;
+using New_ZZZF.TacticalMap.Tracking;
 
 namespace New_ZZZF.TacticalMap.UI
 {
@@ -29,22 +30,23 @@ namespace New_ZZZF.TacticalMap.UI
         private const string OwnerId = "New_ZZZF.TacticalMap";
         private const string ContentRootId = "tacticalmap";
         private const string PageId = "tacticalmap";
-        private const string RuntimeFolderName = "TacticalMapUI";
 
         private HtmlUiConsumerScope _scope;
         private TacticalMapController _controller;
+        private string _contentRootId;
         private bool _registered;
         private bool _visible;
-        private bool _interactive;
         private bool _fullscreen;
+        private bool _interactive;
         private bool _staticPublished;
         private int _lastAgentVersion = -1;
-        private float _stateAccum;
-        private UiState _state = UiState.CompactPassive;
+        private float _stateAccumulator;
+        private UiState _state = UiState.Hidden;
 
+        public bool IsRegistered => _registered;
         public bool IsVisible => _visible;
-        public bool IsInteractive => _interactive;
         public bool IsFullscreen => _fullscreen;
+        public bool IsInteractive => _interactive;
         public UiState State => _state;
 
         public void InitializeOnFrameworkReady()
@@ -60,31 +62,33 @@ namespace New_ZZZF.TacticalMap.UI
             try
             {
                 string assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
-                string uiRoot = Path.Combine(assemblyDir, RuntimeFolderName);
+                string uiRoot = Path.Combine(assemblyDir, "TacticalMapUI");
                 if (!Directory.Exists(uiRoot))
-                {
-                    throw new DirectoryNotFoundException(
-                        $"TacticalMap HTMLUI 资源目录不存在: {uiRoot}");
-                }
+                    throw new DirectoryNotFoundException("TacticalMap HtmlUI 资源目录不存在: " + uiRoot);
 
                 _scope = HtmlUiService.CreateScope(OwnerId);
-                string rootId = _scope.RegisterContentRoot(ContentRootId, uiRoot);
+                _contentRootId = _scope.RegisterContentRoot(ContentRootId, uiRoot);
                 _scope.RegisterPage(new HtmlUiPage(PageId, "index.html")
                 {
-                    ContentRootId = rootId,
+                    ContentRootId = _contentRootId,
                     HotReload = true,
                     DefaultInputMode = HtmlUiInputMode.Passive
                 });
 
                 _scope.RegisterCommand("mapClick", HandleMapClick);
                 _scope.RegisterCommand("cameraClick", HandleCameraClick);
-                _scope.RegisterCommand("exitInteraction", _ => SetUiState(_fullscreen ? UiState.FullPassive : UiState.CompactPassive));
+                _scope.RegisterCommand("exitInteraction", _ =>
+                {
+                    if (_visible)
+                        SetUiState(_fullscreen ? UiState.FullPassive : UiState.CompactPassive);
+                });
                 _scope.RegisterCommand("toggleFullscreen", _ => ToggleFullscreenPreservingInteraction());
-                _scope.RegisterCommand("toggleInteraction", _ => ToggleInteraction());
                 _scope.RegisterCommand("refresh", _ => PublishState(true));
                 _scope.RegisterRequest("getMapData", _ => Task.FromResult<object>(BuildMapData()));
 
                 _registered = true;
+                if (_visible)
+                    ApplyOpenState();
             }
             catch (Exception ex)
             {
@@ -98,57 +102,56 @@ namespace New_ZZZF.TacticalMap.UI
             _controller = controller;
             _staticPublished = false;
             _lastAgentVersion = -1;
-            _stateAccum = 0f;
+            _stateAccumulator = 0f;
 
-            if (controller == null)
+            if (_controller == null)
+            {
                 SetUiState(UiState.Hidden);
-            else if (_visible)
+                return;
+            }
+
+            if (_visible)
                 PublishState(true);
         }
 
         public void SetVisible(bool visible)
         {
-            if (visible)
+            if (!visible)
             {
-                _visible = true;
-                if (_state == UiState.Hidden)
-                    _state = UiState.CompactPassive;
+                SetUiState(UiState.Hidden);
+                return;
             }
+
+            if (_state == UiState.Hidden)
+                SetUiState(UiState.CompactPassive);
             else
-            {
-                _visible = false;
-                _interactive = false;
-                _fullscreen = false;
-                _state = UiState.Hidden;
-            }
+                ApplyOpenState();
+        }
+
+        public void SetUiState(UiState state)
+        {
+            _state = state;
+            _visible = state != UiState.Hidden;
+            _fullscreen = state == UiState.FullPassive || state == UiState.FullInteractive;
+            _interactive = state == UiState.CompactInteractive || state == UiState.FullInteractive;
+
+            ApplyInputMode();
 
             if (!_registered || !HtmlUiService.IsReady)
                 return;
 
             try
             {
-                if (visible)
-                {
-                    HtmlUiService.Pages.Open(PageId);
-                    ApplyInputMode();
-                    PublishState(!_staticPublished);
-                }
+                if (_visible)
+                    ApplyOpenState();
                 else
-                {
                     HtmlUiService.Pages.Close(PageId);
-                    ApplyInputMode();
-                }
             }
             catch (Exception ex)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[TMap][HtmlUI] 页面切换失败: {ex.GetType().Name}: {ex.Message}"));
+                    $"[TMap][HtmlUI] 状态切换失败: {ex.GetType().Name}: {ex.Message}"));
             }
-        }
-
-        public void ResetForMission()
-        {
-            SetUiState(UiState.CompactPassive);
         }
 
         public void ToggleInteraction()
@@ -171,26 +174,41 @@ namespace New_ZZZF.TacticalMap.UI
                 : (_interactive ? UiState.FullInteractive : UiState.FullPassive));
         }
 
-        public void SetUiState(UiState state)
+        public void ResetForMission()
         {
-            _state = state;
-            _visible = state != UiState.Hidden;
-            _fullscreen = state == UiState.FullPassive || state == UiState.FullInteractive;
-            _interactive = state == UiState.CompactInteractive || state == UiState.FullInteractive;
-            ApplyInputMode();
-            PublishState(false);
+            SetUiState(UiState.CompactPassive);
         }
 
-        public void Tick(float dt = 0.016f)
+        public void Tick(float dt)
         {
             if (!_visible || !_registered || _controller == null)
                 return;
 
-            _stateAccum += dt;
-            if (_stateAccum < 0.10f && _controller.AgentDataVersion == _lastAgentVersion)
+            _stateAccumulator += dt;
+            if (_stateAccumulator < 0.10f && _staticPublished && _controller.AgentDataVersion == _lastAgentVersion)
                 return;
 
-            _stateAccum = 0f;
+            _stateAccumulator = 0f;
+            PublishState(!_staticPublished);
+        }
+
+        private void ApplyOpenState()
+        {
+            if (!_registered || !HtmlUiService.IsReady)
+                return;
+
+            if (!HtmlUiService.Pages.Open(PageId))
+            {
+                _visible = false;
+                _state = UiState.Hidden;
+                _interactive = false;
+                _fullscreen = false;
+                ApplyInputMode();
+                InformationManager.DisplayMessage(new InformationMessage("[TMap][HtmlUI] 页面打开失败: " + PageId));
+                return;
+            }
+
+            ApplyInputMode();
             PublishState(!_staticPublished);
         }
 
@@ -244,7 +262,7 @@ namespace New_ZZZF.TacticalMap.UI
                 return;
 
             var cache = _controller.Cache;
-            var formations = (_controller.FormationSnapshots ?? new List<FormationSnapshot>())
+            var formations = _controller.FormationSnapshots
                 .Select((x, index) =>
                 {
                     Vec2 uv = cache.WorldToUV(x.AveragePosition);
@@ -278,13 +296,12 @@ namespace New_ZZZF.TacticalMap.UI
             Vec2? camera = _controller.CameraTarget;
             Vec2 facing = _controller.PlayerFacing;
 
-            _scope.SetState("map", new
+            HtmlUiService.State.Set("tacticalmap", new
             {
                 visible = _visible,
-                interactive = _interactive,
                 fullscreen = _fullscreen,
+                interactive = _interactive,
                 uiState = _state.ToString(),
-                ready = cache.IsBaked,
                 player = player.HasValue ? new
                 {
                     u = cache.WorldToUV(player.Value).X,
@@ -303,9 +320,13 @@ namespace New_ZZZF.TacticalMap.UI
                 agentVersion = _controller.AgentDataVersion
             });
 
-            _lastAgentVersion = _controller.AgentDataVersion;
             if (forceStatic && cache.IsBaked)
+            {
+                HtmlUiService.State.Set("tacticalmap.static", BuildMapData());
                 _staticPublished = true;
+            }
+
+            _lastAgentVersion = _controller.AgentDataVersion;
         }
 
         private object BuildMapData()
@@ -325,6 +346,8 @@ namespace New_ZZZF.TacticalMap.UI
                 height = output,
                 terrainRgba = Convert.ToBase64String(terrain),
                 riskRgba = Convert.ToBase64String(risk),
+                originX = cache.OriginX,
+                originY = cache.OriginY,
                 worldW = cache.WorldW,
                 worldH = cache.WorldH
             };
@@ -332,8 +355,8 @@ namespace New_ZZZF.TacticalMap.UI
 
         private static byte[] DownsampleRgba(byte[] source, int sw, int sh, int dw, int dh)
         {
-            if (source == null || source.Length == 0 || sw <= 0 || sh <= 0)
-                return Array.Empty<byte>();
+            if (source == null || sw <= 0 || sh <= 0)
+                return new byte[0];
 
             byte[] output = new byte[dw * dh * 4];
             for (int y = 0; y < dh; y++)
@@ -360,17 +383,25 @@ namespace New_ZZZF.TacticalMap.UI
                 if (_registered && HtmlUiService.IsReady)
                     HtmlUiService.Pages.Close(PageId);
             }
-            catch { }
+            catch
+            {
+            }
 
-            try { _scope?.Dispose(); } catch { }
+            try
+            {
+                _scope?.Dispose();
+            }
+            catch
+            {
+            }
 
             _scope = null;
-            _controller = null;
+            _contentRootId = null;
             _registered = false;
             _visible = false;
             _interactive = false;
             _fullscreen = false;
-            _state = UiState.Hidden;
+            _controller = null;
         }
     }
 }
