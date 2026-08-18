@@ -1,6 +1,7 @@
 using System;
 using HarmonyLib;
 using New_ZZZF.TacticalMap.Config;
+using BannerlordHtmlUI;
 
 namespace New_ZZZF.TacticalMap.UI
 {
@@ -23,6 +24,9 @@ namespace New_ZZZF.TacticalMap.UI
             PatchMethod(typeof(TacticalMapHtmlUi), "SetUiState", nameof(AfterSetUiState));
             PatchMethod(typeof(TacticalMapHtmlUi), "ApplyInputMode", nameof(AfterApplyInputMode));
             PatchMethod(typeof(TacticalMapHtmlUiBridgePatch), "AttachFromInstance", nameof(AfterAttachFromInstance));
+            PatchMethod(typeof(HtmlUiPageManager), "Open", nameof(AfterPageOpen));
+            PatchMethod(typeof(HtmlUiHost), "Navigate", nameof(AfterNavigate));
+            PatchMethod(typeof(HtmlUiHost), "OnNavigationCompleted", nameof(AfterNavigationCompleted));
 
             _patched = true;
             TacticalMapHtmlUiDebug.Log("PATCH", "TacticalMap HtmlUI diagnostic patches installed");
@@ -84,6 +88,44 @@ namespace New_ZZZF.TacticalMap.UI
         {
             var ui = TacticalMapBootstrap.HtmlUi;
             TacticalMapHtmlUiDebug.Log("BRIDGE_ATTACH", "AttachFromInstance returned; ui=" + (ui == null ? "null" : "exists") + ", uiVisible=" + (ui != null && ui.IsVisible) + ", uiState=" + (ui == null ? "null" : ui.State.ToString()));
+        }
+
+        private static void AfterPageOpen(HtmlUiPageManager __instance, string id, bool __result)
+        {
+            try
+            {
+                var current = __instance.Current;
+                TacticalMapHtmlUiDebug.Log("PAGE_OPEN", "Open('" + id + "') result=" + __result + ", current=" + (__instance.CurrentId ?? "<null>") + ", owner=" + (current?.OwnerId ?? "<null>") + ", path=" + (current?.RelativePath ?? "<null>"));
+            }
+            catch (Exception ex)
+            {
+                TacticalMapHtmlUiDebug.Log("PAGE_OPEN_ERROR", ex.ToString());
+            }
+        }
+
+        private static void AfterNavigate(HtmlUiPage page)
+        {
+            try
+            {
+                TacticalMapHtmlUiDebug.Log("NAVIGATE", "Navigate('" + (page?.Id ?? "<null>") + "') requested path=" + (page?.ContentRootId ?? "<null>") + ":/" + (page?.RelativePath ?? "<null>") + ", webReady=" + HtmlUiService.Host?.IsWebViewReady + ", visible=" + HtmlUiService.Host?.IsVisible + ", input=" + HtmlUiService.Host?.InputMode);
+            }
+            catch (Exception ex)
+            {
+                TacticalMapHtmlUiDebug.Log("NAVIGATE_ERROR", ex.ToString());
+            }
+        }
+
+        private static void AfterNavigationCompleted(HtmlUiHost __instance)
+        {
+            try
+            {
+                var current = HtmlUiService.Pages?.Current;
+                TacticalMapHtmlUiDebug.Log("NAV_COMPLETED", "NavigationCompleted; hostVisible=" + __instance.IsVisible + ", input=" + __instance.InputMode + ", page=" + (current?.Id ?? "<null>") + ", path=" + (current?.RelativePath ?? "<null>"));
+            }
+            catch (Exception ex)
+            {
+                TacticalMapHtmlUiDebug.Log("NAV_COMPLETED_ERROR", ex.ToString());
+            }
         }
     }
 }
