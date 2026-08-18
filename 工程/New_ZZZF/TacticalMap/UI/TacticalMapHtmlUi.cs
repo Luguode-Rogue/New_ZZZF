@@ -1,9 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 using BannerlordHtmlUI;
+using Newtonsoft.Json.Linq;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Core;
@@ -98,8 +99,6 @@ namespace New_ZZZF.TacticalMap.UI
                 _scope.RegisterRequest("getMapData", _ => Task.FromResult<object>(BuildMapData()));
                 _registered = true;
 
-                // 不在 Page.Open 之前切换 Host 输入模式。
-                // CustomSkill 等已验证 Consumer 都是先 Open 页面，再进入其实际输入状态。
                 if (_controller != null && _visible)
                     SetVisible(true);
             }
@@ -157,10 +156,7 @@ namespace New_ZZZF.TacticalMap.UI
             }
 
             if (!_registered || !HtmlUiService.IsReady || _pageId == null)
-            {
-                ApplyInputMode();
                 return;
-            }
 
             try
             {
@@ -281,7 +277,7 @@ namespace New_ZZZF.TacticalMap.UI
             Vec2 facing = _controller.PlayerFacing;
             int agentVersion = _controller.AgentDataVersion;
 
-            _scope.SetState("map", new
+            HtmlUiService.State.Set("map", new
             {
                 visible = _visible,
                 fullscreen = _fullscreen,
@@ -307,7 +303,7 @@ namespace New_ZZZF.TacticalMap.UI
 
             if (forceTerrain && cache.IsBaked)
             {
-                _scope.SetState("mapStatic", BuildMapData());
+                HtmlUiService.State.Set("mapStatic", BuildMapData());
                 _terrainPublished = true;
             }
 
@@ -363,23 +359,17 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                if (_registered && _scope != null)
-                    _scope.Dispose();
+                if (_registered && HtmlUiService.IsReady && !string.IsNullOrEmpty(_pageId))
+                    HtmlUiService.Pages.Close(_pageId);
             }
             catch { }
-            finally
-            {
-                _scope = null;
-                _controller = null;
-                _registered = false;
-                _visible = false;
-                _fullscreen = false;
-                _interactive = false;
-                _terrainPublished = false;
-                _lastAgentVersion = -1;
-                _stateAccum = 0f;
-                _uiState = UiState.Hidden;
-            }
+            try { _scope?.Dispose(); } catch { }
+            _scope = null;
+            _pageId = null;
+            _rootId = null;
+            _registered = false;
+            _visible = false;
+            _controller = null;
         }
     }
 }
