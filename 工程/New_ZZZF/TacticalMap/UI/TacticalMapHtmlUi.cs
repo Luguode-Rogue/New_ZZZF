@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using BannerlordHtmlUI;
 using TaleWorlds.Library;
+using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Core;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
