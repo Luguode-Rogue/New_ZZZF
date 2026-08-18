@@ -8,7 +8,7 @@ using BannerlordHtmlUI;
 namespace New_ZZZF.TacticalMap.Config
 {
     /// <summary>
-    /// 战术地图功能总入口。旧 Gauntlet UI 与新的 HtmlUI 视图并行，不互相替换。
+    /// 战术地图功能总入口。HTMLUI 负责运行时界面，Core 负责地图数据与战场逻辑。
     /// </summary>
     public static class TacticalMapBootstrap
     {
@@ -19,12 +19,19 @@ namespace New_ZZZF.TacticalMap.Config
 
         public static void OnSubModuleLoad()
         {
-            if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导跳过：FeatureGate(EnableMinimap) 关闭")); return; }
+            if (!FeatureGate.Enabled)
+            {
+                InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导跳过：FeatureGate(EnableMinimap) 关闭"));
+                return;
+            }
+
             _harmony = new Harmony("TacticalMap");
             TacticalCameraPatch.Patch(_harmony);
             TacticalMapHtmlUiBridgePatch.Patch(_harmony);
+            TacticalMapHtmlUiInputPatch.Patch(_harmony);
 
             _htmlUi = new TacticalMapHtmlUi();
+
             HtmlUiService.OnReady(() =>
             {
                 try
@@ -37,17 +44,21 @@ namespace New_ZZZF.TacticalMap.Config
                     InformationManager.DisplayMessage(new InformationMessage($"[TMap][HtmlUI] 透明 Overlay 启用失败: {ex.GetType().Name}: {ex.Message}"));
                 }
             });
-            _htmlUi.InitializeOnFrameworkReady();
 
-            InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导完成：旧版 Gauntlet + 新版 HtmlUI 并行就绪"));
+            _htmlUi.InitializeOnFrameworkReady();
+            HtmlUiService.OnReady(() => TacticalMapHtmlUiBridgePatch.OnHtmlUiFrameworkReady());
+
+            InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导完成：TacticalMap HTMLUI 就绪"));
         }
 
         public static void OnMissionStart(Mission mission)
         {
-            if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 未注入 MissionBehavior：FeatureGate(EnableMinimap) 关闭")); return; }
+            if (!FeatureGate.Enabled)
+            {
+                InformationManager.DisplayMessage(new InformationMessage("[TMap] 未注入 MissionBehavior：FeatureGate(EnableMinimap) 关闭"));
+                return;
+            }
 
-            // 酒馆/城镇/竞技场等场景没有地形数据，烘焙会触发引擎侧 AccessViolationException（无法被 C# 捕获），
-            // 因此这里直接不注入 MissionBehavior。
             if (!MissionSceneGuard.IsTacticalMapSupported(mission))
             {
                 InformationManager.DisplayMessage(new InformationMessage("[TMap] 未注入 MissionBehavior：非战场场景（无地形）"));
