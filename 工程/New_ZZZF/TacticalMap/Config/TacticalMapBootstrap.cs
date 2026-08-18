@@ -37,6 +37,7 @@ namespace New_ZZZF.TacticalMap.Config
                 TacticalCameraPatch.Patch(_harmony);
                 TacticalMapHtmlUiBridgePatch.Patch(_harmony);
                 TacticalMapHtmlUiInputPatch.Patch(_harmony);
+                TacticalMapHtmlUiDebugPatch.Patch(_harmony);
                 TacticalMapHtmlUiDebug.Log("BOOT", "Harmony patches installed");
 
                 _htmlUi = new TacticalMapHtmlUi();
