@@ -4,12 +4,15 @@ using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
 using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.UI;
 using System;
 
 namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
-    /// 战场 MissionBehavior：挂载小地图控制器、处理开关/点击/相机热键。
+    /// 战场 MissionBehavior：管理 TacticalMap HTMLUI 的 N 键状态机与地图数据刷新。
+    /// N 短按：操作地图/非操作切换。
+    /// N 长按：小地图 -> 全屏 -> 隐藏 -> 小地图。
     /// </summary>
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
@@ -17,33 +20,36 @@ namespace New_ZZZF.TacticalMap.Core
         private MissionScreen _ms;
         private bool _ready;
         private bool _initialized;
+        private bool _nTracking;
+        private float _nHeldTime;
 
         public override void OnAfterMissionCreated()
         {
-            InformationManager.DisplayMessage(new InformationMessage("[TMap] OnAfterMissionCreated 进入"));
             if (_initialized) return;
             try
             {
                 base.OnAfterMissionCreated();
-                if (!FeatureGate.Enabled) { InformationManager.DisplayMessage(new InformationMessage("[TMap] 功能被关闭 (EnableMinimap=false)")); _initialized = true; return; }
+                if (!FeatureGate.Enabled)
+                {
+                    _initialized = true;
+                    return;
+                }
                 if (!MissionSceneGuard.IsTacticalMapSupported(Mission))
                 {
-                    InformationManager.DisplayMessage(new InformationMessage("[TMap] 跳过初始化：当前场景无地形（酒馆/城镇等）"));
                     _initialized = true;
                     _ready = false;
                     return;
                 }
+
                 _controller = new TacticalMapController(Mission);
                 _ready = _controller.Initialize(Mission);
                 _initialized = true;
-                var c = _controller.Cache;
-                string err = string.IsNullOrEmpty(c.LastError) ? "" : ("err=" + c.LastError);
-                InformationManager.DisplayMessage(new InformationMessage($"[TMap] 初始化 _ready={_ready} baked={c.IsBaked} {c.Width}x{c.Height} {err}"));
             }
             catch (Exception ex)
             {
                 string fr = ex.StackTrace != null ? ex.StackTrace.Split('\n')[0].Trim() : "";
-                InformationManager.DisplayMessage(new InformationMessage($"[TMap] OnAfterMissionCreated 异常: {ex.GetType().Name}: {ex.Message} @ {fr}"));
+                InformationManager.DisplayMessage(new InformationMessage(
+                    $"[TMap] OnAfterMissionCreated 异常: {ex.GetType().Name}: {ex.Message} @ {fr}"));
                 _initialized = true;
             }
         }
@@ -52,29 +58,26 @@ namespace New_ZZZF.TacticalMap.Core
         {
             base.OnMissionTick(dt);
 
-            // 懒初始化兜底：若 OnAfterMissionCreated 未被引擎调用，则在首个可用 tick 初始化
             if (!_initialized && Mission != null && Mission.Scene != null)
             {
                 try
                 {
                     if (!MissionSceneGuard.IsTacticalMapSupported(Mission))
                     {
-                        InformationManager.DisplayMessage(new InformationMessage("[TMap] 跳过懒初始化：当前场景无地形（酒馆/城镇等）"));
                         _initialized = true;
                         _ready = false;
                         return;
                     }
+
                     _controller = new TacticalMapController(Mission);
                     _ready = _controller.Initialize(Mission);
                     _initialized = true;
-                    var c = _controller.Cache;
-                    string err = string.IsNullOrEmpty(c.LastError) ? "" : ("err=" + c.LastError);
-                    InformationManager.DisplayMessage(new InformationMessage($"[TMap] 懒初始化 _ready={_ready} baked={c.IsBaked} {c.Width}x{c.Height} {err}"));
                 }
                 catch (Exception ex)
                 {
                     string fr = ex.StackTrace != null ? ex.StackTrace.Split('\n')[0].Trim() : "";
-                    InformationManager.DisplayMessage(new InformationMessage($"[TMap] 懒初始化 异常: {ex.GetType().Name}: {ex.Message} @ {fr}"));
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        $"[TMap] 懒初始化异常: {ex.GetType().Name}: {ex.Message} @ {fr}"));
                     _initialized = true;
                 }
             }
@@ -84,29 +87,69 @@ namespace New_ZZZF.TacticalMap.Core
             if (_ms == null) _ms = ScreenManager.TopScreen as MissionScreen;
             if (_ms == null) return;
 
-            var s = TacticalSettings.Instance;
-
-            if (Input.IsKeyPressed(s.ToggleKey))
+            // 默认状态：小地图显示、非全屏、不捕获鼠标。
+            var ui = TacticalMapBootstrap.HtmlUi;
+            if (ui != null && !_controller.IsVisible)
             {
-                _controller.SetVisible(_ms, !_controller.IsVisible);
-                InformationManager.DisplayMessage(new InformationMessage($"[TMap] 切换显示 -> Visible={_controller.IsVisible} ready={_ready}"));
+                _controller.SetVisible(_ms, true);
+                ui.ResetForMission();
             }
 
+            HandleNKey(dt, ui);
+
             if (_controller.IsVisible)
-            {
-                if (Input.IsKeyPressed(s.CameraFollowKey))
-                    _controller.ToggleCameraFollow();
-
-                Vec2 mouse = Input.MousePositionPixel;
-                bool left = Input.IsKeyPressed(InputKey.LeftMouseButton);
-                bool right = Input.IsKeyPressed(InputKey.RightMouseButton);
-                if (left || right)
-                {
-                    bool shift = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
-                    _controller.HandleClick(mouse, shift, right);
-                }
-
                 _controller.Tick(Mission, _ms, dt);
+        }
+
+        private void HandleNKey(float dt, TacticalMapHtmlUi ui)
+        {
+            var s = TacticalSettings.Instance;
+            if (!_nTracking && Input.IsKeyPressed(s.ToggleKey))
+            {
+                _nTracking = true;
+                _nHeldTime = 0f;
+            }
+
+            if (_nTracking && Input.IsKeyDown(s.ToggleKey))
+                _nHeldTime += Math.Max(0f, dt);
+
+            if (!_nTracking || !Input.IsKeyReleased(s.ToggleKey)) return;
+
+            bool longPress = _nHeldTime >= s.ToggleLongPressThreshold;
+            _nTracking = false;
+            _nHeldTime = 0f;
+
+            if (ui == null) return;
+
+            if (longPress)
+            {
+                HandleLongPress(ui);
+            }
+            else
+            {
+                // 短按只改变“是否操作地图”，不改变地图显隐或全屏状态。
+                if (_controller.IsVisible)
+                    ui.ToggleInteraction();
+            }
+        }
+
+        private void HandleLongPress(TacticalMapHtmlUi ui)
+        {
+            if (!_controller.IsVisible)
+            {
+                _controller.SetVisible(_ms, true);
+                ui.SetUiState(TacticalMapHtmlUi.UiState.CompactPassive);
+                return;
+            }
+
+            if (ui.IsFullscreen)
+            {
+                _controller.SetVisible(_ms, false);
+                ui.SetUiState(TacticalMapHtmlUi.UiState.Hidden);
+            }
+            else
+            {
+                ui.ToggleFullscreenPreservingInteraction();
             }
         }
 
@@ -115,7 +158,10 @@ namespace New_ZZZF.TacticalMap.Core
             if (_controller != null && _ms != null)
                 _controller.SetVisible(_ms, false);
 
-            // 归还并释放引擎相机资源，避免 CustomCamera 残留到下一场战斗
+            var ui = TacticalMapBootstrap.HtmlUi;
+            if (ui != null)
+                ui.SetUiState(TacticalMapHtmlUi.UiState.Hidden);
+
             if (CameraController.Instance != null)
             {
                 try { CameraController.Instance.Destroy(); }
