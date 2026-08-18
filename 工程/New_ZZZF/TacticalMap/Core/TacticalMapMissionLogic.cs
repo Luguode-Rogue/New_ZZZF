@@ -90,18 +90,26 @@ namespace New_ZZZF.TacticalMap.Core
 
             var ui = TacticalMapBootstrap.HtmlUi;
 
-            // 每场战斗只执行一次默认状态初始化；用户随后隐藏地图时不再自动恢复。
+            // Core controller 始终保持运行，以便地图隐藏时仍可快速恢复；HTML 页面显隐完全由 UiState 管理。
             if (!_defaultStateApplied)
             {
                 _controller.SetVisible(_ms, true);
+                ui?.SetVisible(true);
                 ui?.ResetForMission();
                 _defaultStateApplied = true;
             }
 
+            // ESC 只退出 HTML 地图操作，不关闭地图；Captuerd 模式使用非激活窗口时，键盘仍由 Bannerlord 主窗口接收。
+            if (ui != null && ui.IsInteractive && Input.IsKeyPressed(InputKey.Escape))
+            {
+                ui.ToggleInteraction();
+                return;
+            }
+
             HandleNKey(dt, ui);
 
-            if (_controller.IsVisible)
-                _controller.Tick(Mission, _ms, dt);
+            // 地图数据更新不依赖 HTML 页面当前是否可见，因此隐藏状态也保持 Core Tick。
+            _controller.Tick(Mission, _ms, dt);
         }
 
         private void HandleNKey(float dt, TacticalMapHtmlUi ui)
@@ -126,22 +134,22 @@ namespace New_ZZZF.TacticalMap.Core
 
             if (longPress)
                 HandleLongPress(ui);
-            else if (_controller.IsVisible)
+            else if (ui.IsVisible)
                 ui.ToggleInteraction();
+            else
+                ui.SetUiState(TacticalMapHtmlUi.UiState.CompactPassive);
         }
 
         private void HandleLongPress(TacticalMapHtmlUi ui)
         {
-            if (!_controller.IsVisible)
+            if (!ui.IsVisible)
             {
-                _controller.SetVisible(_ms, true);
                 ui.SetUiState(TacticalMapHtmlUi.UiState.CompactPassive);
                 return;
             }
 
             if (ui.IsFullscreen)
             {
-                _controller.SetVisible(_ms, false);
                 ui.SetUiState(TacticalMapHtmlUi.UiState.Hidden);
             }
             else
