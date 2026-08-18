@@ -1,5 +1,6 @@
 using System;
 using HarmonyLib;
+using New_ZZZF.TacticalMap.Config;
 
 namespace New_ZZZF.TacticalMap.UI
 {
