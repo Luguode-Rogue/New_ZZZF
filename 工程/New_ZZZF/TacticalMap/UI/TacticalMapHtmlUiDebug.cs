@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using TaleWorlds.Library;
 
 namespace New_ZZZF.TacticalMap.UI
@@ -13,7 +12,7 @@ namespace New_ZZZF.TacticalMap.UI
     internal static class TacticalMapHtmlUiDebug
     {
         private static readonly object Sync = new object();
-        private static string _path;
+        private static string _logPath;
         private static bool _initialized;
 
         public static void Init()
@@ -26,7 +25,7 @@ namespace New_ZZZF.TacticalMap.UI
                 string assemblyDir = null;
                 try
                 {
-                    assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUiDebug).Assembly.Location);
+                    assemblyDir = System.IO.Path.GetDirectoryName(typeof(TacticalMapHtmlUiDebug).Assembly.Location);
                 }
                 catch { }
 
@@ -37,21 +36,20 @@ namespace New_ZZZF.TacticalMap.UI
                     logDir = Environment.CurrentDirectory;
 
                 Directory.CreateDirectory(logDir);
-                _path = Path.Combine(logDir, "TacticalMapHtmlUiDebug.log");
-
-                File.WriteAllText(_path, string.Empty);
+                _logPath = System.IO.Path.Combine(logDir, "TacticalMapHtmlUiDebug.log");
+                File.WriteAllText(_logPath, string.Empty);
             }
             catch
             {
                 try
                 {
-                    _path = Path.Combine(Environment.CurrentDirectory, "TacticalMapHtmlUiDebug.log");
-                    File.WriteAllText(_path, string.Empty);
+                    _logPath = System.IO.Path.Combine(Environment.CurrentDirectory, "TacticalMapHtmlUiDebug.log");
+                    File.WriteAllText(_logPath, string.Empty);
                 }
                 catch { }
             }
 
-            Log("DEBUG_INIT", "diagnostic logger initialized; path=" + (_path ?? "<none>"));
+            Log("DEBUG_INIT", "diagnostic logger initialized; path=" + (_logPath ?? "<none>"));
         }
 
         private static string FindModDirectory(string assemblyDir)
@@ -60,10 +58,12 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 if (!string.IsNullOrWhiteSpace(assemblyDir))
                 {
-                    string current = Path.GetFullPath(assemblyDir);
+                    string current = System.IO.Path.GetFullPath(assemblyDir);
                     for (int i = 0; i < 8 && !string.IsNullOrWhiteSpace(current); i++)
                     {
-                        string name = Path.GetFileName(current.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                        string name = System.IO.Path.GetFileName(current.TrimEnd(
+                            System.IO.Path.DirectorySeparatorChar,
+                            System.IO.Path.AltDirectorySeparatorChar));
                         if (string.Equals(name, "New_ZZZF", StringComparison.OrdinalIgnoreCase))
                             return current;
 
@@ -75,7 +75,7 @@ namespace New_ZZZF.TacticalMap.UI
 
             try
             {
-                string steam = Path.GetFullPath(Path.Combine(
+                string steam = System.IO.Path.GetFullPath(System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
                     "Steam", "steamapps", "common", "Mount & Blade II Bannerlord", "Modules", "New_ZZZF"));
                 if (Directory.Exists(steam)) return steam;
@@ -84,7 +84,7 @@ namespace New_ZZZF.TacticalMap.UI
 
             try
             {
-                string steam64 = Path.GetFullPath(Path.Combine(
+                string steam64 = System.IO.Path.GetFullPath(System.IO.Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
                     "Steam", "steamapps", "common", "Mount & Blade II Bannerlord", "Modules", "New_ZZZF"));
                 if (Directory.Exists(steam64)) return steam64;
@@ -94,7 +94,7 @@ namespace New_ZZZF.TacticalMap.UI
             return null;
         }
 
-        public static string Path => _path;
+        public static string LogFilePath => _logPath;
 
         public static void Log(string stage, string message)
         {
@@ -106,13 +106,13 @@ namespace New_ZZZF.TacticalMap.UI
                 {
                     lock (Sync)
                     {
-                        if (!string.IsNullOrWhiteSpace(_path))
-                            File.AppendAllText(_path, line + Environment.NewLine);
+                        if (!string.IsNullOrWhiteSpace(_logPath))
+                            File.AppendAllText(_logPath, line + Environment.NewLine);
                     }
                 }
                 catch { }
 
-                try { Debug.Print("[TMapHtmlUI] " + line); } catch { }
+                try { TaleWorlds.Library.Debug.Print("[TMapHtmlUI] " + line); } catch { }
             }
             catch { }
         }
