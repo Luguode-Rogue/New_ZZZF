@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using HarmonyLib;
 
 namespace New_ZZZF.TacticalMap.UI
@@ -10,19 +9,22 @@ namespace New_ZZZF.TacticalMap.UI
     internal static class TacticalMapHtmlUiDebugPatch
     {
         private static bool _patched;
+        private static Harmony _harmony;
 
         public static void Patch(Harmony harmony)
         {
             if (_patched || harmony == null) return;
-            _patched = true;
+            _harmony = harmony;
 
             PatchMethod(typeof(TacticalMapHtmlUi), "InitializeOnFrameworkReady", nameof(AfterInitializeRequest));
             PatchMethod(typeof(TacticalMapHtmlUi), "Register", nameof(AfterRegister));
             PatchMethod(typeof(TacticalMapHtmlUi), "SetVisible", nameof(AfterSetVisible));
             PatchMethod(typeof(TacticalMapHtmlUi), "SetUiState", nameof(AfterSetUiState));
             PatchMethod(typeof(TacticalMapHtmlUi), "ApplyInputMode", nameof(AfterApplyInputMode));
-
             PatchMethod(typeof(TacticalMapHtmlUiBridgePatch), "AttachFromInstance", nameof(AfterAttachFromInstance));
+
+            _patched = true;
+            TacticalMapHtmlUiDebug.Log("PATCH", "TacticalMap HtmlUI diagnostic patches installed");
         }
 
         private static void PatchMethod(Type type, string method, string postfix)
@@ -43,12 +45,7 @@ namespace New_ZZZF.TacticalMap.UI
                     return;
                 }
 
-                // Use a generic postfix signature with no __result requirement; Harmony
-                // allows this for void methods and selected private methods.
-                new HarmonyMethod(callback);
-                var harmony = FindCurrentHarmony();
-                if (harmony == null) return;
-                harmony.Patch(target, postfix: new HarmonyMethod(callback));
+                _harmony.Patch(target, postfix: new HarmonyMethod(callback));
                 TacticalMapHtmlUiDebug.Log("PATCH", "patched " + type.Name + "." + method);
             }
             catch (Exception ex)
@@ -56,11 +53,6 @@ namespace New_ZZZF.TacticalMap.UI
                 TacticalMapHtmlUiDebug.Log("PATCH_ERROR", type.Name + "." + method + " -> " + ex);
             }
         }
-
-        // Stored by Patch(Harmony) for the small private-method diagnostic patch set.
-        private static Harmony _harmony;
-
-        private static Harmony FindCurrentHarmony() => _harmony;
 
         private static void AfterInitializeRequest()
         {
