@@ -46,7 +46,6 @@ namespace New_ZZZF.TacticalMap.Config
             });
 
             _htmlUi.InitializeOnFrameworkReady();
-            HtmlUiService.OnReady(() => TacticalMapHtmlUiBridgePatch.OnHtmlUiFrameworkReady());
 
             InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导完成：TacticalMap HTMLUI 就绪"));
         }
