@@ -97,8 +97,9 @@ namespace New_ZZZF.TacticalMap.UI
                 _scope.RegisterCommand("refresh", _ => PublishState(forceTerrain: true));
                 _scope.RegisterRequest("getMapData", _ => Task.FromResult<object>(BuildMapData()));
                 _registered = true;
-                ApplyInputMode();
 
+                // 不在 Page.Open 之前切换 Host 输入模式。
+                // CustomSkill 等已验证 Consumer 都是先 Open 页面，再进入其实际输入状态。
                 if (_controller != null && _visible)
                     SetVisible(true);
             }
@@ -155,19 +156,34 @@ namespace New_ZZZF.TacticalMap.UI
                 _uiState = UiState.CompactPassive;
             }
 
-            ApplyInputMode();
-            if (!_registered || !HtmlUiService.IsReady || _pageId == null) return;
+            if (!_registered || !HtmlUiService.IsReady || _pageId == null)
+            {
+                ApplyInputMode();
+                return;
+            }
 
             try
             {
                 if (visible)
                 {
-                    HtmlUiService.Pages.Open(_pageId);
+                    if (!HtmlUiService.Pages.Open(_pageId))
+                    {
+                        _visible = false;
+                        _uiState = UiState.Hidden;
+                        _interactive = false;
+                        _fullscreen = false;
+                        ApplyInputMode();
+                        InformationManager.DisplayMessage(new InformationMessage("[TMap][HtmlUI] 页面打开失败: " + _pageId));
+                        return;
+                    }
+
+                    ApplyInputMode();
                     PublishState(forceTerrain: !_terrainPublished);
                 }
                 else
                 {
                     HtmlUiService.Pages.Close(_pageId);
+                    ApplyInputMode();
                 }
             }
             catch (Exception ex)
