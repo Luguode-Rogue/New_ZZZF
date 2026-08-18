@@ -20,6 +20,7 @@ namespace New_ZZZF.TacticalMap.Core
         private MissionScreen _ms;
         private bool _ready;
         private bool _initialized;
+        private bool _defaultStateApplied;
         private bool _nTracking;
         private float _nHeldTime;
 
@@ -87,12 +88,14 @@ namespace New_ZZZF.TacticalMap.Core
             if (_ms == null) _ms = ScreenManager.TopScreen as MissionScreen;
             if (_ms == null) return;
 
-            // 默认状态：小地图显示、非全屏、不捕获鼠标。
             var ui = TacticalMapBootstrap.HtmlUi;
-            if (ui != null && !_controller.IsVisible)
+
+            // 每场战斗只执行一次默认状态初始化；用户随后隐藏地图时不再自动恢复。
+            if (!_defaultStateApplied)
             {
                 _controller.SetVisible(_ms, true);
-                ui.ResetForMission();
+                ui?.ResetForMission();
+                _defaultStateApplied = true;
             }
 
             HandleNKey(dt, ui);
@@ -122,15 +125,9 @@ namespace New_ZZZF.TacticalMap.Core
             if (ui == null) return;
 
             if (longPress)
-            {
                 HandleLongPress(ui);
-            }
-            else
-            {
-                // 短按只改变“是否操作地图”，不改变地图显隐或全屏状态。
-                if (_controller.IsVisible)
-                    ui.ToggleInteraction();
-            }
+            else if (_controller.IsVisible)
+                ui.ToggleInteraction();
         }
 
         private void HandleLongPress(TacticalMapHtmlUi ui)
@@ -168,6 +165,14 @@ namespace New_ZZZF.TacticalMap.Core
                 catch (Exception) { }
                 CameraController.Instance = null;
             }
+
+            _defaultStateApplied = false;
+            _nTracking = false;
+            _nHeldTime = 0f;
+            _ms = null;
+            _controller = null;
+            _ready = false;
+            _initialized = false;
             base.OnEndMission();
         }
     }
