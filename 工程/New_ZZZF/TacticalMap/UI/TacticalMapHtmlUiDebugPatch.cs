@@ -1,8 +1,8 @@
 using System;
 using System.Diagnostics;
-using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
 using HarmonyLib;
 using New_ZZZF.TacticalMap.Config;
 using BannerlordHtmlUI;
@@ -115,12 +115,23 @@ namespace New_ZZZF.TacticalMap.UI
             try
             {
                 var form = _formField?.GetValue(host) as Form;
-                var web = _webField?.GetValue(host) as Microsoft.Web.WebView2.WinForms.WebView2;
+                var webObject = _webField?.GetValue(host);
                 var fg = GetForegroundWindow();
                 var game = Process.GetCurrentProcess().MainWindowHandle;
                 string source = "<null>";
-                try { source = web?.Source?.ToString() ?? "<null>"; } catch { }
-                string core = web?.CoreWebView2 == null ? "null" : "ready";
+                string core = "unknown";
+                try
+                {
+                    if (webObject != null)
+                    {
+                        var sourceProperty = webObject.GetType().GetProperty("Source", BindingFlags.Instance | BindingFlags.Public);
+                        source = sourceProperty?.GetValue(webObject, null)?.ToString() ?? "<null>";
+                        var coreProperty = webObject.GetType().GetProperty("CoreWebView2", BindingFlags.Instance | BindingFlags.Public);
+                        core = coreProperty?.GetValue(webObject, null) == null ? "null" : "ready";
+                    }
+                }
+                catch { }
+
                 string bounds = form == null ? "null" : form.Bounds.ToString();
                 string formHwnd = form == null ? "null" : form.Handle.ToString();
                 string visible = form == null ? "null" : form.Visible.ToString();
@@ -143,5 +154,8 @@ namespace New_ZZZF.TacticalMap.UI
             }
             catch (Exception ex) { TacticalMapHtmlUiDebug.Log(stage + "_ERROR", ex.ToString()); }
         }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
     }
 }
