@@ -3,12 +3,11 @@ using TaleWorlds.MountAndBlade;
 using New_ZZZF.TacticalMap.Core;
 using New_ZZZF.TacticalMap.UI;
 using TaleWorlds.Library;
-using BannerlordHtmlUI;
 
 namespace New_ZZZF.TacticalMap.Config
 {
     /// <summary>
-    /// 战术地图功能总入口。新版 TacticalMap HtmlUI 为正式运行入口。
+    /// TacticalMap HTMLUI runtime entry.
     /// </summary>
     public static class TacticalMapBootstrap
     {
@@ -29,6 +28,7 @@ namespace New_ZZZF.TacticalMap.Config
             _harmony = new Harmony("TacticalMap");
             TacticalCameraPatch.Patch(_harmony);
             TacticalMapHtmlUiBridgePatch.Patch(_harmony);
+            TacticalMapHtmlUiInputPatch.Patch(_harmony);
 
             _htmlUi = new TacticalMapHtmlUi();
             _htmlUi.InitializeOnFrameworkReady();
