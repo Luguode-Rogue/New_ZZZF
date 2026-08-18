@@ -31,20 +31,6 @@ namespace New_ZZZF.TacticalMap.Config
             TacticalMapHtmlUiInputPatch.Patch(_harmony);
 
             _htmlUi = new TacticalMapHtmlUi();
-
-            HtmlUiService.OnReady(() =>
-            {
-                try
-                {
-                    HtmlUiOverlayTransparency.Enable(HtmlUiService.Host);
-                    InformationManager.DisplayMessage(new InformationMessage("[TMap][HtmlUI] 已启用透明 Overlay"));
-                }
-                catch (System.Exception ex)
-                {
-                    InformationManager.DisplayMessage(new InformationMessage($"[TMap][HtmlUI] 透明 Overlay 启用失败: {ex.GetType().Name}: {ex.Message}"));
-                }
-            });
-
             _htmlUi.InitializeOnFrameworkReady();
 
             InformationManager.DisplayMessage(new InformationMessage("[TMap] 引导完成：TacticalMap HTMLUI 就绪"));
