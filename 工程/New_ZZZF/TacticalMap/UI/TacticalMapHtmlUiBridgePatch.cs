@@ -111,15 +111,17 @@ namespace New_ZZZF.TacticalMap.UI
             if (page == null) return;
             try
             {
-                bool transparent =
-                    string.Equals(page.OwnerId, "New_ZZZF.TacticalMap", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(page.OwnerId, "New_ZZZF.CustomSkill", StringComparison.OrdinalIgnoreCase);
+                bool transparent = string.Equals(
+                    page.OwnerId,
+                    "New_ZZZF.TacticalMap",
+                    StringComparison.OrdinalIgnoreCase);
+
                 ConfigureOverlayBackground(HtmlUiService.Host, transparent);
             }
             catch (Exception ex)
             {
                 InformationManager.DisplayMessage(new InformationMessage(
-                    $"[HtmlUI] Overlay background 配置失败: {ex.GetType().Name}: {ex.Message}"));
+                    $"[TMap][HtmlUI] Overlay background 配置失败: {ex.GetType().Name}: {ex.Message}"));
             }
         }
 
@@ -135,22 +137,40 @@ namespace New_ZZZF.TacticalMap.UI
             if (web == null || form == null)
                 throw new InvalidOperationException("HtmlUiHost WebView2/form is not available.");
 
-            var webType = web.GetType();
-            var controllerField = webType.GetField("_coreWebView2Controller", BindingFlags.Instance | BindingFlags.NonPublic);
-            if (controllerField == null)
-                throw new InvalidOperationException("WebView2 private field '_coreWebView2Controller' was not found. Runtime type=" + webType.FullName);
+            // 优先使用 WebView2 WinForms 控件公开的 CoreWebView2Controller，
+            // 不再依赖私有字段 _coreWebView2Controller。旧实现依赖该字段，
+            // 在不同 WebView2 控件版本下可能失效，从而导致透明设置根本没有应用。
+            object controller = null;
+            var publicControllerProperty = web.GetType().GetProperty(
+                "CoreWebView2Controller",
+                BindingFlags.Instance | BindingFlags.Public);
+            if (publicControllerProperty != null)
+                controller = publicControllerProperty.GetValue(web, null);
 
-            var controller = controllerField.GetValue(web);
             if (controller == null)
-                throw new InvalidOperationException("WebView2 _coreWebView2Controller is null.");
+            {
+                var privateField = web.GetType().GetField(
+                    "_coreWebView2Controller",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (privateField != null)
+                    controller = privateField.GetValue(web);
+            }
 
-            var backgroundProperty = controller.GetType().GetProperty("DefaultBackgroundColor", BindingFlags.Instance | BindingFlags.Public);
+            if (controller == null)
+                throw new InvalidOperationException(
+                    "WebView2 CoreWebView2Controller could not be resolved. Runtime type=" + web.GetType().FullName);
+
+            var backgroundProperty = controller.GetType().GetProperty(
+                "DefaultBackgroundColor",
+                BindingFlags.Instance | BindingFlags.Public);
             if (backgroundProperty == null || !backgroundProperty.CanWrite)
-                throw new InvalidOperationException("CoreWebView2Controller.DefaultBackgroundColor was not found on " + controller.GetType().FullName);
+                throw new InvalidOperationException(
+                    "CoreWebView2Controller.DefaultBackgroundColor was not found on " + controller.GetType().FullName);
 
             Action apply = () =>
             {
-                backgroundProperty.SetValue(controller,
+                backgroundProperty.SetValue(
+                    controller,
                     transparent ? System.Drawing.Color.Transparent : System.Drawing.Color.Black,
                     null);
 
