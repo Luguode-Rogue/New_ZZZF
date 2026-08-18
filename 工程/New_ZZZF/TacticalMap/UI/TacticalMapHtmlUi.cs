@@ -135,8 +135,6 @@ namespace New_ZZZF.TacticalMap.UI
             _fullscreen = state == UiState.FullPassive || state == UiState.FullInteractive;
             _interactive = state == UiState.CompactInteractive || state == UiState.FullInteractive;
 
-            ApplyInputMode();
-
             if (!_registered || !HtmlUiService.IsReady)
                 return;
 
@@ -145,7 +143,10 @@ namespace New_ZZZF.TacticalMap.UI
                 if (_visible)
                     ApplyOpenState();
                 else
+                {
                     HtmlUiService.Pages.Close(PageId);
+                    HtmlUiService.Hide();
+                }
             }
             catch (Exception ex)
             {
@@ -220,9 +221,14 @@ namespace New_ZZZF.TacticalMap.UI
             try
             {
                 if (_interactive)
+                {
                     HtmlUiService.CaptureInput();
+                }
                 else
-                    HtmlUiService.ReleaseInput();
+                {
+                    // 被动模式仍然需要显示 WebView，只是不抢夺游戏输入焦点。
+                    HtmlUiService.Show();
+                }
             }
             catch (Exception ex)
             {
@@ -380,28 +386,25 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                if (_registered && HtmlUiService.IsReady)
-                    HtmlUiService.Pages.Close(PageId);
+                if (_scope != null)
+                    _scope.Dispose();
             }
-            catch
+            catch (Exception ex)
             {
-            }
-
-            try
-            {
-                _scope?.Dispose();
-            }
-            catch
-            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    $"[TMap][HtmlUI] 释放异常: {ex.GetType().Name}: {ex.Message}"));
             }
 
             _scope = null;
+            _controller = null;
             _contentRootId = null;
             _registered = false;
             _visible = false;
-            _interactive = false;
             _fullscreen = false;
-            _controller = null;
+            _interactive = false;
+            _staticPublished = false;
+            _lastAgentVersion = -1;
+            _state = UiState.Hidden;
         }
     }
 }
