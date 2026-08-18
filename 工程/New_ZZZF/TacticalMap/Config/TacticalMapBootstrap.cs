@@ -3,60 +3,49 @@ using TaleWorlds.MountAndBlade;
 using New_ZZZF.TacticalMap.Core;
 using New_ZZZF.TacticalMap.UI;
 using TaleWorlds.Library;
+using BannerlordHtmlUI;
 
 namespace New_ZZZF.TacticalMap.Config
 {
     /// <summary>
-    /// TacticalMap HTMLUI 显示链隔离测试入口。
-    /// 当前阶段故意不启动 TacticalMap Controller、输入补丁或业务 UI；只展示一个静态 HTML 页面。
+    /// 战术地图功能总入口。新版 TacticalMap HtmlUI 为正式运行入口。
     /// </summary>
     public static class TacticalMapBootstrap
     {
         private static Harmony _harmony;
-        private static TacticalMapHtmlUiSmokeTest _smokeTest;
+        private static TacticalMapHtmlUi _htmlUi;
 
-        public static TacticalMapHtmlUi HtmlUi => null;
+        public static TacticalMapHtmlUi HtmlUi => _htmlUi;
 
         public static void OnSubModuleLoad()
         {
-            try
+            if (!FeatureGate.Enabled)
             {
-                _harmony = new Harmony("TacticalMap");
-                _smokeTest = new TacticalMapHtmlUiSmokeTest();
-                _smokeTest.InitializeOnFrameworkReady();
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "[TMap] 引导跳过：FeatureGate(EnableMinimap) 关闭"));
+                return;
+            }
 
-                InformationManager.DisplayMessage(new InformationMessage(
-                    "[TMapSmoke] 仅启动静态 BannerlordHtmlUI 展示测试。"));
-            }
-            catch (System.Exception ex)
-            {
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"[TMapSmoke] Bootstrap 异常: {ex.GetType().Name}: {ex.Message}"));
-            }
+            _harmony = new Harmony("TacticalMap");
+            TacticalCameraPatch.Patch(_harmony);
+            TacticalMapHtmlUiBridgePatch.Patch(_harmony);
+
+            _htmlUi = new TacticalMapHtmlUi();
+            _htmlUi.InitializeOnFrameworkReady();
+
+            InformationManager.DisplayMessage(new InformationMessage(
+                "[TMap] 引导完成：新版 HtmlUI 已注册"));
         }
 
         public static void OnMissionStart(Mission mission)
         {
-            if (mission == null)
+            if (!FeatureGate.Enabled)
                 return;
 
-            _smokeTest?.RequestOpen();
-        }
+            if (!MissionSceneGuard.IsTacticalMapSupported(mission))
+                return;
 
-        public static void OnMissionEnd()
-        {
-            _smokeTest?.Close();
-        }
-
-        public static void Dispose()
-        {
-            try { _smokeTest?.Dispose(); }
-            catch { }
-            finally
-            {
-                _smokeTest = null;
-                _harmony = null;
-            }
+            mission.AddMissionBehavior(new TacticalMapMissionLogic());
         }
     }
 }
