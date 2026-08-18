@@ -50,6 +50,7 @@ namespace New_ZZZF.TacticalMap.Core
                 _controller = new TacticalMapController(Mission);
                 _ready = _controller.Initialize(Mission);
                 TacticalMapHtmlUiDebug.Log("MISSION", "controller Initialize result=" + _ready);
+                BindControllerToHtmlUi();
                 _initialized = true;
             }
             catch (Exception ex)
@@ -88,6 +89,7 @@ namespace New_ZZZF.TacticalMap.Core
                     _controller = new TacticalMapController(Mission);
                     _ready = _controller.Initialize(Mission);
                     TacticalMapHtmlUiDebug.Log("MISSION", "lazy controller Initialize result=" + _ready);
+                    BindControllerToHtmlUi();
                     _initialized = true;
                 }
                 catch (Exception ex)
@@ -129,6 +131,16 @@ namespace New_ZZZF.TacticalMap.Core
 
             HandleNKey(dt, ui);
             _controller.Tick(Mission, _ms, dt);
+        }
+
+        private void BindControllerToHtmlUi()
+        {
+            var ui = TacticalMapBootstrap.HtmlUi;
+            if (ui == null || _controller == null)
+                return;
+
+            ui.AttachController(_controller);
+            TacticalMapHtmlUiDebug.Log("STATE", "HtmlUI controller bound directly");
         }
 
         private void HandleNKey(float dt, TacticalMapHtmlUi ui)
@@ -186,7 +198,10 @@ namespace New_ZZZF.TacticalMap.Core
 
             var ui = TacticalMapBootstrap.HtmlUi;
             if (ui != null)
+            {
                 ui.SetUiState(TacticalMapHtmlUi.UiState.Hidden);
+                ui.AttachController(null);
+            }
 
             if (CameraController.Instance != null)
             {
