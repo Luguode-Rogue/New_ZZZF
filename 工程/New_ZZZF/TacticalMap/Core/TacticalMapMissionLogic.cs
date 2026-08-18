@@ -7,10 +7,8 @@ using New_ZZZF.TacticalMap.Config;
 namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
-    /// TacticalMap battle MissionBehavior.
-    /// The legacy HtmlUI lifecycle/state machine has been removed. This class now owns only
-    /// TacticalMap controller initialization, mission lifetime, and backend ticking.
-    /// The new HtmlUI will consume the controller through a clean integration layer.
+    /// TacticalMap 战场 MissionBehavior。
+    /// 只负责控制器生命周期和后端数据刷新；HTMLUI 自身由 Consumer 管理。
     /// </summary>
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
@@ -18,6 +16,7 @@ namespace New_ZZZF.TacticalMap.Core
         private MissionScreen _missionScreen;
         private bool _initialized;
         private bool _ready;
+        private bool _uiAttached;
 
         public override void OnAfterMissionCreated()
         {
@@ -54,10 +53,18 @@ namespace New_ZZZF.TacticalMap.Core
             if (_missionScreen == null)
                 return;
 
-            // Keep the backend active for the upcoming UI integration.
-            // Until the new UI exists, the controller remains the sole owner of TacticalMap state.
+            var ui = TacticalMapBootstrap.HtmlUi;
+            if (!_uiAttached && ui != null)
+            {
+                ui.AttachController(_controller);
+                ui.ResetForMission();
+                ui.SetVisible(true);
+                _uiAttached = true;
+            }
+
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
+            ui?.Tick(dt);
         }
 
         private void InitializeController()
@@ -77,6 +84,20 @@ namespace New_ZZZF.TacticalMap.Core
 
         protected override void OnEndMission()
         {
+            try
+            {
+                var ui = TacticalMapBootstrap.HtmlUi;
+                if (ui != null)
+                {
+                    ui.SetVisible(false);
+                    ui.AttachController(null);
+                }
+            }
+            catch
+            {
+                // Mission cleanup must not throw.
+            }
+
             try
             {
                 if (_controller != null && _missionScreen != null)
@@ -102,6 +123,7 @@ namespace New_ZZZF.TacticalMap.Core
             _controller = null;
             _ready = false;
             _initialized = false;
+            _uiAttached = false;
 
             base.OnEndMission();
         }
