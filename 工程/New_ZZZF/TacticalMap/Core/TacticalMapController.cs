@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
@@ -7,14 +8,12 @@ using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
 using New_ZZZF.TacticalMap.UI;
-using System;
 
 namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
-    /// 小地图总控制器：烘焙地形、驱动追踪器、派发编队指令、管理 UI 层与镜头联动。
-    /// 绘制由 MinimapWidget 直接在 OnRender 里完成（读取本控制器暴露的数据），不再依赖位图纹理。
-    /// 所有对外依赖都收敛在这里，方便整个 TacticalMap 文件夹整体抽离成独立 mod。
+    /// TacticalMap 总控制器：提供地图数据、编队/单位追踪、订单与镜头操作。
+    /// 当前 HTMLUI 重制版不再创建旧 Gauntlet TacticalMapLayer；UI 生命周期由 HtmlUI consumer 管理。
     /// </summary>
     public sealed class TacticalMapController
     {
@@ -23,23 +22,21 @@ namespace New_ZZZF.TacticalMap.Core
         private readonly FormationTracker _formationTracker;
         private readonly AgentTracker _agentTracker;
         private readonly OrderSystem _orderSystem;
-        private TacticalMapLayer _layer;
         private bool _visible;
         private float _accum;
-        private bool _cameraLink;
         private Vec2? _playerPos;
         private Vec2? _camTarget;
         private Vec2 _playerFacing = Vec2.Zero;
         private int _agentVersion;
+        private readonly List<AgentMapSnapshot> _agentSnapshots = new List<AgentMapSnapshot>();
 
         public TerrainCache Cache => _cache;
         public bool IsVisible => _visible;
         public List<FormationSnapshot> FormationSnapshots => _formationTracker.Snapshots;
+        public IReadOnlyList<AgentMapSnapshot> AgentSnapshots => _agentSnapshots;
         public Vec2? PlayerPos => _playerPos;
         public Vec2? CameraTarget => _camTarget;
         public Vec2 PlayerFacing => _playerFacing;
-        public bool CameraLinkEnabled => _cameraLink;
-        // 动态单位层（每个 agent 一个点），供 MinimapWidget 烘焙成纹理
         public byte[] AgentRGBA => _cache.AgentRGBA;
         public int AgentDataVersion => _agentVersion;
 
@@ -54,133 +51,145 @@ namespace New_ZZZF.TacticalMap.Core
             CameraController.Instance = new CameraController();
         }
 
-        /// <summary>战斗开局烘焙地形；失败返回 false（UI 不会显示）。</summary>
         public bool Initialize(Mission mission)
         {
             if (mission == null || mission.Scene == null) return false;
             return _cache.TryBake(mission.Scene);
         }
 
+        /// <summary>
+        /// 控制地图是否存在于 HTMLUI 中。旧 Gauntlet Layer 已退出运行时路径。
+        /// </summary>
         public void SetVisible(MissionScreen ms, bool visible)
         {
-            if (visible && _layer == null)
-            {
-                _layer = new TacticalMapLayer(this);
-                _layer.Create(ms);
-                _accum = TacticalSettings.Instance.UpdateInterval; // 立刻出第一帧
-            }
-            else if (!visible && _layer != null)
-            {
-                _layer.Destroy(ms);
-                _layer = null;
-                if (CameraController.Instance != null) CameraController.Instance.Disable();
-            }
             _visible = visible;
+            if (!visible && CameraController.Instance != null)
+                CameraController.Instance.Disable();
         }
 
-        /// <summary>每帧调用（仅在可见时）。标记/密度按 UpdateInterval 节流刷新；绘制由控件每帧完成。</summary>
         public void Tick(Mission mission, MissionScreen ms, float dt)
         {
-            if (!_visible || _layer == null) return;
+            if (!_visible) return;
 
             _playerPos = (_mission.MainAgent != null) ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
             if (_mission.MainAgent != null)
             {
-                float af = _mission.MainAgent.LookDirectionAsAngle; // 朝向角（弧度，绕 Z 轴）
+                float af = _mission.MainAgent.LookDirectionAsAngle;
                 _playerFacing = new Vec2((float)Math.Cos(af), (float)Math.Sin(af));
             }
-            _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
-                ? CameraController.Instance.TargetWorldPos : (Vec2?)null;
 
-            // 驱动相机状态机（飞出 → 停留 → 飞回）。必须每帧调用，
-            // 且要在 CameraController.Initialize 之后才有效。
+            _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
+                ? CameraController.Instance.TargetWorldPos
+                : (Vec2?)null;
+
             if (CameraController.Instance != null)
             {
-                CameraController.Instance.Initialize(ms, mission.Scene);
-                // 每帧幂等记录玩家基准高度（agent 就绪后即生效一次，之后值不变）
+                if (ms != null && mission != null && mission.Scene != null)
+                    CameraController.Instance.Initialize(ms, mission.Scene);
                 CameraController.Instance.CaptureBaseHeight(mission);
                 CameraController.Instance.Tick(dt);
             }
 
             _accum += dt;
-            if (_accum >= TacticalSettings.Instance.UpdateInterval)
+            if (_accum < TacticalSettings.Instance.UpdateInterval) return;
+
+            _accum = 0f;
+            _formationTracker.Update(mission);
+            _agentTracker.Update(mission);
+            RebuildAgentSnapshots(mission);
+            _agentVersion++;
+
+            _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
+                ? CameraController.Instance.TargetWorldPos
+                : (Vec2?)null;
+        }
+
+        private void RebuildAgentSnapshots(Mission mission)
+        {
+            _agentSnapshots.Clear();
+            if (mission == null || !_cache.IsBaked) return;
+            if (!TacticalSettings.Instance.EnableAgentMarkers) return;
+
+            foreach (var agent in mission.Agents)
             {
-                _accum = 0f;
-                _formationTracker.Update(mission);
-                _agentTracker.Update(mission);
-                _agentVersion++;   // 单位层已刷新，通知纹理缓存重建
+                if (agent == null || agent.Health <= 0f || !agent.IsHuman) continue;
+
+                Vec2 position = agent.Position.AsVec2;
+                Vec2 uv = _cache.WorldToUV(position);
+                if (uv.X < 0f || uv.X > 1f || uv.Y < 0f || uv.Y > 1f) continue;
+
+                bool playerTeam = agent.Team != null && agent.Team.IsPlayerTeam;
+                _agentSnapshots.Add(new AgentMapSnapshot
+                {
+                    U = uv.X,
+                    V = uv.Y,
+                    PlayerTeam = playerTeam,
+                    Neutral = agent.Team == null
+                });
             }
         }
 
-        /// <summary>小地图点击：根据按键决定移动 / 攻击移动 / 朝向，并可联动镜头。</summary>
-        public void HandleClick(Vec2 mousePixel, bool shift, bool rightButton)
+        /// <summary>
+        /// HTML 左键：移动命令。
+        /// </summary>
+        public void HandleHtmlMoveClick(float u, float v)
         {
-            if (_layer == null) return;
-            if (!_layer.HitTestMinimap(mousePixel, out Vec2 uv)) return;
-            IssueOrderAtWorld(_cache.UVToWorld(uv), rightButton ? TacticalClickMode.Face : shift ? TacticalClickMode.AttackMove : TacticalClickMode.Move);
+            if (!ValidateHtmlUv(u, v)) return;
+            IssueOrderAtWorld(_cache.UVToWorld(new Vec2(u, v)), TacticalClickMode.Move);
         }
 
-        /// <summary>HtmlUI 地图点击适配器：把 0..1 UV 转换为世界坐标后复用现有 OrderSystem。</summary>
-        public void HandleHtmlMapClick(float u, float v, string mode)
+        /// <summary>
+        /// HTML 右键：朝向命令。
+        /// </summary>
+        public void HandleHtmlFaceClick(float u, float v)
         {
-            if (!_visible || !_cache.IsBaked) return;
-            if (u < 0f || u > 1f || v < 0f || v > 1f) return;
+            if (!ValidateHtmlUv(u, v)) return;
+            IssueOrderAtWorld(_cache.UVToWorld(new Vec2(u, v)), TacticalClickMode.Face);
+        }
 
-            TacticalClickMode clickMode;
-            switch ((mode ?? "move").ToLowerInvariant())
-            {
-                case "face":
-                    clickMode = TacticalClickMode.Face;
-                    break;
-                case "attack":
-                case "attackmove":
-                    clickMode = TacticalClickMode.AttackMove;
-                    break;
-                default:
-                    clickMode = TacticalClickMode.Move;
-                    break;
-            }
+        /// <summary>
+        /// HTML 中键：将战场镜头切换到地图目标位置。
+        /// </summary>
+        public void HandleHtmlCameraClick(float u, float v)
+        {
+            if (!ValidateHtmlUv(u, v)) return;
+            if (!FeatureGate.IsEnabled(TacticalFeature.CameraLink)) return;
+            CameraController.Instance?.Enable(_cache.UVToWorld(new Vec2(u, v)));
+        }
 
-            Vec2 world = _cache.UVToWorld(new Vec2(u, v));
-            IssueOrderAtWorld(world, clickMode);
+        private bool ValidateHtmlUv(float u, float v)
+        {
+            return _visible && _cache.IsBaked && u >= 0f && u <= 1f && v >= 0f && v <= 1f;
         }
 
         private void IssueOrderAtWorld(Vec2 world, TacticalClickMode mode)
         {
             _orderSystem.IssueOrder(_mission, world, mode);
-
-            if (FeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
-                CameraController.Instance.Enable(world);
         }
 
-        /// <summary>C 键：切换“小地图点击联动镜头”模式。</summary>
+        /// <summary>
+        /// 保留旧接口以便兼容尚未清理的调用方；HTMLUI 不再使用旧 Layer 命中测试。
+        /// </summary>
+        public void HandleClick(Vec2 mousePixel, bool shift, bool rightButton)
+        {
+        }
+
         public void ToggleCameraFollow()
         {
-            _cameraLink = !_cameraLink;
-            if (CameraController.Instance != null)
-            {
-                // 同步开关：关闭时让镜头平滑飞回原位
-                CameraController.Instance.PreviewModeEnabled = _cameraLink;
-                if (!_cameraLink) { CameraController.Instance.Disable(); }
-            }
-            string msg = _cameraLink ? "战术地图：已开启 点击联动镜头" : "战术地图：已关闭 点击联动镜头";
-            InformationManager.DisplayMessage(new InformationMessage(msg, new Color(0.2f, 0.9f, 1f, 1f)));
+            if (!FeatureGate.IsEnabled(TacticalFeature.CameraLink)) return;
+            if (CameraController.Instance == null) return;
 
-            // 调试用：输出【当前真实相机】的姿态（按 C 时打印），方便把调好的角度回贴给开发
-            if (CameraController.Instance != null)
-            {
-                CameraController.Instance.ReadRealCameraAngles(out float bearing, out float pitch, out Vec3 eye);
-                float bearingDeg = bearing * 57.29578f;
-                float pitchDeg = pitch * 57.29578f;
-                // 归一化到 [0,360)
-                if (bearingDeg < 0f) { bearingDeg += 360f; }
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"[Cam] 真实相机 bearing={bearingDeg:F1}° pitch={pitchDeg:F1}° eye=({eye.x:F1},{eye.y:F1},{eye.z:F1})",
-                    new Color(1f, 0.85f, 0.2f, 1f)));
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"[Cam] 固定参数(供替换): ViewBearing={bearing:F6}f; ViewHeight={(float)Math.Max(0, eye.z):F1}f;",
-                    new Color(1f, 0.85f, 0.2f, 1f)));
-            }
+            CameraController.Instance.PreviewModeEnabled = !CameraController.Instance.PreviewModeEnabled;
+            if (!CameraController.Instance.PreviewModeEnabled)
+                CameraController.Instance.Disable();
         }
+    }
+
+    public sealed class AgentMapSnapshot
+    {
+        public float U { get; set; }
+        public float V { get; set; }
+        public bool PlayerTeam { get; set; }
+        public bool Neutral { get; set; }
     }
 }
