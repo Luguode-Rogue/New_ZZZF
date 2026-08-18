@@ -2,16 +2,20 @@ using HarmonyLib;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using New_ZZZF.TacticalMap.Core;
+using New_ZZZF.TacticalMap.UI;
 
 namespace New_ZZZF.TacticalMap.Config
 {
     /// <summary>
-    /// TacticalMap runtime bootstrap.
-    /// Legacy HtmlUI integration has been removed; the new UI will be rebuilt from a clean baseline.
+    /// TacticalMap 运行时入口。
+    /// HtmlUI 作为独立 Consumer 注册；游戏逻辑仍由 TacticalMapController 负责。
     /// </summary>
     public static class TacticalMapBootstrap
     {
         private static Harmony _harmony;
+        private static TacticalMapHtmlUi _htmlUi;
+
+        public static TacticalMapHtmlUi HtmlUi => _htmlUi;
 
         public static void OnSubModuleLoad()
         {
@@ -25,8 +29,11 @@ namespace New_ZZZF.TacticalMap.Config
             _harmony = new Harmony("TacticalMap");
             TacticalCameraPatch.Patch(_harmony);
 
+            _htmlUi = new TacticalMapHtmlUi();
+            _htmlUi.InitializeOnFrameworkReady();
+
             InformationManager.DisplayMessage(new InformationMessage(
-                "[TMap] 引导完成：旧 HtmlUI 已移除，等待新 UI 集成"));
+                "[TMap] 引导完成：HtmlUI Consumer 已注册"));
         }
 
         public static void OnMissionStart(Mission mission)
