@@ -1,17 +1,16 @@
-using System;
 using TaleWorlds.Library;
 
 namespace New_ZZZF.TacticalMap.Config
 {
     /// <summary>
-    /// 可独立开关的子功能。所有子功能必须先过总开关 EnableMinimap。
+    /// 可独立开关的 TacticalMap 子功能。所有子功能必须先过总开关 EnableMinimap。
     /// </summary>
     public enum TacticalFeature
     {
-        RiskOverlay,     // 地形风险提示层（悬崖/水域/林地）
-        CameraLink,      // 小地图点击 -> 镜头联动
-        DensityHeatmap,  // 单位密度热力
-        UnitMarkers      // 编队/单位标记
+        RiskOverlay,
+        CameraLink,
+        DensityHeatmap,
+        UnitMarkers
     }
 
     public static class FeatureGate
@@ -23,11 +22,17 @@ namespace New_ZZZF.TacticalMap.Config
             if (!Enabled) return false;
             switch (feature)
             {
-                case TacticalFeature.RiskOverlay: return TacticalSettings.Instance.EnableRiskOverlay;
-                case TacticalFeature.CameraLink: return TacticalSettings.Instance.EnableCameraLink;
-                case TacticalFeature.DensityHeatmap: return TacticalSettings.Instance.EnableDensityHeatmap;
-                case TacticalFeature.UnitMarkers: return TacticalSettings.Instance.EnableUnitMarkers;
-                default: return true;
+                case TacticalFeature.RiskOverlay:
+                    return TacticalSettings.Instance.EnableRiskOverlay;
+                case TacticalFeature.CameraLink:
+                    return TacticalSettings.Instance.EnableCameraLink;
+                case TacticalFeature.DensityHeatmap:
+                    // HTMLUI 重制版不再提供密度热力图。
+                    return false;
+                case TacticalFeature.UnitMarkers:
+                    return TacticalSettings.Instance.EnableUnitMarkers;
+                default:
+                    return true;
             }
         }
     }
