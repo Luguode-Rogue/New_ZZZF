@@ -41,6 +41,24 @@ namespace New_ZZZF.TacticalMap.UI
             }
         }
 
+        /// <summary>
+        /// HtmlUI 框架已经 Ready 后，若 MissionLogic 已经创建并默认开启地图，立即补一次打开。
+        /// 解决“战斗先开始、WebView 后 Ready”时第一下 N 需要等待的问题。
+        /// </summary>
+        public static void OnHtmlUiFrameworkReady()
+        {
+            try
+            {
+                if (_controller != null && _controller.IsVisible)
+                    TacticalMapBootstrap.HtmlUi?.SetVisible(true);
+            }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    $"[TMap][HtmlUI] Framework Ready 同步失败: {ex.GetType().Name}: {ex.Message}"));
+            }
+        }
+
         private static void OnAfterMissionCreatedPostfix(TacticalMapMissionLogic __instance)
         {
             try { AttachFromInstance(__instance); }
@@ -59,8 +77,9 @@ namespace New_ZZZF.TacticalMap.UI
 
                 var ui = TacticalMapBootstrap.HtmlUi;
                 if (ui == null || _controller == null) return;
-                if (ui.IsVisible != _controller.IsVisible)
-                    ui.SetVisible(_controller.IsVisible);
+
+                // Core controller 的 IsVisible 表示“战场数据更新是否启用”，不是 HTML 页面的显隐状态。
+                // HTML 隐藏/全屏/操作状态完全由 TacticalMapHtmlUi 自己管理，避免长按隐藏后被 Bridge 下一帧强制重新打开。
                 if (_controller.IsVisible)
                     ui.Tick();
             }
