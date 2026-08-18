@@ -88,6 +88,11 @@ namespace New_ZZZF.TacticalMap.UI
                     _controller.HandleHtmlCameraClick(u, v);
                 });
 
+                _scope.RegisterCommand("exitInteraction", _ =>
+                {
+                    if (_visible) SetUiState(_fullscreen ? UiState.FullPassive : UiState.CompactPassive);
+                });
+
                 _scope.RegisterCommand("refresh", _ => PublishState(forceTerrain: true));
                 _scope.RegisterRequest("getMapData", _ => Task.FromResult<object>(BuildMapData()));
                 _registered = true;
@@ -196,10 +201,7 @@ namespace New_ZZZF.TacticalMap.UI
                 : (_interactive ? UiState.FullInteractive : UiState.FullPassive));
         }
 
-        public void ResetForMission()
-        {
-            SetUiState(UiState.CompactPassive);
-        }
+        public void ResetForMission() => SetUiState(UiState.CompactPassive);
 
         private void ApplyInputMode()
         {
