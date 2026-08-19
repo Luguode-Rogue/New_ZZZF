@@ -16,6 +16,7 @@ using New_ZZZF.Systems;
 using MountedSlashCamera;
 using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.UI;
+using New_ZZZF.TacticalMap.Diagnostics;
 using TaleWorlds.CampaignSystem.ComponentInterfaces;
 using StoryMode.GameComponents.CampaignBehaviors;
 using TaleWorlds.Localization;
@@ -35,9 +36,35 @@ namespace New_ZZZF
         protected override void OnSubModuleLoad()
         {
             base.OnSubModuleLoad();
-            TacticalMapBootstrap.OnSubModuleLoad();
-            TacticalMapHtmlUi.Instance.InitializeOnFrameworkReady();
+            TacticalMapLog.Initialize();
+            TacticalMapLog.Section("SUBMODULE LOAD");
+            TacticalMapLog.Info("Assembly=" + typeof(SubModule).Assembly.Location);
+            TacticalMapLog.Info("ModLogPath=" + TacticalMapLog.LogPath);
+
+            try
+            {
+                TacticalMapBootstrap.OnSubModuleLoad();
+                TacticalMapLog.Info("TacticalMapBootstrap.OnSubModuleLoad completed.");
+            }
+            catch (Exception ex)
+            {
+                TacticalMapLog.Error("TacticalMapBootstrap.OnSubModuleLoad failed.", ex);
+                throw;
+            }
+
+            try
+            {
+                TacticalMapHtmlUi.Instance.InitializeOnFrameworkReady();
+                TacticalMapLog.Info("TacticalMapHtmlUi.InitializeOnFrameworkReady registered.");
+            }
+            catch (Exception ex)
+            {
+                TacticalMapLog.Error("TacticalMapHtmlUi.InitializeOnFrameworkReady failed.", ex);
+                throw;
+            }
+
             CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
+            TacticalMapLog.Info("CustomSkillHtmlUi.InitializeOnFrameworkReady registered.");
         }
 
         public override void OnNewGameCreated(Game game, object initializerObject)
@@ -96,24 +123,31 @@ namespace New_ZZZF
         public override void OnMissionBehaviorInitialize(Mission mission)
         {
             base.OnMissionBehaviorInitialize(mission);
+            TacticalMapLog.Section("MISSION BEHAVIOR INITIALIZE");
+            TacticalMapLog.Info("Mission=" + (mission == null ? "null" : mission.GetType().FullName));
             mission.AddMissionBehavior(new SkillSystemBehavior());
             mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
             mission.AddMissionBehavior(new HeroChangeMissionBehavior());
             TacticalMapBootstrap.OnMissionStart(mission);
+            TacticalMapLog.Info("TacticalMapBootstrap.OnMissionStart completed.");
             mission.AddMissionBehavior(new AffixMissionBehavior());
             mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
         }
 
         protected override void OnSubModuleUnloaded()
         {
-            TacticalMapHtmlUi.Instance.Dispose();
-            CustomSkillHtmlUi.Instance.Dispose();
+            TacticalMapLog.Section("SUBMODULE UNLOAD");
+            try { TacticalMapHtmlUi.Instance.Dispose(); }
+            catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
+            try { CustomSkillHtmlUi.Instance.Dispose(); }
+            catch (Exception ex) { TacticalMapLog.Error("CustomSkillHtmlUi.Dispose failed.", ex); }
             base.OnSubModuleUnloaded();
         }
 
         protected override void OnBeforeInitialModuleScreenSetAsRoot()
         {
             base.OnBeforeInitialModuleScreenSetAsRoot();
+            TacticalMapLog.Info("OnBeforeInitialModuleScreenSetAsRoot.");
             InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] Mod已启动！"));
         }
 
@@ -161,6 +195,7 @@ namespace New_ZZZF
                 && Mission.Current == null
                 && !Game.Current.GameStateManager.ActiveState.IsMenuState)
             {
+                TacticalMapLog.Info("CustomSkill Shift+M input detected.");
                 if (CustomSkillHtmlUi.Instance.IsVisible)
                     CustomSkillHtmlUi.Instance.Close();
                 else
