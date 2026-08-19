@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Security;
 using TaleWorlds.Engine;
@@ -10,12 +14,43 @@ namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
     /// 在战斗开局把 Scene 地形烘焙成一张低分辨率战术栅格。
-    /// 只做一次（或场景变化时），之后由 MinimapCompositor 复用。
+    /// Scene 级缓存会复用已经采样/分类完成的数据，避免同一 Scene 重复调用引擎地形 API。
     /// 所有坐标约定：uv(0..1) -> 世界 (OriginX + uv.X*WorldW, OriginY + uv.Y*WorldH)。
-    /// WorldW/WorldH 由实际战场边界决定（软边界或包围盒），而非整个地形大小。
     /// </summary>
     public sealed class TerrainCache
     {
+        private sealed class CachedBake
+        {
+            public int Signature;
+            public int Width;
+            public int Height;
+            public float WorldW;
+            public float WorldH;
+            public float OriginX;
+            public float OriginY;
+            public float CellStep;
+            public float MinH;
+            public float MaxH;
+            public CellSnapshot[] Cells;
+            public byte[] TerrainBaseRGBA;
+            public byte[] RiskRGBA;
+        }
+
+        private struct CellSnapshot
+        {
+            public float Height;
+            public Vec3 Normal;
+            public float Slope;
+            public TerrainKind Kind;
+            public float Risk;
+            public bool IsForest;
+            public bool IsCliff;
+            public bool IsWater;
+        }
+
+        private static readonly ConditionalWeakTable<Scene, CachedBake> SceneBakeCache =
+            new ConditionalWeakTable<Scene, CachedBake>();
+
         public int Width { get; private set; }
         public int Height { get; private set; }
         public float WorldW { get; private set; }
@@ -44,7 +79,12 @@ namespace New_ZZZF.TacticalMap.Terrain
         [SecurityCritical]
         public bool TryBake(Scene scene)
         {
+            var watch = Stopwatch.StartNew();
             TacticalMapLog.Section("TERRAIN BAKE");
+            string assemblyPath = typeof(TerrainCache).Assembly.Location;
+            TacticalMapLog.Info(
+                "BuildFingerprint: Assembly=" + typeof(TerrainCache).Assembly.FullName
+                + ", LastWriteUtc=" + (string.IsNullOrWhiteSpace(assemblyPath) ? "<unknown>" : File.GetLastWriteTimeUtc(assemblyPath).ToString("O")));
             TacticalMapLog.Info("TryBake entered. Scene=" + (scene == null ? "null" : scene.GetType().FullName));
             _scene = scene;
             if (scene == null)
@@ -96,19 +136,29 @@ namespace New_ZZZF.TacticalMap.Terrain
                     TacticalMapLog.Info("Battle bounds: min=(" + battleMin.X + "," + battleMin.Y + ") max=(" + battleMax.X + "," + battleMax.Y + ")");
                 }
 
+                int res = Math.Max(1, _settings.BakeResolution);
+                Width = res;
+                Height = res;
                 OriginX = battleMin.X;
                 OriginY = battleMin.Y;
                 WorldW = Math.Max(1f, battleMax.X - battleMin.X);
                 WorldH = Math.Max(1f, battleMax.Y - battleMin.Y);
-
-                int res = _settings.BakeResolution;
-                Width = res;
-                Height = res;
                 CellStep = Math.Max(WorldW, WorldH) / res;
+
+                int cacheSignature = ComputeCacheSignature(nodeDim, nodeSize, minH, maxH, battleMin, battleMax);
+                if (SceneBakeCache.TryGetValue(scene, out var cached) && cached != null && cached.Signature == cacheSignature)
+                {
+                    ApplyCachedBake(cached, scene);
+                    watch.Stop();
+                    TacticalMapLog.Info("Terrain bake CACHE HIT. Reused Scene bake in " + watch.ElapsedMilliseconds + " ms.");
+                    return true;
+                }
+
                 TacticalMapLog.Info("Bake resolution=" + Width + "x" + Height + ", world=" + WorldW + "x" + WorldH + ", cellStep=" + CellStep);
 
                 Cells = new TerrainCell[Width, Height];
                 float[,] heights = new float[Width, Height];
+                var sampleWatch = Stopwatch.StartNew();
 
                 for (int x = 0; x < Width; x++)
                 {
@@ -134,17 +184,28 @@ namespace New_ZZZF.TacticalMap.Terrain
                     }
                 }
 
-                TacticalMapLog.Info("Terrain samples completed.");
+                sampleWatch.Stop();
+                TacticalMapLog.Info("Terrain samples completed in " + sampleWatch.ElapsedMilliseconds + " ms.");
+
+                var classifyWatch = Stopwatch.StartNew();
                 TerrainAnalyzer.ClassifyAll(this, heights, _settings);
-                TacticalMapLog.Info("TerrainAnalyzer.ClassifyAll completed.");
+                classifyWatch.Stop();
+                TacticalMapLog.Info("TerrainAnalyzer.ClassifyAll completed in " + classifyWatch.ElapsedMilliseconds + " ms. Cells=" + (Width * Height));
+
+                var rgbaWatch = Stopwatch.StartNew();
                 BuildBaseRGBA();
-                TacticalMapLog.Info("BuildBaseRGBA completed. Bytes=" + (TerrainBaseRGBA == null ? 0 : TerrainBaseRGBA.Length));
                 BuildRiskRGBA();
-                TacticalMapLog.Info("BuildRiskRGBA completed. Bytes=" + (RiskRGBA == null ? 0 : RiskRGBA.Length));
+                rgbaWatch.Stop();
+                TacticalMapLog.Info("Terrain RGBA build completed in " + rgbaWatch.ElapsedMilliseconds + " ms. TerrainBytes=" + (TerrainBaseRGBA == null ? 0 : TerrainBaseRGBA.Length) + ", RiskBytes=" + (RiskRGBA == null ? 0 : RiskRGBA.Length));
+
                 AgentRGBA = new byte[Width * Height * 4];
                 _baked = true;
                 LastError = null;
-                TacticalMapLog.Info("Terrain bake SUCCESS.");
+
+                StoreCachedBake(scene, cacheSignature);
+
+                watch.Stop();
+                TacticalMapLog.Info("Terrain bake SUCCESS. Total=" + watch.ElapsedMilliseconds + " ms.");
                 return true;
             }
             catch (Exception ex)
@@ -156,6 +217,122 @@ namespace New_ZZZF.TacticalMap.Terrain
                 InformationManager.DisplayMessage(new InformationMessage($"[TMap] 地形烘焙失败: {ex.GetType().Name}: {ex.Message}"));
                 return false;
             }
+        }
+
+        private int ComputeCacheSignature(Vec2i nodeDim, float nodeSize, float minH, float maxH, Vec2 battleMin, Vec2 battleMax)
+        {
+            unchecked
+            {
+                int hash = 17;
+                hash = hash * 31 + nodeDim.X;
+                hash = hash * 31 + nodeDim.Y;
+                hash = hash * 31 + nodeSize.GetHashCode();
+                hash = hash * 31 + minH.GetHashCode();
+                hash = hash * 31 + maxH.GetHashCode();
+                hash = hash * 31 + battleMin.X.GetHashCode();
+                hash = hash * 31 + battleMin.Y.GetHashCode();
+                hash = hash * 31 + battleMax.X.GetHashCode();
+                hash = hash * 31 + battleMax.Y.GetHashCode();
+                hash = hash * 31 + _settings.BakeResolution;
+                hash = hash * 31 + _settings.CliffSlopeThreshold.GetHashCode();
+                hash = hash * 31 + _settings.CliffHeightJump.GetHashCode();
+                hash = hash * 31 + _settings.WaterHeightFraction.GetHashCode();
+                var forestMaterials = _settings.ForestMaterialIndices;
+                if (forestMaterials != null)
+                {
+                    hash = hash * 31 + forestMaterials.Length;
+                    for (int i = 0; i < forestMaterials.Length; i++)
+                        hash = hash * 31 + forestMaterials[i];
+                }
+                return hash;
+            }
+        }
+
+        private void StoreCachedBake(Scene scene, int signature)
+        {
+            var snapshot = new CachedBake
+            {
+                Signature = signature,
+                Width = Width,
+                Height = Height,
+                WorldW = WorldW,
+                WorldH = WorldH,
+                OriginX = OriginX,
+                OriginY = OriginY,
+                CellStep = CellStep,
+                MinH = MinH,
+                MaxH = MaxH,
+                Cells = new CellSnapshot[Width * Height],
+                TerrainBaseRGBA = TerrainBaseRGBA == null ? null : (byte[])TerrainBaseRGBA.Clone(),
+                RiskRGBA = RiskRGBA == null ? null : (byte[])RiskRGBA.Clone()
+            };
+
+            int index = 0;
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    var c = Cells[x, y];
+                    snapshot.Cells[index++] = new CellSnapshot
+                    {
+                        Height = c.Height,
+                        Normal = c.Normal,
+                        Slope = c.Slope,
+                        Kind = c.Kind,
+                        Risk = c.Risk,
+                        IsForest = c.IsForest,
+                        IsCliff = c.IsCliff,
+                        IsWater = c.IsWater
+                    };
+                }
+            }
+
+            SceneBakeCache.Remove(scene);
+            SceneBakeCache.Add(scene, snapshot);
+            TacticalMapLog.Info("Scene terrain cache stored. Signature=" + signature);
+        }
+
+        private void ApplyCachedBake(CachedBake cached, Scene scene)
+        {
+            _scene = scene;
+            Width = cached.Width;
+            Height = cached.Height;
+            WorldW = cached.WorldW;
+            WorldH = cached.WorldH;
+            OriginX = cached.OriginX;
+            OriginY = cached.OriginY;
+            CellStep = cached.CellStep;
+            MinH = cached.MinH;
+            MaxH = cached.MaxH;
+
+            Cells = new TerrainCell[Width, Height];
+            int index = 0;
+            for (int x = 0; x < Width; x++)
+            {
+                for (int y = 0; y < Height; y++)
+                {
+                    var c = cached.Cells[index++];
+                    Cells[x, y] = new TerrainCell
+                    {
+                        Height = c.Height,
+                        Normal = c.Normal,
+                        Slope = c.Slope,
+                        Kind = c.Kind,
+                        Risk = c.Risk,
+                        IsForest = c.IsForest,
+                        IsCliff = c.IsCliff,
+                        IsWater = c.IsWater,
+                        MaterialLayers = new short[0],
+                        DensityAgentCount = 0
+                    };
+                }
+            }
+
+            TerrainBaseRGBA = cached.TerrainBaseRGBA == null ? null : (byte[])cached.TerrainBaseRGBA.Clone();
+            RiskRGBA = cached.RiskRGBA == null ? null : (byte[])cached.RiskRGBA.Clone();
+            AgentRGBA = new byte[Width * Height * 4];
+            _baked = true;
+            LastError = null;
         }
 
         public bool IsBaked => _baked;
