@@ -53,13 +53,13 @@ namespace New_ZZZF.TacticalMap.UI
                 return;
 
             string assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
-            string uiRoot = Path.Combine(assemblyDir, "TacticalMapUI");
+            string uiRoot = Path.Combine(assemblyDir, "UI");
             if (!Directory.Exists(uiRoot))
                 throw new DirectoryNotFoundException("TacticalMap HtmlUI content root not found: " + uiRoot);
 
             _scope = HtmlUiService.CreateScope(OwnerId);
             _scope.RegisterContentRoot(ContentRootName, uiRoot);
-            _pageId = _scope.RegisterPage(new HtmlUiPage(PageName, "index.html")
+            _pageId = _scope.RegisterPage(new HtmlUiPage(PageName, "TacticalMap/index.html")
             {
                 ContentRootId = ContentRootName,
                 HotReload = true,
@@ -190,7 +190,6 @@ namespace New_ZZZF.TacticalMap.UI
 
         private void UpdateToggleKey(float dt)
         {
-            // 当页面已经处于 Captured 且本次按键不是从 Passive 状态开始时，交给 JS keydown/keyup 处理。
             if (IsInteractive && !_toggleKeyDown)
                 return;
 
