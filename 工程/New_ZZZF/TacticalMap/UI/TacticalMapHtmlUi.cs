@@ -88,6 +88,7 @@ namespace New_ZZZF.TacticalMap.UI
                         SetUiState(_fullscreen ? UiState.FullPassive : UiState.CompactPassive);
                 });
                 _scope.RegisterCommand("toggleFullscreen", _ => ToggleFullscreenPreservingInteraction());
+                _scope.RegisterCommand("toggleInteraction", _ => ToggleInteraction());
                 _scope.RegisterCommand("refresh", _ => PublishState(true));
                 _scope.RegisterRequest("getMapData", _ => Task.FromResult<object>(BuildMapData()));
 
@@ -114,8 +115,11 @@ namespace New_ZZZF.TacticalMap.UI
                 return;
             }
 
-            if (_visible)
+            if (_controller.Cache.IsBaked)
                 PublishState(true);
+
+            if (_visible)
+                ApplyOpenState();
         }
 
         public void SetVisible(bool visible)
@@ -140,7 +144,10 @@ namespace New_ZZZF.TacticalMap.UI
                 if (_visible)
                     ApplyOpenState();
                 else if (!string.IsNullOrWhiteSpace(_pageId))
+                {
                     HtmlUiService.Pages.Close(_pageId);
+                    HtmlUiService.Hide();
+                }
             }
             catch (Exception ex)
             {
@@ -197,14 +204,14 @@ namespace New_ZZZF.TacticalMap.UI
                 return;
             }
 
-            // 页面自己的 DefaultInputMode 已经是 Passive。
-            // 这里仅在交互状态下显式切换为 Captured；退出交互时回到 Passive。
             try
             {
+                // Passive 模式必须使用 Show；ReleaseInput 的语义是隐藏 Host。
+                // 交互模式才捕获输入。
                 if (_interactive)
                     HtmlUiService.CaptureInput();
                 else
-                    HtmlUiService.ReleaseInput();
+                    HtmlUiService.Show();
             }
             catch (Exception ex)
             {
@@ -307,6 +314,7 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 _scope.SetState("static", BuildMapData());
                 _staticPublished = true;
+                HtmlUiLogger.Info("TacticalMap static map published: " + cache.Width + "x" + cache.Height);
             }
 
             _lastAgentVersion = _controller.AgentDataVersion;
