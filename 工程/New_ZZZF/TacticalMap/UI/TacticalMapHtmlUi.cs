@@ -8,7 +8,6 @@ using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Core;
-using New_ZZZF.TacticalMap.Tracking;
 using New_ZZZF.TacticalMap.Diagnostics;
 
 namespace New_ZZZF.TacticalMap.UI
@@ -204,7 +203,6 @@ namespace New_ZZZF.TacticalMap.UI
 
         private void UpdateToggleKey(float dt)
         {
-            if (IsInteractive && !_toggleKeyDown) return;
             bool isDown;
             try { isDown = Input.IsKeyDown(TacticalSettings.Instance.ToggleKey); }
             catch (Exception ex) { TacticalMapLog.Error("Toggle key read failed.", ex); return; }
@@ -213,7 +211,7 @@ namespace New_ZZZF.TacticalMap.UI
                 _toggleKeyDown = true;
                 _keyHoldAccum = 0f;
                 _longPressTriggered = false;
-                TacticalMapLog.Info("Toggle key DOWN. Key=" + TacticalSettings.Instance.ToggleKey);
+                TacticalMapLog.Info("Toggle key DOWN. Key=" + TacticalSettings.Instance.ToggleKey + ", Mode=" + _mode);
                 return;
             }
             if (isDown)
@@ -222,7 +220,7 @@ namespace New_ZZZF.TacticalMap.UI
                 if (!_longPressTriggered && _keyHoldAccum >= TacticalSettings.Instance.ToggleLongPressThreshold)
                 {
                     _longPressTriggered = true;
-                    TacticalMapLog.Info("Toggle key LONG PRESS. Duration=" + _keyHoldAccum);
+                    TacticalMapLog.Info("Toggle key LONG PRESS. Duration=" + _keyHoldAccum + ", Mode=" + _mode);
                     AdvanceLongPress();
                 }
                 return;
@@ -231,7 +229,7 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 if (!_longPressTriggered)
                 {
-                    TacticalMapLog.Info("Toggle key SHORT PRESS. Duration=" + _keyHoldAccum);
+                    TacticalMapLog.Info("Toggle key SHORT PRESS. Duration=" + _keyHoldAccum + ", Mode=" + _mode);
                     ToggleInteractive();
                 }
                 _toggleKeyDown = false;
@@ -406,13 +404,11 @@ namespace New_ZZZF.TacticalMap.UI
 
         public void Dispose()
         {
-            TacticalMapLog.Section("HTMLUI DISPOSE");
             DetachController();
-            try { _scope?.Dispose(); } catch (Exception ex) { TacticalMapLog.Error("HtmlUi scope dispose failed.", ex); }
+            try { _scope?.Dispose(); } catch { }
             _scope = null;
             _registered = false;
             _pageId = null;
-            TacticalMapLog.Info("TacticalMapHtmlUi disposed.");
         }
     }
 
