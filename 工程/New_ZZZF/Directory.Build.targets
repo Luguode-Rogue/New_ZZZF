@@ -2,7 +2,7 @@
   <PropertyGroup>
     <CustomSkillHtmlUiSource>$(MSBuildProjectDirectory)\GUI\Html\CustomSkill</CustomSkillHtmlUiSource>
     <CustomSkillHtmlUiDeploy>$(TargetDir)CustomSkillUI</CustomSkillHtmlUiDeploy>
-    <TacticalMapHtmlUiSource>$(MSBuildProjectDirectory)\GUI\Html\TacticalMap</TacticalMapHtmlUiSource>
+    <TacticalMapHtmlUiSource>$(MSBuildProjectDirectory)\TacticalMap\UI\TacticalMap</TacticalMapHtmlUiSource>
     <TacticalMapHtmlUiDeploy>$(TargetDir)UI\TacticalMap</TacticalMapHtmlUiDeploy>
   </PropertyGroup>
 
