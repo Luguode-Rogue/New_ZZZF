@@ -3,7 +3,7 @@
     <CustomSkillHtmlUiSource>$(MSBuildProjectDirectory)\GUI\Html\CustomSkill</CustomSkillHtmlUiSource>
     <CustomSkillHtmlUiDeploy>$(TargetDir)CustomSkillUI</CustomSkillHtmlUiDeploy>
     <TacticalMapHtmlUiSource>$(MSBuildProjectDirectory)\GUI\Html\TacticalMap</TacticalMapHtmlUiSource>
-    <TacticalMapHtmlUiDeploy>$(TargetDir)TacticalMapUI</TacticalMapHtmlUiDeploy>
+    <TacticalMapHtmlUiDeploy>$(TargetDir)UI\TacticalMap</TacticalMapHtmlUiDeploy>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,7 +12,6 @@
       <Private>False</Private>
     </Reference>
 
-    <!-- 修正历史工程文件中部分版本化 MBOptionScreen 引用的 HintPath，避免无关路径错误阻断编译。 -->
     <Reference Remove="Bannerlord.MBOptionScreen.v1.0.1" />
     <Reference Include="Bannerlord.MBOptionScreen.v1.0.1">
       <HintPath>..\..\..\Bannerlord.MBOptionScreen\bin\Win64_Shipping_Client\Bannerlord.MBOptionScreen.v1.0.1.dll</HintPath>
