@@ -21,7 +21,9 @@ namespace New_ZZZF.TacticalMap.UI
         private const string RuntimeStateKey = "tacticalMap.runtime";
         private const string StaticStateKey = "tacticalMap.static";
 
-        private static readonly Lazy<TacticalMapHtmlUi> _instance = new Lazy<TacticalMapHtmlUi>(() => new TacticalMapHtmlUi());
+        private static readonly Lazy<TacticalMapHtmlUi> _instance =
+            new Lazy<TacticalMapHtmlUi>(() => new TacticalMapHtmlUi());
+
         private HtmlUiConsumerScope _scope;
         private string _pageId;
         private TacticalMapController _controller;
@@ -56,26 +58,31 @@ namespace New_ZZZF.TacticalMap.UI
             TacticalMapLog.Info("Register entered. FrameworkReady=" + HtmlUiService.IsReady);
             if (_registered || !HtmlUiService.IsReady) return;
 
-            string assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
-            string uiRoot = Path.Combine(assemblyDir, "UI");
-            TacticalMapLog.Info("HtmlUI AssemblyDir=" + assemblyDir);
-            TacticalMapLog.Info("HtmlUI ContentRoot=" + uiRoot + ", Exists=" + Directory.Exists(uiRoot));
-            if (!Directory.Exists(uiRoot)) throw new DirectoryNotFoundException("TacticalMap HtmlUI content root not found: " + uiRoot);
-
             try
             {
+                string assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
+                string uiRoot = Path.Combine(assemblyDir, "UI");
+                TacticalMapLog.Info("HtmlUI AssemblyDir=" + assemblyDir);
+                TacticalMapLog.Info("HtmlUI ContentRoot=" + uiRoot + ", Exists=" + Directory.Exists(uiRoot));
+                if (!Directory.Exists(uiRoot))
+                    throw new DirectoryNotFoundException("TacticalMap HtmlUI content root not found: " + uiRoot);
+
                 _scope = HtmlUiService.CreateScope(OwnerId);
                 _scope.RegisterContentRoot(ContentRootName, uiRoot);
+                TacticalMapLog.Info("ContentRoot registered: " + ContentRootName);
                 _pageId = _scope.RegisterPage(new HtmlUiPage(PageName, "TacticalMap/index.html")
                 {
                     ContentRootId = ContentRootName,
                     HotReload = true,
-                    DefaultInputMode = HtmlUiInputMode.Passive
+                    DefaultInputMode = HtmlUiInputMode.Passive,
+                    CloseOnEscape = false
                 });
+                TacticalMapLog.Info("Page registered. PageId=" + _pageId + ", Html=TacticalMap/index.html, CloseOnEscape=false");
+
                 RegisterCommands();
                 _registered = true;
                 HtmlUiLogger.Info("TacticalMap HtmlUI registered.");
-                TacticalMapLog.Info("TacticalMap HtmlUI registration SUCCESS. PageId=" + _pageId);
+                TacticalMapLog.Info("TacticalMap HtmlUI registration SUCCESS.");
                 if (_controller != null) OpenForMission();
             }
             catch (Exception ex)
@@ -108,25 +115,50 @@ namespace New_ZZZF.TacticalMap.UI
                 TacticalMapLog.Info("HTML command escape received.");
                 SetInteractive(false);
             });
+            _scope.RegisterCommand("clientLog", payload =>
+            {
+                string message = payload?["message"]?.Value<string>() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(message))
+                    TacticalMapLog.Info("JS: " + message);
+            });
             _scope.RegisterCommand("selectFormation", payload =>
             {
                 string name = payload?["name"]?.Value<string>();
                 TacticalMapLog.Info("HTML command selectFormation=" + (name ?? "<clear>"));
-                if (string.IsNullOrWhiteSpace(name)) _controller?.HandleHtmlClearFormationSelection();
-                else _controller?.HandleHtmlSelectFormation(name);
+                if (string.IsNullOrWhiteSpace(name))
+                    _controller?.HandleHtmlClearFormationSelection();
+                else
+                    _controller?.HandleHtmlSelectFormation(name);
                 PublishState(true);
             });
-
-            _scope.RegisterCommand("move", payload => ExecuteUv("move", payload, _controller == null ? null : new Action<float, float>(_controller.HandleHtmlMoveClick)));
-            _scope.RegisterCommand("face", payload => ExecuteUv("face", payload, _controller == null ? null : new Action<float, float>(_controller.HandleHtmlFaceClick)));
-            _scope.RegisterCommand("camera", payload => ExecuteUv("camera", payload, _controller == null ? null : new Action<float, float>(_controller.HandleHtmlCameraClick)));
+            _scope.RegisterCommand("move", payload =>
+            {
+                TacticalMapLog.Info("HTML command move received.");
+                var controller = _controller;
+                if (controller != null)
+                    ExecuteUv("move", payload, new Action<float, float>(controller.HandleHtmlMoveClick));
+            });
+            _scope.RegisterCommand("face", payload =>
+            {
+                TacticalMapLog.Info("HTML command face received.");
+                var controller = _controller;
+                if (controller != null)
+                    ExecuteUv("face", payload, new Action<float, float>(controller.HandleHtmlFaceClick));
+            });
+            _scope.RegisterCommand("camera", payload =>
+            {
+                TacticalMapLog.Info("HTML command camera received.");
+                var controller = _controller;
+                if (controller != null)
+                    ExecuteUv("camera", payload, new Action<float, float>(controller.HandleHtmlCameraClick));
+            });
             _scope.RegisterCommand("refresh", _ => PublishState(true));
             _scope.RegisterRequest("getState", _ => Task.FromResult<object>(BuildRuntimeState()));
         }
 
         private static void ExecuteUv(string command, JToken payload, Action<float, float> handler)
         {
-            TacticalMapLog.Info("HTML command " + command + " received. Handler=" + (handler != null));
+            TacticalMapLog.Info("ExecuteUv " + command + ". Handler=" + (handler != null));
             if (handler == null || payload == null) return;
             float u = payload["u"]?.Value<float>() ?? -1f;
             float v = payload["v"]?.Value<float>() ?? -1f;
@@ -137,6 +169,7 @@ namespace New_ZZZF.TacticalMap.UI
         public void AttachController(TacticalMapController controller)
         {
             TacticalMapLog.Section("HTMLUI ATTACH CONTROLLER");
+            TacticalMapLog.Info("AttachController controllerNull=" + (controller == null));
             _controller = controller;
             _mode = TacticalMapUiMode.CompactPassive;
             _publishAccum = 0f;
@@ -147,7 +180,6 @@ namespace New_ZZZF.TacticalMap.UI
             _lastTerrainSignature = 0;
             _terrainBase64 = null;
             _riskBase64 = null;
-            TacticalMapLog.Info("AttachController controllerNull=" + (controller == null));
             if (_registered && HtmlUiService.IsReady) OpenForMission();
         }
 
@@ -173,7 +205,7 @@ namespace New_ZZZF.TacticalMap.UI
             _lastTerrainSignature = 0;
             _terrainBase64 = null;
             _riskBase64 = null;
-            try { HtmlUiService.SetInputMode(HtmlUiInputMode.Passive); } catch { }
+            try { HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden); } catch { }
             TacticalMapLog.Info("DetachController completed.");
         }
 
@@ -197,6 +229,7 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 _pageOpened = false;
                 TacticalMapLog.Error("TacticalMap HtmlUI open failed.", ex);
+                HtmlUiLogger.Error("TacticalMap HtmlUI open failed.", ex);
             }
         }
 
@@ -204,7 +237,10 @@ namespace New_ZZZF.TacticalMap.UI
         {
             if (_controller == null) return;
             if (!_pageOpened && _registered && HtmlUiService.IsReady) OpenForMission();
-            UpdateToggleKey(dt);
+
+            if (!IsInteractive)
+                UpdateToggleKey(dt);
+
             if (!_pageOpened) return;
             _publishAccum += Math.Max(0f, dt);
             if (_publishAccum < 0.10f) return;
@@ -284,9 +320,15 @@ namespace New_ZZZF.TacticalMap.UI
             switch (_mode)
             {
                 case TacticalMapUiMode.FullPassive:
-                case TacticalMapUiMode.FullInteractive: _mode = interactive ? TacticalMapUiMode.FullInteractive : TacticalMapUiMode.FullPassive; break;
-                case TacticalMapUiMode.Hidden: _mode = interactive ? TacticalMapUiMode.CompactInteractive : TacticalMapUiMode.CompactPassive; break;
-                default: _mode = interactive ? TacticalMapUiMode.CompactInteractive : TacticalMapUiMode.CompactPassive; break;
+                case TacticalMapUiMode.FullInteractive:
+                    _mode = interactive ? TacticalMapUiMode.FullInteractive : TacticalMapUiMode.FullPassive;
+                    break;
+                case TacticalMapUiMode.Hidden:
+                    _mode = interactive ? TacticalMapUiMode.CompactInteractive : TacticalMapUiMode.CompactPassive;
+                    break;
+                default:
+                    _mode = interactive ? TacticalMapUiMode.CompactInteractive : TacticalMapUiMode.CompactPassive;
+                    break;
             }
             TacticalMapLog.Info("SetInteractive(" + interactive + "): " + before + " -> " + _mode);
             ApplyInputMode();
@@ -297,9 +339,16 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                HtmlUiInputMode mode = IsInteractive ? HtmlUiInputMode.Captured : HtmlUiInputMode.Passive;
+                HtmlUiInputMode mode;
+                if (_mode == TacticalMapUiMode.Hidden)
+                    mode = HtmlUiInputMode.Hidden;
+                else if (IsInteractive)
+                    mode = HtmlUiInputMode.Captured;
+                else
+                    mode = HtmlUiInputMode.Passive;
+
                 HtmlUiService.SetInputMode(mode);
-                TacticalMapLog.Info("InputMode applied: " + mode);
+                TacticalMapLog.Info("InputMode=" + mode + ", Mode=" + _mode);
             }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMap HtmlUI input mode change failed.", ex); }
         }
