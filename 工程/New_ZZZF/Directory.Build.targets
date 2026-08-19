@@ -61,4 +61,16 @@
       DestinationFiles="@(_TacticalMapHtmlFiles->'$(TacticalMapHtmlUiDeploy)\%(RecursiveDir)%(Filename)%(Extension)')"
       SkipUnchangedFiles="true" />
   </Target>
+
+  <Target Name="CleanupLegacyTacticalMapHtmlUi"
+          AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'net472'">
+    <PropertyGroup>
+      <_LegacyTacticalMapGameDir>$(HtmlUiBinaryDeployDir)\TacticalMapUI</_LegacyTacticalMapGameDir>
+      <_LegacyTacticalMapBuildDir>$(TargetDir)TacticalMapUI</_LegacyTacticalMapBuildDir>
+    </PropertyGroup>
+    <Message Importance="Normal" Text="[TacticalMap] Removing legacy HtmlUI outputs if present." />
+    <RemoveDir Directories="$(_LegacyTacticalMapGameDir)" Condition="Exists('$(_LegacyTacticalMapGameDir)')" />
+    <RemoveDir Directories="$(_LegacyTacticalMapBuildDir)" Condition="Exists('$(_LegacyTacticalMapBuildDir)')" />
+  </Target>
 </Project>
