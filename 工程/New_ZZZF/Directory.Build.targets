@@ -2,6 +2,8 @@
   <PropertyGroup>
     <CustomSkillHtmlUiSource>$(MSBuildProjectDirectory)\GUI\Html\CustomSkill</CustomSkillHtmlUiSource>
     <CustomSkillHtmlUiDeploy>$(TargetDir)CustomSkillUI</CustomSkillHtmlUiDeploy>
+    <TacticalMapHtmlUiSource>$(MSBuildProjectDirectory)\GUI\Html\TacticalMap</TacticalMapHtmlUiSource>
+    <TacticalMapHtmlUiDeploy>$(TargetDir)TacticalMapUI</TacticalMapHtmlUiDeploy>
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,6 +42,20 @@
     <Copy
       SourceFiles="@(_CustomSkillHtmlFiles)"
       DestinationFiles="@(_CustomSkillHtmlFiles->'$(CustomSkillHtmlUiDeploy)\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="DeployTacticalMapHtmlUi"
+          AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'net472' and Exists('$(GameFolder)\Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll') and Exists('$(TacticalMapHtmlUiSource)')">
+    <Message Importance="High" Text="[TacticalMap] Deploy HtmlUI: '$(TacticalMapHtmlUiSource)' -> '$(TacticalMapHtmlUiDeploy)'" />
+    <MakeDir Directories="$(TacticalMapHtmlUiDeploy)" />
+    <ItemGroup>
+      <_TacticalMapHtmlFiles Include="$(TacticalMapHtmlUiSource)\**\*" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_TacticalMapHtmlFiles)"
+      DestinationFiles="@(_TacticalMapHtmlFiles->'$(TacticalMapHtmlUiDeploy)\%(RecursiveDir)%(Filename)%(Extension)')"
       SkipUnchangedFiles="true" />
   </Target>
 </Project>
