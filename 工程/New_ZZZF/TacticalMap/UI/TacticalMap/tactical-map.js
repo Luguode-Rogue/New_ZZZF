@@ -11,12 +11,16 @@
   const formationList = document.getElementById('formationList');
   const detailBody = document.getElementById('detailBody');
 
+  canvas.tabIndex = 0;
+
   let staticState = null;
   let runtimeState = null;
   let terrainCanvas = null;
   let riskCanvas = null;
   let selectedFormation = -1;
   let rafPending = false;
+  let interactiveGesture = null;
+  const LONG_PRESS_MS = 450;
 
   const modeText = {
     CompactPassive: '观察',
@@ -120,6 +124,7 @@
         if (f.player) {
           app.call('selectFormation', { name: f.name }).catch(() => {});
         }
+        canvas.focus();
       });
       formationList.appendChild(item);
     });
@@ -311,6 +316,7 @@
     if (!runtimeState?.interactive) return;
     event.preventDefault();
     event.stopPropagation();
+    canvas.focus();
     const uv = getUvFromEvent(event);
     try {
       if (event.button === 0) await app.call('move', uv);
@@ -326,7 +332,34 @@
       event.preventDefault();
       event.stopPropagation();
       app.call('escape', {}).catch(() => {});
+      return;
     }
+
+    if (event.key.toLowerCase() !== 'n' || !runtimeState?.interactive || interactiveGesture) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    interactiveGesture = { start: performance.now(), longTriggered: false };
+
+    setTimeout(() => {
+      if (!interactiveGesture || interactiveGesture.longTriggered) return;
+      if (performance.now() - interactiveGesture.start >= LONG_PRESS_MS) {
+        interactiveGesture.longTriggered = true;
+        app.call('longPressNext', {}).catch(() => {});
+      }
+    }, LONG_PRESS_MS + 5);
+  });
+
+  document.addEventListener('keyup', event => {
+    if (event.key.toLowerCase() !== 'n' || !interactiveGesture) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const gesture = interactiveGesture;
+    interactiveGesture = null;
+
+    if (!gesture.longTriggered)
+      app.call('toggleInteractive', {}).catch(() => {});
   });
 
   window.addEventListener('resize', scheduleRender);
