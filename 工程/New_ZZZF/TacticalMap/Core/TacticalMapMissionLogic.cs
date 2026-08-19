@@ -55,7 +55,6 @@ namespace New_ZZZF.TacticalMap.Core
 
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
-            TacticalMapHtmlUi.Instance.AttachController(_controller);
             TacticalMapHtmlUi.Instance.Tick(dt);
         }
 
