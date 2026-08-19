@@ -80,6 +80,15 @@ namespace New_ZZZF.TacticalMap.UI
             _scope.RegisterCommand("setInteractive", payload => SetInteractive(payload?["value"]?.Value<bool>() ?? false));
             _scope.RegisterCommand("longPressNext", _ => AdvanceLongPress());
             _scope.RegisterCommand("escape", _ => SetInteractive(false));
+            _scope.RegisterCommand("selectFormation", payload =>
+            {
+                string name = payload?["name"]?.Value<string>();
+                if (string.IsNullOrWhiteSpace(name))
+                    _controller?.HandleHtmlClearFormationSelection();
+                else
+                    _controller?.HandleHtmlSelectFormation(name);
+                PublishState(true);
+            });
             _scope.RegisterCommand("move", payload => ExecuteUv(payload, _controller?.HandleHtmlMoveClick));
             _scope.RegisterCommand("face", payload => ExecuteUv(payload, _controller?.HandleHtmlFaceClick));
             _scope.RegisterCommand("camera", payload => ExecuteUv(payload, _controller?.HandleHtmlCameraClick));
@@ -181,6 +190,10 @@ namespace New_ZZZF.TacticalMap.UI
 
         private void UpdateToggleKey(float dt)
         {
+            // 当页面已经处于 Captured 且本次按键不是从 Passive 状态开始时，交给 JS keydown/keyup 处理。
+            if (IsInteractive && !_toggleKeyDown)
+                return;
+
             bool isDown;
             try { isDown = Input.IsKeyDown(TacticalSettings.Instance.ToggleKey); }
             catch { return; }
@@ -378,6 +391,7 @@ namespace New_ZZZF.TacticalMap.UI
                 mode = _mode.ToString(),
                 visible = _mode != TacticalMapUiMode.Hidden && _controller.IsVisible,
                 interactive = IsInteractive,
+                selectedFormation = _controller.SelectedFormationName,
                 player = player.HasValue ? (object)new
                 {
                     u = Clamp01(playerUv.X),
