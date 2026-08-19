@@ -6,8 +6,8 @@ namespace New_ZZZF.TacticalMap.Diagnostics
 {
     /// <summary>
     /// TacticalMap 专用诊断日志。
-    /// 每次 SubModule 加载都会创建一份全新的日志，写入 Mod 根目录：
-    /// Modules/New_ZZZF/New_ZZZF_TacticalMap.log
+    /// 每次 SubModule 加载都会创建一份全新的日志，写入 Mod 的 Logs 子目录：
+    /// Modules/New_ZZZF/Logs/New_ZZZF_TacticalMap.log
     /// </summary>
     public static class TacticalMapLog
     {
@@ -25,9 +25,6 @@ namespace New_ZZZF.TacticalMap.Diagnostics
             }
         }
 
-        /// <summary>
-        /// 开始新的游戏/Mod 会话。旧日志直接删除，不做 .old 滚动。
-        /// </summary>
         public static void Initialize()
         {
             EnsureInitialized();
@@ -42,7 +39,6 @@ namespace New_ZZZF.TacticalMap.Diagnostics
 
                 try
                 {
-                    // 每次游戏启动都从零开始，确保日志只对应当前会话。
                     File.WriteAllText(_logPath, string.Empty, new UTF8Encoding(false));
                     _sessionStarted = true;
 
@@ -96,8 +92,9 @@ namespace New_ZZZF.TacticalMap.Diagnostics
                     string assemblyPath = typeof(TacticalMapLog).Assembly.Location;
                     string assemblyDir = Path.GetDirectoryName(assemblyPath) ?? ".";
                     string moduleDir = Path.GetFullPath(Path.Combine(assemblyDir, "..", ".."));
-                    Directory.CreateDirectory(moduleDir);
-                    _logPath = Path.Combine(moduleDir, "New_ZZZF_TacticalMap.log");
+                    string logDirectory = Path.Combine(moduleDir, "Logs");
+                    Directory.CreateDirectory(logDirectory);
+                    _logPath = Path.Combine(logDirectory, "New_ZZZF_TacticalMap.log");
                 }
                 catch
                 {
@@ -118,7 +115,6 @@ namespace New_ZZZF.TacticalMap.Diagnostics
             {
                 lock (Sync)
                 {
-                    // 允许日志类在极早期被调用；只要还没建立本会话，就先建立。
                     if (!_sessionStarted)
                     {
                         File.WriteAllText(_logPath, string.Empty, new UTF8Encoding(false));
