@@ -9,7 +9,7 @@ namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
     /// TacticalMap 战场 MissionBehavior。
-    /// 只负责控制器生命周期、后端数据刷新和 N 键显示切换；HTMLUI 自身由 Consumer 管理。
+    /// 负责控制器生命周期、后端数据刷新，以及 TacticalMap 的 N 键交互状态切换。
     /// </summary>
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
@@ -62,12 +62,11 @@ namespace New_ZZZF.TacticalMap.Core
                 _uiAttached = true;
             }
 
-            if (Input.IsKeyPressed(InputKey.N) && ui != null)
+            // 按 TacticalMap HTMLUI 功能基线：N 短按只在观察与操作之间切换。
+            // 地图显隐/全屏属于独立的长按状态机，不在这里错误地把短按当作隐藏。
+            if (Input.IsKeyPressed(InputKey.N) && ui != null && ui.IsVisible)
             {
-                ui.SetVisible(!ui.IsVisible);
-                TaleWorlds.Library.InformationManager.DisplayMessage(
-                    new TaleWorlds.Library.InformationMessage(
-                        ui.IsVisible ? "[TMap] HTMLUI 已显示" : "[TMap] HTMLUI 已隐藏"));
+                ui.ToggleInteraction();
             }
 
             _controller.SetVisible(_missionScreen, ui != null && ui.IsVisible);
