@@ -7,7 +7,6 @@ using TaleWorlds.MountAndBlade.View.Screens;
 using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
-using New_ZZZF.TacticalMap.UI;
 
 namespace New_ZZZF.TacticalMap.Core
 {
@@ -129,27 +128,18 @@ namespace New_ZZZF.TacticalMap.Core
             }
         }
 
-        /// <summary>
-        /// HTML 左键：移动命令。
-        /// </summary>
         public void HandleHtmlMoveClick(float u, float v)
         {
             if (!ValidateHtmlUv(u, v)) return;
             IssueOrderAtWorld(_cache.UVToWorld(new Vec2(u, v)), TacticalClickMode.Move);
         }
 
-        /// <summary>
-        /// HTML 右键：朝向命令。
-        /// </summary>
         public void HandleHtmlFaceClick(float u, float v)
         {
             if (!ValidateHtmlUv(u, v)) return;
             IssueOrderAtWorld(_cache.UVToWorld(new Vec2(u, v)), TacticalClickMode.Face);
         }
 
-        /// <summary>
-        /// HTML 中键：将战场镜头切换到地图目标位置。
-        /// </summary>
         public void HandleHtmlCameraClick(float u, float v)
         {
             if (!ValidateHtmlUv(u, v)) return;
@@ -167,9 +157,6 @@ namespace New_ZZZF.TacticalMap.Core
             _orderSystem.IssueOrder(_mission, world, mode);
         }
 
-        /// <summary>
-        /// 保留旧接口以便兼容尚未清理的调用方；HTMLUI 不再使用旧 Layer 命中测试。
-        /// </summary>
         public void HandleClick(Vec2 mousePixel, bool shift, bool rightButton)
         {
         }
