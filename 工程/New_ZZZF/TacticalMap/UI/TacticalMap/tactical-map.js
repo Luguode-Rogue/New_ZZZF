@@ -29,15 +29,25 @@
 
   function decodeImage(base64, width, height) {
     if (!base64 || width <= 0 || height <= 0) return null;
-    const binary = atob(base64);
-    const bytes = new Uint8ClampedArray(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    if (bytes.length !== width * height * 4) return null;
-    const source = document.createElement('canvas');
-    source.width = width;
-    source.height = height;
-    source.getContext('2d').putImageData(new ImageData(bytes, width, height), 0, 0);
-    return source;
+    try {
+      const binary = atob(base64);
+      const expected = width * height * 4;
+      if (binary.length !== expected) {
+        console.warn(`[TacticalMap] RGBA length mismatch: got=${binary.length}, expected=${expected}`);
+        return null;
+      }
+      const bytes = new Uint8ClampedArray(expected);
+      for (let i = 0; i < expected; i++) bytes[i] = binary.charCodeAt(i);
+      const source = document.createElement('canvas');
+      source.width = width;
+      source.height = height;
+      const sourceCtx = source.getContext('2d');
+      sourceCtx.putImageData(new ImageData(bytes, width, height), 0, 0);
+      return source;
+    } catch (error) {
+      console.error('[TacticalMap] terrain image decode failed', error);
+      return null;
+    }
   }
 
   function scheduleRender() {
@@ -50,18 +60,18 @@
   }
 
   function applyStatic(state) {
-    staticState = state;
-    terrainCanvas = decodeImage(state.terrainBaseRgba, state.width, state.height);
-    riskCanvas = decodeImage(state.riskRgba, state.width, state.height);
+    staticState = state || null;
+    terrainCanvas = state ? decodeImage(state.terrainBaseRgba, Number(state.width), Number(state.height)) : null;
+    riskCanvas = state ? decodeImage(state.riskRgba, Number(state.width), Number(state.height)) : null;
     scheduleRender();
   }
 
   function applyRuntime(state) {
-    runtimeState = state;
-    if (state.selectedFormation) {
+    runtimeState = state || null;
+    if (state?.selectedFormation) {
       const index = (state.formations || []).findIndex(f => f.player && f.name === state.selectedFormation);
       selectedFormation = index;
-    } else if (selectedFormation >= (state.formations || []).length) {
+    } else if (selectedFormation >= (state?.formations || []).length) {
       selectedFormation = -1;
     }
     updateChrome();
@@ -76,9 +86,18 @@
     const visible = !!runtimeState?.visible;
     root.setAttribute('aria-hidden', visible ? 'false' : 'true');
     modeLabel.textContent = modeText[mode] || mode;
-    statusText.textContent = visible
-      ? `TacticalMap · ${modeText[mode] || mode}`
-      : 'TacticalMap · 隐藏';
+
+    if (!visible) {
+      statusText.textContent = 'TacticalMap · 隐藏';
+    } else if (!staticState?.baked) {
+      const error = staticState?.error ? `：${staticState.error}` : '';
+      statusText.textContent = `TacticalMap · 地形不可用${error}`;
+    } else if (!terrainCanvas) {
+      statusText.textContent = `TacticalMap · 地形数据已到达但解码失败`;
+    } else {
+      statusText.textContent = `TacticalMap · ${modeText[mode] || mode}`;
+    }
+
     hint.textContent = mode.includes('Interactive')
       ? '左键：移动　中键：镜头　右键：朝向　ESC：退出操作　N 长按：全屏 / 隐藏'
       : 'N 短按：操作　N 长按：全屏 / 隐藏';
@@ -131,15 +150,19 @@
     if (!terrainCanvas) {
       ctx.fillStyle = '#0d1519';
       ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = 'rgba(225,205,140,.35)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
       return;
     }
 
     ctx.save();
     ctx.translate(x + w, y);
     ctx.scale(-1, 1);
+    ctx.imageSmoothingEnabled = true;
     ctx.drawImage(terrainCanvas, 0, 0, w, h);
     if (riskCanvas && staticState?.enableRisk) {
-      ctx.globalAlpha = 0.48;
+      ctx.globalAlpha = 0.42;
       ctx.drawImage(riskCanvas, 0, 0, w, h);
       ctx.globalAlpha = 1;
     }
@@ -148,6 +171,26 @@
     ctx.strokeStyle = 'rgba(225,205,140,.70)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  }
+
+  function drawGrid(x, y, w, h) {
+    if (terrainCanvas) return;
+    ctx.strokeStyle = 'rgba(150,170,180,.08)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 8; i++) {
+      const px = x + (w * i) / 8;
+      const py = y + (h * i) / 8;
+      ctx.beginPath();
+      ctx.moveTo(px, y);
+      ctx.lineTo(px, y + h);
+      ctx.moveTo(x, py);
+      ctx.lineTo(x + w, py);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(225,235,240,.72)';
+    ctx.font = '11px Segoe UI, Arial';
+    const error = staticState?.error ? `地形：${staticState.error}` : '等待地形数据';
+    ctx.fillText(error, x + 12, y + 22);
   }
 
   function drawArrow(x, y, dx, dy, scale, color, width) {
@@ -243,10 +286,11 @@
     const w = rect.width, h = rect.height;
     ctx.clearRect(0, 0, w, h);
     drawStaticMap(0, 0, w, h);
+    drawGrid(0, 0, w, h);
     drawMarkers(0, 0, w, h);
 
     if (runtimeState.mode.includes('Interactive')) {
-      ctx.fillStyle = 'rgba(255,225,135,.06)';
+      ctx.fillStyle = 'rgba(255,225,135,.05)';
       ctx.fillRect(0, 0, w, h);
     }
   }
