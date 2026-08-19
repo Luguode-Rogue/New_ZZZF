@@ -47,7 +47,19 @@ namespace New_ZZZF.TacticalMap.Core
         {
             base.OnMissionTick(dt);
 
-            if (!_initialized && Mission != null && Mission.Scene != null)
+            if (Mission == null)
+            {
+                if (_controller != null || TacticalMapHtmlUi.Instance.IsVisible)
+                {
+                    TacticalMapLog.Info("Mission reference became null during tick; forcing TacticalMap UI detach.");
+                    TacticalMapHtmlUi.Instance.DetachController();
+                    _controller = null;
+                    _ready = false;
+                }
+                return;
+            }
+
+            if (!_initialized && Mission.Scene != null)
                 InitializeController();
 
             if (!_ready || _controller == null)
