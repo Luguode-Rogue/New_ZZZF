@@ -18,10 +18,20 @@
   let selectedFormation = -1;
   let rafPending = false;
   let nGesture = null;
+  let lastRuntimeLogSignature = null;
   const LONG_PRESS_MS = 450;
 
+  canvas.tabIndex = 0;
+
   function clientLog(message) {
-    try { app.call('clientLog', { message }).catch(() => {}); } catch (_) {}
+    try { app.call('clientLog', { message }); } catch (_) {}
+  }
+
+  function command(name, payload = {}) {
+    return app.call(name, payload).catch(error => {
+      clientLog('command ' + name + ' failed: ' + (error?.message || error));
+      throw error;
+    });
   }
 
   clientLog('JS boot. document=' + document.readyState + ', url=' + location.href);
@@ -65,7 +75,12 @@
 
   function applyRuntime(state) {
     runtimeState = state || null;
-    clientLog('state.runtime received mode=' + (state?.mode || '<null>') + ' interactive=' + !!state?.interactive + ' visible=' + !!state?.visible);
+    const signature = [state?.mode || '<null>', !!state?.interactive, !!state?.visible].join('|');
+    if (signature !== lastRuntimeLogSignature) {
+      lastRuntimeLogSignature = signature;
+      clientLog('state.runtime changed mode=' + (state?.mode || '<null>') + ' interactive=' + !!state?.interactive + ' visible=' + !!state?.visible);
+    }
+
     if (state?.selectedFormation) {
       selectedFormation = (state.formations || []).findIndex(f => f.player && f.name === state.selectedFormation);
     } else if (selectedFormation >= (state?.formations || []).length) {
@@ -79,7 +94,8 @@
 
   function updateChrome() {
     const mode = runtimeState?.mode || 'CompactPassive';
-    root.className = 'map-shell mode-' + mode.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+    const className = 'map-shell mode-' + mode.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+    if (root.className !== className) root.className = className;
     const visible = !!runtimeState?.visible;
     root.setAttribute('aria-hidden', visible ? 'false' : 'true');
     modeLabel.textContent = ({ CompactPassive:'观察', CompactInteractive:'操作', FullPassive:'观察', FullInteractive:'战术操作', Hidden:'隐藏' })[mode] || mode;
@@ -107,7 +123,7 @@
       item.addEventListener('click', () => {
         selectedFormation = index;
         clientLog('formation item click index=' + index + ' player=' + !!f.player);
-        if (f.player) app.call('selectFormation', { name: f.name }).catch(error => clientLog('selectFormation error=' + (error?.message || error)));
+        if (f.player) command('selectFormation', { name: f.name }).catch(() => {});
         updateFormationList();
         updateDetails();
         scheduleRender();
@@ -200,60 +216,67 @@
 
   function getUv(event) {
     const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return { u: 0, v: 0 };
     return {
       u: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
       v: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
     };
   }
 
-  canvas.addEventListener('contextmenu', event => { event.preventDefault(); event.stopPropagation(); clientLog('contextmenu'); });
+  canvas.addEventListener('contextmenu', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    clientLog('contextmenu button=' + event.button + ' interactive=' + !!runtimeState?.interactive);
+  });
 
-  canvas.addEventListener('mousedown', async event => {
-    clientLog('mousedown button=' + event.button + ' interactive=' + !!runtimeState?.interactive);
+  canvas.addEventListener('pointerdown', async event => {
+    clientLog('pointerdown button=' + event.button + ' pointerType=' + event.pointerType + ' interactive=' + !!runtimeState?.interactive);
     if (!runtimeState?.interactive) return;
     event.preventDefault();
     event.stopPropagation();
-    canvas.focus();
+    canvas.focus({ preventScroll: true });
+    try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
     const uv = getUv(event);
     try {
-      if (event.button === 0) await app.call('move', uv);
-      else if (event.button === 1) await app.call('camera', uv);
-      else if (event.button === 2) await app.call('face', uv);
-    } catch (error) {
-      clientLog('mouse command exception=' + (error?.message || error));
-    }
+      if (event.button === 0) await command('move', uv);
+      else if (event.button === 1) await command('camera', uv);
+      else if (event.button === 2) await command('face', uv);
+    } catch (_) {}
   });
 
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && runtimeState?.interactive) {
       clientLog('ESC keydown in Interactive');
-      event.preventDefault(); event.stopPropagation();
-      app.call('escape', {}).catch(error => clientLog('escape call error=' + (error?.message || error)));
+      event.preventDefault();
+      event.stopPropagation();
+      command('escape').catch(() => {});
       return;
     }
 
     if (event.key.toLowerCase() !== 'n' || !runtimeState?.interactive || nGesture) return;
     clientLog('N keydown in Interactive');
-    event.preventDefault(); event.stopPropagation();
+    event.preventDefault();
+    event.stopPropagation();
     nGesture = { start: performance.now(), longTriggered: false };
     setTimeout(() => {
       if (!nGesture || nGesture.longTriggered) return;
       if (performance.now() - nGesture.start >= LONG_PRESS_MS) {
         nGesture.longTriggered = true;
         clientLog('N long -> longPressNext');
-        app.call('longPressNext', {}).catch(error => clientLog('longPressNext error=' + (error?.message || error)));
+        command('longPressNext').catch(() => {});
       }
     }, LONG_PRESS_MS + 5);
   });
 
   document.addEventListener('keyup', event => {
     if (event.key.toLowerCase() !== 'n' || !nGesture) return;
-    event.preventDefault(); event.stopPropagation();
+    event.preventDefault();
+    event.stopPropagation();
     const gesture = nGesture;
     nGesture = null;
     if (!gesture.longTriggered) {
       clientLog('N short -> toggleInteractive');
-      app.call('toggleInteractive', {}).catch(error => clientLog('toggleInteractive error=' + (error?.message || error)));
+      command('toggleInteractive').catch(() => {});
     }
   });
 
