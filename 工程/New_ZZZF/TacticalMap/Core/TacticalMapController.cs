@@ -12,7 +12,7 @@ namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
     /// TacticalMap 总控制器：提供地图数据、编队/单位追踪、订单与镜头操作。
-    /// 当前 HTMLUI 重制版不再创建旧 Gauntlet TacticalMapLayer；UI 生命周期由 HtmlUI consumer 管理。
+    /// HTMLUI Consumer 负责表现和输入，Controller 不创建任何 WebView2/Gauntlet UI。
     /// </summary>
     public sealed class TacticalMapController
     {
@@ -28,6 +28,7 @@ namespace New_ZZZF.TacticalMap.Core
         private Vec2 _playerFacing = Vec2.Zero;
         private int _agentVersion;
         private readonly List<AgentMapSnapshot> _agentSnapshots = new List<AgentMapSnapshot>();
+        private string _selectedFormationName;
 
         public TerrainCache Cache => _cache;
         public bool IsVisible => _visible;
@@ -38,6 +39,7 @@ namespace New_ZZZF.TacticalMap.Core
         public Vec2 PlayerFacing => _playerFacing;
         public byte[] AgentRGBA => _cache.AgentRGBA;
         public int AgentDataVersion => _agentVersion;
+        public string SelectedFormationName => _selectedFormationName;
 
         public TacticalMapController(Mission mission)
         {
@@ -56,9 +58,6 @@ namespace New_ZZZF.TacticalMap.Core
             return _cache.TryBake(mission.Scene);
         }
 
-        /// <summary>
-        /// 控制地图是否存在于 HTMLUI 中。旧 Gauntlet Layer 已退出运行时路径。
-        /// </summary>
         public void SetVisible(MissionScreen ms, bool visible)
         {
             _visible = visible;
@@ -98,6 +97,21 @@ namespace New_ZZZF.TacticalMap.Core
             RebuildAgentSnapshots(mission);
             _agentVersion++;
 
+            if (!string.IsNullOrWhiteSpace(_selectedFormationName))
+            {
+                bool stillExists = false;
+                foreach (var f in _formationTracker.Snapshots)
+                {
+                    if (f.IsPlayer && string.Equals(f.Name, _selectedFormationName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        stillExists = true;
+                        break;
+                    }
+                }
+                if (!stillExists)
+                    _selectedFormationName = null;
+            }
+
             _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
                 ? CameraController.Instance.TargetWorldPos
                 : (Vec2?)null;
@@ -128,6 +142,26 @@ namespace New_ZZZF.TacticalMap.Core
             }
         }
 
+        public void HandleHtmlSelectFormation(string formationName)
+        {
+            if (!_visible || string.IsNullOrWhiteSpace(formationName)) return;
+
+            foreach (var formation in _formationTracker.Snapshots)
+            {
+                if (!formation.IsPlayer) continue;
+                if (string.Equals(formation.Name, formationName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _selectedFormationName = formation.Name;
+                    return;
+                }
+            }
+        }
+
+        public void HandleHtmlClearFormationSelection()
+        {
+            _selectedFormationName = null;
+        }
+
         public void HandleHtmlMoveClick(float u, float v)
         {
             if (!ValidateHtmlUv(u, v)) return;
@@ -154,7 +188,7 @@ namespace New_ZZZF.TacticalMap.Core
 
         private void IssueOrderAtWorld(Vec2 world, TacticalClickMode mode)
         {
-            _orderSystem.IssueOrder(_mission, world, mode);
+            _orderSystem.IssueOrder(_mission, world, mode, _selectedFormationName);
         }
 
         public void HandleClick(Vec2 mousePixel, bool shift, bool rightButton)
