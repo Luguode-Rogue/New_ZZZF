@@ -79,20 +79,9 @@ namespace New_ZZZF.TacticalMap.Core
             _controller.Tick(Mission, _missionScreen, dt);
             TacticalMapHtmlUi.Instance.Tick(dt);
 
-            // Framework 的 Captured 是页面级输入所有权。Bannerlord 可能在 Mission Tick/窗口切换期间重新取得前台，
-            // 因此只在 TacticalMap 处于交互态时通过 Framework 的公开 API 重新声明 Captured，不直接碰 Win32/WebView2。
-            if (TacticalMapHtmlUi.Instance.IsInteractive)
-            {
-                try
-                {
-                    HtmlUiService.CaptureInput();
-                }
-                catch (Exception ex)
-                {
-                    TacticalMapLog.Warn("Failed to maintain TacticalMap Captured input: " + ex.Message);
-                }
-            }
-
+            // Input ownership is changed only on TacticalMap mode transitions via ApplyInputMode().
+            // Do not re-submit CaptureInput() every MissionTick: HtmlUiService marshals it to the WebView2 UI thread,
+            // and repeating it every frame can starve browser input/timers and cause long-press latency.
             _heartbeatAccum += Math.Max(0f, dt);
             if (_heartbeatAccum >= 5f)
             {
