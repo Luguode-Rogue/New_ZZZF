@@ -16,7 +16,6 @@
   let terrainCanvas = null;
   let riskCanvas = null;
   let selectedFormation = -1;
-  let interactiveGesture = null;
   let rafPending = false;
 
   const modeText = {
@@ -93,13 +92,13 @@
       const error = staticState?.error ? `：${staticState.error}` : '';
       statusText.textContent = `TacticalMap · 地形不可用${error}`;
     } else if (!terrainCanvas) {
-      statusText.textContent = `TacticalMap · 地形数据已到达但解码失败`;
+      statusText.textContent = 'TacticalMap · 地形数据已到达但解码失败';
     } else {
       statusText.textContent = `TacticalMap · ${modeText[mode] || mode}`;
     }
 
     hint.textContent = mode.includes('Interactive')
-      ? '左键：移动　中键：镜头　右键：朝向　ESC：退出操作　N 长按：全屏 / 隐藏'
+      ? '左键：移动　中键：镜头　右键：朝向　ESC：退出操作　N：切换操作　N 长按：全屏 / 隐藏'
       : 'N 短按：操作　N 长按：全屏 / 隐藏';
   }
 
@@ -303,10 +302,15 @@
     };
   }
 
-  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
   canvas.addEventListener('mousedown', async event => {
     if (!runtimeState?.interactive) return;
     event.preventDefault();
+    event.stopPropagation();
     const uv = getUvFromEvent(event);
     try {
       if (event.button === 0) await app.call('move', uv);
@@ -320,29 +324,9 @@
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && runtimeState?.interactive) {
       event.preventDefault();
+      event.stopPropagation();
       app.call('escape', {}).catch(() => {});
-      return;
     }
-
-    if (event.key.toLowerCase() === 'n' && runtimeState?.interactive && !interactiveGesture) {
-      interactiveGesture = { start: performance.now(), longTriggered: false };
-      const threshold = 450;
-      setTimeout(() => {
-        if (!interactiveGesture || interactiveGesture.longTriggered) return;
-        if (performance.now() - interactiveGesture.start >= threshold) {
-          interactiveGesture.longTriggered = true;
-          app.call('longPressNext', {}).catch(() => {});
-        }
-      }, threshold + 5);
-    }
-  });
-
-  document.addEventListener('keyup', event => {
-    if (event.key.toLowerCase() !== 'n' || !interactiveGesture) return;
-    const gesture = interactiveGesture;
-    interactiveGesture = null;
-    if (!gesture.longTriggered)
-      app.call('toggleInteractive', {}).catch(() => {});
   });
 
   window.addEventListener('resize', scheduleRender);
