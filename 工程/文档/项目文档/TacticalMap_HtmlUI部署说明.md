@@ -4,154 +4,168 @@
 
 ## 当前状态
 
-本分支保留原有 TacticalMap Gauntlet UI，同时新增右上角 HtmlUI 版本。
-
-当前工程没有依赖一个可靠的“编译后自动复制 HTML 资源”的 IDE/MSBuild 部署流程，因此**运行前需要手动复制 `TacticalMapUI` 资源目录**。
-
-## 手动部署
-
-### 1. 编译 New_ZZZF
-
-先正常编译：
-
-`New_ZZZF (net472)`
-
-编译完成后，实际运行时 DLL 所在目录通常是：
+TacticalMap 已接入 `BannerlordHtmlUI` Framework。Consumer C# 位于 `TacticalMap/UI/TacticalMapHtmlUi.cs`，HTML/CSS/JS 源文件位于：
 
 ```text
-E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\bin\Win64_Shipping_Client\
+工程\New_ZZZF\GUI\Html\TacticalMap\
 ```
 
-以你当前机器为例，必须确认目录中存在：
+运行时资源由 `Directory.Build.targets` 在 `net472` Build 后自动部署到：
 
 ```text
-New_ZZZF.dll
+$(TargetDir)TacticalMapUI\
 ```
 
-### 2. 复制 HtmlUI 资源
+因此无需再手工复制 HTML 资源。
 
-源目录：
+## 运行时文件布局
+
+编译后，以 `New_ZZZF.dll` 的 `Assembly.Location` 为准，实际目录应类似：
 
 ```text
-工程\New_ZZZF\TacticalMap\HtmlUI\
+Modules\New_ZZZF\bin\Win64_Shipping_Client\
+├─ New_ZZZF.dll
+└─ TacticalMapUI\
+   ├─ index.html
+   ├─ tactical-map.css
+   └─ tactical-map.js
 ```
 
-目标目录：
+同时必须存在：
 
 ```text
-游戏目录\Modules\New_ZZZF\bin\Win64_Shipping_Client\TacticalMapUI\
-```
-
-最终必须形成：
-
-```text
-Modules\New_ZZZF\
-└─ bin\
-   └─ Win64_Shipping_Client\
-      ├─ New_ZZZF.dll
-      └─ TacticalMapUI\
-         └─ index.html
-```
-
-**注意：不要复制到下面这些位置：**
-
-```text
-Modules\New_ZZZF\TacticalMapUI\
-Modules\New_ZZZF\工程\New_ZZZF\TacticalMapUI\
-Modules\New_ZZZF\bin\TacticalMapUI\
-```
-
-HtmlUI 的运行时路径依据 `New_ZZZF.dll` 的 `Assembly.Location` 确定，因此必须与实际加载的 DLL 位于同一个 `bin\Win64_Shipping_Client` 运行时目录下。
-
-### 3. 运行前检查
-
-启动游戏前确认：
-
-```text
-Modules\New_ZZZF\bin\Win64_Shipping_Client\New_ZZZF.dll
-Modules\New_ZZZF\bin\Win64_Shipping_Client\TacticalMapUI\index.html
 Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll
 ```
 
-三者都存在。
+以及 BannerlordHtmlUI Framework 自身要求的 WebView2/`web` 运行时资源。
 
-### 4. Framework 依赖
+## 构建部署
 
-New_ZZZF 的 TacticalMap HtmlUI 使用 `BannerlordHtmlUI` Framework，因此需要已经正确安装并加载：
+执行：
 
 ```text
-Modules\BannerlordHtmlUI\
-└─ bin\
-   └─ Win64_Shipping_Client\
-      └─ BannerlordHtmlUI.dll
+New_ZZZF (net472)
 ```
 
-同时 `BannerlordHtmlUI` 自己的运行时 `web` 资源也必须按 Framework 的部署说明存在。
+`Directory.Build.targets` 会执行：
+
+```text
+GUI\Html\TacticalMap\**\*
+        ↓
+$(TargetDir)TacticalMapUI\
+```
+
+源码工程中的 `GUI\Html\TacticalMap` 不是运行时路径；运行时依据 DLL 的 `Assembly.Location` 查找 `TacticalMapUI`。
 
 ## 如何确认部署成功
 
-进入有地形的实际战场。
-
-按 TacticalMap 原来的开关键 `N`。
-
-预期结果：
+进入支持 TacticalMap 的实际战场后，默认应看到：
 
 ```text
-左上：原 Gauntlet TacticalMap
-右上：新的 HtmlUI TacticalMap
+右下角：CompactPassive 小地图
 ```
 
-如果右上角 HtmlUI 没出现，优先检查：
+默认不捕获鼠标，不影响 Bannerlord 正常战斗输入。
 
-1. `New_ZZZF.dll` 当前实际加载路径。
-2. `TacticalMapUI\index.html` 是否与该 DLL 同目录下。
-3. `BannerlordHtmlUI.dll` 是否已加载。
-4. 日志中是否出现：
+N 短按：
 
 ```text
-[TMap][HtmlUI] 注册失败
+CompactPassive <-> CompactInteractive
+FullPassive    <-> FullInteractive
 ```
 
-或者 `DirectoryNotFoundException`。
+N 长按：
+
+```text
+Compact -> Full -> Hidden -> Compact
+```
+
+ESC：
+
+```text
+CompactInteractive -> CompactPassive
+FullInteractive    -> FullPassive
+```
+
+操作状态下：
+
+```text
+左键：移动
+中键：镜头
+右键：朝向
+```
+
+全屏地图提供：
+
+```text
+左侧：编队列表
+中央：战术地图
+右侧：编队详情
+底部：状态/操作提示
+```
 
 ## 常见错误
 
 ### DirectoryNotFoundException
 
-如果日志类似：
+如果日志显示：
 
 ```text
-DirectoryNotFoundException:
 ...\Modules\New_ZZZF\bin\Win64_Shipping_Client\TacticalMapUI
 ```
 
-说明代码已经执行到 `RegisterContentRoot()`，但运行时目录下没有 `TacticalMapUI`。
+说明 Build 后实际 DLL 旁没有 `TacticalMapUI`。优先检查：
 
-解决方法：重新执行上面的手动复制步骤。
+1. 使用的是 `net472` 构建。
+2. `$(GameFolder)` 指向正确的 Bannerlord 安装目录。
+3. `Directory.Build.targets` 已被工程加载。
+4. `GUI\Html\TacticalMap` 源目录存在。
 
-### 只复制 `index.html` 到错误目录
+### Framework 未就绪
 
-不要只看源码工程位置。真正运行的是 DLL 同目录资源：
-
-```text
-New_ZZZF.dll
-TacticalMapUI\index.html
-```
-
-必须形成这一对运行时文件。
-
-## 以后自动部署
-
-后续可以继续完善 `Directory.Build.targets`，把：
+必须先加载：
 
 ```text
-工程\New_ZZZF\TacticalMap\HtmlUI
+Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll
 ```
 
-自动复制到：
+Consumer 使用 `HtmlUiService.OnReady(...)` 注册，不自行创建 WebView2。
+
+### 页面能显示但不能点击
+
+按照 Framework 输入链检查：
 
 ```text
-$(TargetDir)TacticalMapUI
+N 短按
+→ Captured
+→ WebView Focus
+→ Canvas pointer events
+→ HTML Command
 ```
 
-但在自动复制链经过实际构建验证之前，正式测试统一按本文的手动复制方式执行。
+TacticalMap 本身不直接操作 WebView2/Overlay HWND。
+
+## 实现职责
+
+```text
+TacticalMap Core
+├─ TerrainCache
+├─ FormationTracker
+├─ AgentTracker
+├─ OrderSystem
+└─ CameraController
+
+TacticalMap HtmlUI Consumer
+├─ Page 生命周期
+├─ Compact/Full/Hidden 状态机
+├─ Passive/Captured 输入模式
+├─ State
+├─ Command / Request
+└─ HTML 资源注册
+
+HTML/CSS/JS
+├─ Terrain / Risk 绘制
+├─ Formation / Agent / Player / Camera Target
+├─ 编队列表与详情
+└─ 左中右键交互
+```
