@@ -17,11 +17,7 @@
   let riskCanvas = null;
   let selectedFormation = -1;
   let rafPending = false;
-  let nGesture = null;
   let lastRuntimeLogSignature = null;
-  const LONG_PRESS_MS = 450;
-
-  canvas.tabIndex = 0;
 
   function clientLog(message) {
     try { app.call('clientLog', { message }); } catch (_) {}
@@ -109,7 +105,7 @@
   }
 
   function escapeHtml(value) {
-    return String(value).replace(/[&<>'"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[ch]);
+    return String(value).replace(/[&<>'\"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '\"':'&quot;' })[ch]);
   }
 
   function updateFormationList() {
@@ -127,7 +123,6 @@
         updateFormationList();
         updateDetails();
         scheduleRender();
-        canvas.focus();
       });
       formationList.appendChild(item);
     });
@@ -234,7 +229,6 @@
     if (!runtimeState?.interactive) return;
     event.preventDefault();
     event.stopPropagation();
-    canvas.focus({ preventScroll: true });
     try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
     const uv = getUv(event);
     try {
@@ -242,42 +236,6 @@
       else if (event.button === 1) await command('camera', uv);
       else if (event.button === 2) await command('face', uv);
     } catch (_) {}
-  });
-
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && runtimeState?.interactive) {
-      clientLog('ESC keydown in Interactive');
-      event.preventDefault();
-      event.stopPropagation();
-      command('escape').catch(() => {});
-      return;
-    }
-
-    if (event.key.toLowerCase() !== 'n' || !runtimeState?.interactive || nGesture) return;
-    clientLog('N keydown in Interactive');
-    event.preventDefault();
-    event.stopPropagation();
-    nGesture = { start: performance.now(), longTriggered: false };
-    setTimeout(() => {
-      if (!nGesture || nGesture.longTriggered) return;
-      if (performance.now() - nGesture.start >= LONG_PRESS_MS) {
-        nGesture.longTriggered = true;
-        clientLog('N long -> longPressNext');
-        command('longPressNext').catch(() => {});
-      }
-    }, LONG_PRESS_MS + 5);
-  });
-
-  document.addEventListener('keyup', event => {
-    if (event.key.toLowerCase() !== 'n' || !nGesture) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const gesture = nGesture;
-    nGesture = null;
-    if (!gesture.longTriggered) {
-      clientLog('N short -> toggleInteractive');
-      command('toggleInteractive').catch(() => {});
-    }
   });
 
   window.addEventListener('resize', scheduleRender);
@@ -289,5 +247,5 @@
   const initialRuntime = app.state.get('tacticalMap.runtime');
   if (initialStatic) applyStatic(initialStatic);
   if (initialRuntime) applyRuntime(initialRuntime);
-  clientLog('JS event handlers installed.');
+  clientLog('JS event handlers installed. Keyboard remains with Bannerlord; mouse is consumed only in interactive mode.');
 })();
