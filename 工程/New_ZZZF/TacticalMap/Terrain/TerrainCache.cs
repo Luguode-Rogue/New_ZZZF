@@ -4,6 +4,7 @@ using System.Security;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Core;
+using New_ZZZF.TacticalMap.Diagnostics;
 
 namespace New_ZZZF.TacticalMap.Terrain
 {
@@ -26,12 +27,8 @@ namespace New_ZZZF.TacticalMap.Terrain
         public float MaxH { get; private set; }
 
         public TerrainCell[,] Cells { get; private set; }
-
-        // 烘焙一次的静态底图（高度色 + 材质着色）与风险层（半透明叠加）
         public byte[] TerrainBaseRGBA { get; private set; }
         public byte[] RiskRGBA { get; private set; }
-        // 动态单位层：每单位一个彩色点（透明背景），由 AgentTracker 每帧节流刷新，
-        // 整体烘焙成纹理绘制（单 draw call，清晰呈现成千上万单位的真实分布）。
         public byte[] AgentRGBA { get; private set; }
 
         private readonly TacticalMap.Config.TacticalSettings _settings;
@@ -43,45 +40,62 @@ namespace New_ZZZF.TacticalMap.Terrain
             _settings = settings;
         }
 
-        /// <summary>
-        /// 烘焙地形。若场景无地形（酒馆/城镇/竞技场等）直接返回 false，不触碰任何地形原生 API。
-        /// </summary>
-        /// <remarks>
-        /// HandleProcessCorruptedStateExceptions 是最后一道保险：引擎侧地形接口在异常场景下
-        /// 可能抛出 AccessViolationException，该异常默认不会被 catch(Exception) 捕获，
-        /// 加上此特性后至少能降级为“地图不显示”而不是整个游戏崩溃。
-        /// </remarks>
         [HandleProcessCorruptedStateExceptions]
         [SecurityCritical]
         public bool TryBake(Scene scene)
         {
+            TacticalMapLog.Section("TERRAIN BAKE");
+            TacticalMapLog.Info("TryBake entered. Scene=" + (scene == null ? "null" : scene.GetType().FullName));
             _scene = scene;
-            if (scene == null) { LastError = "scene 为 null"; return false; }
+            if (scene == null)
+            {
+                LastError = "scene 为 null";
+                TacticalMapLog.Warn("Terrain bake aborted: scene is null.");
+                return false;
+            }
 
-            // 关键前置检查：无地形场景中调用 GetTerrainData 会导致引擎侧空指针访问。
             if (!MissionSceneGuard.IsSceneTerrainReady(scene))
             {
                 LastError = "当前场景无地形数据（酒馆/城镇等室内场景）";
                 _baked = false;
+                TacticalMapLog.Warn("Terrain bake aborted: scene terrain is not ready.");
                 return false;
             }
 
             try
             {
                 scene.GetTerrainData(out Vec2i nodeDim, out float nodeSize, out _, out _);
-                if (nodeDim.X <= 0 || nodeDim.Y <= 0 || nodeSize <= 0f) { LastError = "地形数据无效(nodeDim/nodeSize)"; return false; }
-                if (!scene.GetTerrainMinMaxHeight(out float minH, out float maxH)) { LastError = "GetTerrainMinMaxHeight 失败"; return false; }
+                TacticalMapLog.Info("TerrainData: nodeDim=" + nodeDim.X + "x" + nodeDim.Y + ", nodeSize=" + nodeSize);
+                if (nodeDim.X <= 0 || nodeDim.Y <= 0 || nodeSize <= 0f)
+                {
+                    LastError = "地形数据无效(nodeDim/nodeSize)";
+                    TacticalMapLog.Warn("Terrain data invalid.");
+                    return false;
+                }
+
+                if (!scene.GetTerrainMinMaxHeight(out float minH, out float maxH))
+                {
+                    LastError = "GetTerrainMinMaxHeight 失败";
+                    TacticalMapLog.Warn("GetTerrainMinMaxHeight failed.");
+                    return false;
+                }
                 MinH = minH;
                 MaxH = maxH;
+                TacticalMapLog.Info("Terrain height range: min=" + minH + ", max=" + maxH);
 
-                // ---- 计算实际战场边界（避免地图显示范围过大） ----
                 float fullWorldW = nodeDim.X * nodeSize;
                 float fullWorldH = nodeDim.Y * nodeSize;
                 if (!ComputeBattleBounds(scene, out Vec2 battleMin, out Vec2 battleMax))
                 {
                     battleMin = Vec2.Zero;
                     battleMax = new Vec2(fullWorldW, fullWorldH);
+                    TacticalMapLog.Warn("Battle bounds fallback to full terrain bounds.");
                 }
+                else
+                {
+                    TacticalMapLog.Info("Battle bounds: min=(" + battleMin.X + "," + battleMin.Y + ") max=(" + battleMax.X + "," + battleMax.Y + ")");
+                }
+
                 OriginX = battleMin.X;
                 OriginY = battleMin.Y;
                 WorldW = Math.Max(1f, battleMax.X - battleMin.X);
@@ -91,6 +105,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                 Width = res;
                 Height = res;
                 CellStep = Math.Max(WorldW, WorldH) / res;
+                TacticalMapLog.Info("Bake resolution=" + Width + "x" + Height + ", world=" + WorldW + "x" + WorldH + ", cellStep=" + CellStep);
 
                 Cells = new TerrainCell[Width, Height];
                 float[,] heights = new float[Width, Height];
@@ -119,19 +134,26 @@ namespace New_ZZZF.TacticalMap.Terrain
                     }
                 }
 
+                TacticalMapLog.Info("Terrain samples completed.");
                 TerrainAnalyzer.ClassifyAll(this, heights, _settings);
+                TacticalMapLog.Info("TerrainAnalyzer.ClassifyAll completed.");
                 BuildBaseRGBA();
+                TacticalMapLog.Info("BuildBaseRGBA completed. Bytes=" + (TerrainBaseRGBA == null ? 0 : TerrainBaseRGBA.Length));
                 BuildRiskRGBA();
-                AgentRGBA = new byte[Width * Height * 4]; // 初始全 0 = 全透明
+                TacticalMapLog.Info("BuildRiskRGBA completed. Bytes=" + (RiskRGBA == null ? 0 : RiskRGBA.Length));
+                AgentRGBA = new byte[Width * Height * 4];
                 _baked = true;
+                LastError = null;
+                TacticalMapLog.Info("Terrain bake SUCCESS.");
                 return true;
             }
             catch (Exception ex)
             {
                 LastError = ex.Message;
+                _baked = false;
+                TacticalMapLog.Error("TerrainCache.TryBake failed.", ex);
                 Console.WriteLine("[TacticalMap] TerrainCache.TryBake failed: " + ex.Message);
                 InformationManager.DisplayMessage(new InformationMessage($"[TMap] 地形烘焙失败: {ex.GetType().Name}: {ex.Message}"));
-                _baked = false;
                 return false;
             }
         }
@@ -146,7 +168,6 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         public Vec2 UVToWorld(Vec2 uv)
         {
-            // X 轴镜像：把小地图左右翻转，使地图显示/点击与镜头方位一致
             return new Vec2(OriginX + (1f - uv.X) * WorldW, OriginY + uv.Y * WorldH);
         }
 
@@ -162,11 +183,8 @@ namespace New_ZZZF.TacticalMap.Terrain
             catch { return 0f; }
         }
 
-        // ---- 战场边界计算 ----
-        /// <summary>计算实际战斗区域的边界矩形。</summary>
         private bool ComputeBattleBounds(Scene scene, out Vec2 min, out Vec2 max)
         {
-            // ① 优先使用软边界（walk_area）多边形顶点包围盒，这是关编辑器中定义的可行走区域
             int softCount = scene.GetSoftBoundaryVertexCount();
             if (softCount > 0)
             {
@@ -180,29 +198,29 @@ namespace New_ZZZF.TacticalMap.Terrain
                     if (v.X > maxX) maxX = v.X;
                     if (v.Y > maxY) maxY = v.Y;
                 }
-                // 向外扩展 10% 边距，避免边界上的单位被裁切
                 float mx = (maxX - minX) * 0.1f;
                 float my = (maxY - minY) * 0.1f;
                 min = new Vec2(minX - mx, minY - my);
                 max = new Vec2(maxX + mx, maxY + my);
+                TacticalMapLog.Info("ComputeBattleBounds: using soft boundary vertices=" + softCount);
                 return true;
             }
-            // ② 回退：场景包围盒（包含所有实体的最小矩形）
+
             scene.GetBoundingBox(out Vec3 bbMin, out Vec3 bbMax);
-            if (bbMin.IsValid && bbMax.IsValid &&
-                bbMax.X > bbMin.X && bbMax.Y > bbMin.Y)
+            if (bbMin.IsValid && bbMax.IsValid && bbMax.X > bbMin.X && bbMax.Y > bbMin.Y)
             {
                 min = bbMin.AsVec2;
                 max = bbMax.AsVec2;
+                TacticalMapLog.Info("ComputeBattleBounds: using scene bounding box.");
                 return true;
             }
-            // ③ 都失败，返回 false 让调用方使用全地形范围
+
             min = Vec2.Zero;
             max = Vec2.Zero;
+            TacticalMapLog.Warn("ComputeBattleBounds: no usable bounds.");
             return false;
         }
 
-        // --- 颜色工具 ---
         private void BuildBaseRGBA()
         {
             TerrainBaseRGBA = new byte[Width * Height * 4];
@@ -212,8 +230,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                 for (int y = 0; y < Height; y++)
                 {
                     var c = Cells[x, y];
-                    float t = (c.Height - MinH) / range; // 0..1
-                    // 高度色带：低绿 -> 中棕 -> 高灰 -> 顶白
+                    float t = (c.Height - MinH) / range;
                     byte r, g, b;
                     if (t < 0.5f)
                     {
@@ -263,13 +280,11 @@ namespace New_ZZZF.TacticalMap.Terrain
             r = buf[i]; g = buf[i + 1]; b = buf[i + 2]; a = buf[i + 3];
         }
 
-        // --- 动态单位层维护 ---
         public void ClearAgents()
         {
             if (AgentRGBA != null) Array.Clear(AgentRGBA, 0, AgentRGBA.Length);
         }
 
-        // 在 (gx,gy) 周围 radius 范围内画一个不透明点（默认 3x3），双线性拉伸后仍清晰可辨。
         public void PaintAgent(int gx, int gy, byte r, byte g, byte b, int radius = 1)
         {
             if (AgentRGBA == null) return;
