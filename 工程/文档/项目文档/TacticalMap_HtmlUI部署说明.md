@@ -2,89 +2,106 @@
 
 分支：`feature/tacticalmap-htmlui-redesign`
 
-## 当前状态
+本说明按 `BannerlordHtmlUI` Framework 当前 `dev` 文档执行。Framework 明确规定 Consumer 的程序集旁运行时 UI 资源由 `Assembly.Location` 定位，标准布局为 DLL 同目录下的 `UI/`；Framework ConsumerTestMod 也是这一布局。citeturn120file0turn123file0
 
-TacticalMap 已接入 `BannerlordHtmlUI` Framework。Consumer C# 位于 `TacticalMap/UI/TacticalMapHtmlUi.cs`，HTML/CSS/JS 源文件位于：
+## 源码位置
 
-```text
-工程\New_ZZZF\GUI\Html\TacticalMap\
-```
-
-运行时资源由 `Directory.Build.targets` 在 `net472` Build 后自动部署到：
+TacticalMap HTML/CSS/JS 源文件现在位于：
 
 ```text
-$(TargetDir)TacticalMapUI\
+工程\New_ZZZF\TacticalMap\UI\TacticalMap\
+├─ index.html
+├─ tactical-map.css
+└─ tactical-map.js
 ```
 
-因此无需再手工复制 HTML 资源。
+C# Consumer 位于：
 
-## 运行时文件布局
+```text
+工程\New_ZZZF\TacticalMap\UI\TacticalMapHtmlUi.cs
+```
 
-编译后，以 `New_ZZZF.dll` 的 `Assembly.Location` 为准，实际目录应类似：
+## 运行时位置
+
+以实际加载的 `New_ZZZF.dll` 的 `Assembly.Location` 为基准，Framework Consumer 运行时 UI 根目录是：
+
+```text
+<New_ZZZF.dll所在目录>\UI\
+```
+
+TacticalMap Page 的相对路径是：
+
+```text
+TacticalMap\index.html
+```
+
+因此最终应为：
 
 ```text
 Modules\New_ZZZF\bin\Win64_Shipping_Client\
 ├─ New_ZZZF.dll
-└─ TacticalMapUI\
-   ├─ index.html
-   ├─ tactical-map.css
-   └─ tactical-map.js
+└─ UI\
+   └─ TacticalMap\
+      ├─ index.html
+      ├─ tactical-map.css
+      └─ tactical-map.js
 ```
 
-同时必须存在：
+## C# ContentRoot / Page 对应关系
+
+Consumer 使用：
+
+```csharp
+var assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
+var uiRoot = Path.Combine(assemblyDir, "UI");
+_scope.RegisterContentRoot("tacticalmap", uiRoot);
+
+_scope.RegisterPage(new HtmlUiPage("tacticalmap", "TacticalMap/index.html")
+{
+    ContentRootId = "tacticalmap"
+});
+```
+
+注意三者不能混用：
+
+```text
+Page ID          = tacticalmap
+ContentRoot ID   = tacticalmap
+实际 Windows 目录 = ...\bin\Win64_Shipping_Client\UI\
+HTML 相对路径    = TacticalMap\index.html
+```
+
+## Build / Deploy
+
+`工程\New_ZZZF\Directory.Build.targets` 会在 `net472` Build 后执行：
+
+```text
+工程\New_ZZZF\TacticalMap\UI\TacticalMap\**\*
+        ↓
+$(TargetDir)UI\TacticalMap\
+```
+
+因此不需要手工复制 HTML 资源。
+
+## 依赖
+
+必须先存在：
 
 ```text
 Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll
 ```
 
-以及 BannerlordHtmlUI Framework 自身要求的 WebView2/`web` 运行时资源。
+以及 Framework 自身要求的 WebView2 / `web` 运行时资源。
 
-## 构建部署
+## 验证重点
 
-执行：
-
-```text
-New_ZZZF (net472)
-```
-
-`Directory.Build.targets` 会执行：
+进入支持 TacticalMap 的战场后：
 
 ```text
-GUI\Html\TacticalMap\**\*
-        ↓
-$(TargetDir)TacticalMapUI\
-```
-
-源码工程中的 `GUI\Html\TacticalMap` 不是运行时路径；运行时依据 DLL 的 `Assembly.Location` 查找 `TacticalMapUI`。
-
-## 如何确认部署成功
-
-进入支持 TacticalMap 的实际战场后，默认应看到：
-
-```text
-右下角：CompactPassive 小地图
-```
-
-默认不捕获鼠标，不影响 Bannerlord 正常战斗输入。
-
-N 短按：
-
-```text
-CompactPassive <-> CompactInteractive
-FullPassive    <-> FullInteractive
-```
-
-N 长按：
-
-```text
-Compact -> Full -> Hidden -> Compact
-```
-
-ESC：
-
-```text
-CompactInteractive -> CompactPassive
-FullInteractive    -> FullPassive
+默认：CompactPassive 小地图
+N 短按：Passive <-> Interactive
+N 长按：Compact -> Full -> Hidden -> Compact
+ESC：Interactive -> Passive
 ```
 
 操作状态下：
@@ -95,77 +112,36 @@ FullInteractive    -> FullPassive
 右键：朝向
 ```
 
-全屏地图提供：
+如果出现 `DirectoryNotFoundException`，首先检查的是：
 
 ```text
-左侧：编队列表
-中央：战术地图
-右侧：编队详情
-底部：状态/操作提示
+New_ZZZF.dll
+UI\TacticalMap\index.html
 ```
 
-## 常见错误
+是否位于同一个 `bin\Win64_Shipping_Client` 运行时目录层级，而不是检查旧的 `TacticalMapUI` 目录。
 
-### DirectoryNotFoundException
+## 依据
 
-如果日志显示：
+Framework 当前开发指南：
 
 ```text
-...\Modules\New_ZZZF\bin\Win64_Shipping_Client\TacticalMapUI
+Project/BannerlordHtmlUI/BannerlordHtmlUI/docs/DEVELOPMENT_GUIDE.md
 ```
 
-说明 Build 后实际 DLL 旁没有 `TacticalMapUI`。优先检查：
-
-1. 使用的是 `net472` 构建。
-2. `$(GameFolder)` 指向正确的 Bannerlord 安装目录。
-3. `Directory.Build.targets` 已被工程加载。
-4. `GUI\Html\TacticalMap` 源目录存在。
-
-### Framework 未就绪
-
-必须先加载：
+其 ContentRoot 规则明确采用：
 
 ```text
-Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll
+Assembly.Location
+    ↓
+Path.Combine(assemblyDir, "UI")
+    ↓
+RegisterContentRoot(...)
 ```
 
-Consumer 使用 `HtmlUiService.OnReady(...)` 注册，不自行创建 WebView2。
-
-### 页面能显示但不能点击
-
-按照 Framework 输入链检查：
+Framework ConsumerTestMod 的实际工程部署也采用：
 
 ```text
-N 短按
-→ Captured
-→ WebView Focus
-→ Canvas pointer events
-→ HTML Command
-```
-
-TacticalMap 本身不直接操作 WebView2/Overlay HWND。
-
-## 实现职责
-
-```text
-TacticalMap Core
-├─ TerrainCache
-├─ FormationTracker
-├─ AgentTracker
-├─ OrderSystem
-└─ CameraController
-
-TacticalMap HtmlUI Consumer
-├─ Page 生命周期
-├─ Compact/Full/Hidden 状态机
-├─ Passive/Captured 输入模式
-├─ State
-├─ Command / Request
-└─ HTML 资源注册
-
-HTML/CSS/JS
-├─ Terrain / Risk 绘制
-├─ Formation / Agent / Player / Camera Target
-├─ 编队列表与详情
-└─ 左中右键交互
+<Mod>\bin\<GameBinariesFolder>\<Mod>.dll
+<Mod>\bin\<GameBinariesFolder>\UI\...
 ```
