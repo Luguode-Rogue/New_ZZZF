@@ -1,9 +1,13 @@
 <Project>
   <PropertyGroup>
+    <HtmlUiModuleDeployDir Condition="'$(HtmlUiModuleDeployDir)' == ''">$(GameFolder)\Modules\$(ModuleId)</HtmlUiModuleDeployDir>
+    <HtmlUiBinaryDeployDir Condition="'$(HtmlUiBinaryDeployDir)' == ''">$(HtmlUiModuleDeployDir)\bin\$(GameBinariesFolder)</HtmlUiBinaryDeployDir>
+
     <CustomSkillHtmlUiSource>$(MSBuildProjectDirectory)\GUI\Html\CustomSkill</CustomSkillHtmlUiSource>
-    <CustomSkillHtmlUiDeploy>$(TargetDir)CustomSkillUI</CustomSkillHtmlUiDeploy>
+    <CustomSkillHtmlUiDeploy>$(HtmlUiBinaryDeployDir)\CustomSkillUI</CustomSkillHtmlUiDeploy>
+
     <TacticalMapHtmlUiSource>$(MSBuildProjectDirectory)\TacticalMap\UI\TacticalMap</TacticalMapHtmlUiSource>
-    <TacticalMapHtmlUiDeploy>$(TargetDir)UI\TacticalMap</TacticalMapHtmlUiDeploy>
+    <TacticalMapHtmlUiDeploy>$(HtmlUiBinaryDeployDir)\UI\TacticalMap</TacticalMapHtmlUiDeploy>
   </PropertyGroup>
 
   <ItemGroup>
