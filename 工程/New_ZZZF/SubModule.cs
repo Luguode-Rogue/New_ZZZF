@@ -15,6 +15,7 @@ using TaleWorlds.MountAndBlade.View.Screens;
 using New_ZZZF.Systems;
 using MountedSlashCamera;
 using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.UI;
 using TaleWorlds.CampaignSystem.ComponentInterfaces;
 using StoryMode.GameComponents.CampaignBehaviors;
 using TaleWorlds.Localization;
@@ -35,6 +36,7 @@ namespace New_ZZZF
         {
             base.OnSubModuleLoad();
             TacticalMapBootstrap.OnSubModuleLoad();
+            TacticalMapHtmlUi.Instance.InitializeOnFrameworkReady();
             CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
         }
 
@@ -104,6 +106,7 @@ namespace New_ZZZF
 
         protected override void OnSubModuleUnloaded()
         {
+            TacticalMapHtmlUi.Instance.Dispose();
             CustomSkillHtmlUi.Instance.Dispose();
             base.OnSubModuleUnloaded();
         }
