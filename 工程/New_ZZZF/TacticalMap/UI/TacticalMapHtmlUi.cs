@@ -89,9 +89,23 @@ namespace New_ZZZF.TacticalMap.UI
                     _controller?.HandleHtmlSelectFormation(name);
                 PublishState(true);
             });
-            _scope.RegisterCommand("move", payload => ExecuteUv(payload, _controller?.HandleHtmlMoveClick));
-            _scope.RegisterCommand("face", payload => ExecuteUv(payload, _controller?.HandleHtmlFaceClick));
-            _scope.RegisterCommand("camera", payload => ExecuteUv(payload, _controller?.HandleHtmlCameraClick));
+
+            _scope.RegisterCommand("move", payload =>
+            {
+                if (_controller == null) return;
+                ExecuteUv(payload, _controller.HandleHtmlMoveClick);
+            });
+            _scope.RegisterCommand("face", payload =>
+            {
+                if (_controller == null) return;
+                ExecuteUv(payload, _controller.HandleHtmlFaceClick);
+            });
+            _scope.RegisterCommand("camera", payload =>
+            {
+                if (_controller == null) return;
+                ExecuteUv(payload, _controller.HandleHtmlCameraClick);
+            });
+
             _scope.RegisterCommand("refresh", _ => PublishState(true));
             _scope.RegisterRequest("getState", _ => System.Threading.Tasks.Task.FromResult<object>(BuildRuntimeState()));
         }
@@ -333,6 +347,10 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 width = cache.Width,
                 height = cache.Height,
+                baked = cache.IsBaked,
+                error = cache.LastError ?? string.Empty,
+                worldWidth = cache.WorldW,
+                worldHeight = cache.WorldH,
                 terrainVersion = terrainSignature,
                 terrainBaseRgba = _terrainBase64,
                 riskRgba = _riskBase64,
@@ -419,6 +437,7 @@ namespace New_ZZZF.TacticalMap.UI
                 hash = hash * 31 + (cache.IsBaked ? 1 : 0);
                 hash = hash * 31 + (cache.TerrainBaseRGBA == null ? 0 : cache.TerrainBaseRGBA.Length);
                 hash = hash * 31 + (cache.RiskRGBA == null ? 0 : cache.RiskRGBA.Length);
+                hash = hash * 31 + (cache.LastError ?? string.Empty).GetHashCode();
                 return hash;
             }
         }
