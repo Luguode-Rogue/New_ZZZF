@@ -23,12 +23,11 @@
     button{border:1px solid var(--line);background:rgba(0,0,0,.5);color:var(--text);border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer}
     button:hover{background:rgba(255,255,255,.12)}
     #legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px}
-    .legendItem{display:flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block}.square{width:9px;height:9px;border:2px solid;border-radius:2px;display:inline-block}.triangle{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid}
+    .legendItem{display:flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block}.square{width:9px;height:9px;border:2px solid;border-radius:2px;display:inline-block}
     #formations{max-height:260px;overflow:auto;font-size:11px}.formation{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}.formation:last-child{border-bottom:0}
     .formationMarker{width:8px;height:8px;border:2px solid;border-radius:2px;flex:0 0 auto}
     .badge{display:inline-block;padding:2px 5px;border-radius:4px;font-size:10px;background:rgba(255,255,255,.08)}
     .hidden{display:none!important}
-    .full #shell{}
     #status{font-size:11px;line-height:1.5}.statusRow{display:flex;justify-content:space-between;gap:8px}
   </style>
 </head>
@@ -68,6 +67,7 @@
   <script>
   (()=>{
     const game=window.game;
+    const scope=game.scope('New_ZZZF.TacticalMap');
     const shell=document.getElementById('shell');
     const canvas=document.getElementById('map');
     const ctx=canvas.getContext('2d');
@@ -85,22 +85,21 @@
     const stateNames={Hidden:'隐藏',CompactPassive:'小地图·被动',CompactInteractive:'小地图·交互',FullPassive:'全屏·被动',FullInteractive:'全屏·交互'};
 
     function decodeRgba(base64,w,h){
-      const raw=atob(base64||'');const out=new Uint8ClampedArray(raw.length);
+      const raw=atob(base64||'');
+      const out=new Uint8ClampedArray(raw.length);
       for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);
       return new ImageData(out,w,h);
     }
 
-    function loadMap(){
-      game.request('New_ZZZF.TacticalMap.getMapData',{},10000).then(data=>{
-        if(!data||!data.ready)return;
-        mapInfo={...mapInfo,width:data.width,height:data.height,worldW:data.worldW||1,worldH:data.worldH||1,
-          terrain:decodeRgba(data.terrainRgba,data.width,data.height),risk:decodeRgba(data.riskRgba,data.width,data.height)};
-        draw();
-      }).catch(()=>{});
+    function applyStaticMap(data){
+      if(!data||!data.ready)return;
+      mapInfo={...mapInfo,width:data.width,height:data.height,worldW:data.worldW||1,worldH:data.worldH||1,
+        terrain:decodeRgba(data.terrainRgba,data.width,data.height),
+        risk:decodeRgba(data.riskRgba,data.width,data.height)};
+      draw();
     }
 
     function clearCanvas(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#11171d';ctx.fillRect(0,0,canvas.width,canvas.height)}
-
     function marker(x,y,r,fill,stroke){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.lineWidth=2;ctx.strokeStyle=stroke;ctx.stroke()}}
     function square(x,y,s,stroke,fill){ctx.fillStyle=fill||'transparent';ctx.fillRect(x-s/2,y-s/2,s,s);ctx.lineWidth=2;ctx.strokeStyle=stroke;ctx.strokeRect(x-s/2,y-s/2,s,s)}
     function arrow(x,y,dx,dy,color){const len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx*14,y+dy*14);ctx.stroke();ctx.beginPath();ctx.moveTo(x+dx*14,y+dy*14);ctx.lineTo(x+dx*8-dy*4,y+dy*8+dx*4);ctx.moveTo(x+dx*14,y+dy*14);ctx.lineTo(x+dx*8+dy*4,y+dy*8-dx*4);ctx.stroke()}
@@ -111,7 +110,6 @@
       if(mapInfo.risk&&riskVisible){ctx.globalAlpha=.28;ctx.globalCompositeOperation='screen';ctx.putImageData(mapInfo.risk,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
       if(!state)return;
       const toXY=(u,v)=>({x:Math.max(0,Math.min(canvas.width-1,u*canvas.width)),y:Math.max(0,Math.min(canvas.height-1,(1-v)*canvas.height))});
-
       const camera=state.camera;
       const player=state.player;
       const cam=camera?toXY(camera.u,camera.v):null;
@@ -139,9 +137,12 @@
     }
 
     function renderSide(){
-      const s=state||{};stateEl.textContent=stateNames[s.uiState]||'等待';
-      playerEl.textContent=s.player?'在线':'--';cameraEl.textContent=s.camera?'已锁定':'自由';
-      const near=!!(s.camera&&s.agentDetailDistance);lodEl.textContent=near?'近距离显示Agent':'编队聚合';
+      const s=state||{};
+      stateEl.textContent=stateNames[s.uiState]||'等待';
+      playerEl.textContent=s.player?'在线':'--';
+      cameraEl.textContent=s.camera?'已锁定':'自由';
+      const near=!!(s.camera&&s.agentDetailDistance);
+      lodEl.textContent=near?'近距离显示Agent':'编队聚合';
       formationsEl.textContent='';
       for(const f of (s.formations||[])){
         const row=document.createElement('div');row.className='formation';
@@ -151,27 +152,28 @@
         row.append(m,name,count);formationsEl.appendChild(row);
       }
       if(!formationsEl.children.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='暂无编队数据';formationsEl.appendChild(empty)}
-      hintEl.textContent=s.interactive?'左键移动 · 中键镜头 · 右键朝向 · ESC退出交互':'被动模式：查看战场态势';
+      hintEl.textContent=s.interactive?'左键移动 · 中键镜头 · 右键朝向 · ESC退出交互':'被动模式：查看战场态势 · N显示/隐藏';
       shell.classList.toggle('compact',!s.fullscreen);
       draw();
     }
 
-    game.state.subscribe('New_ZZZF.TacticalMap.map',value=>{state=value||null;renderSide()});
-    document.getElementById('fullscreen').onclick=()=>game.call('New_ZZZF.TacticalMap.toggleFullscreen');
-    document.getElementById('interaction').onclick=()=>game.call('New_ZZZF.TacticalMap.toggleInteraction');
-    document.getElementById('refresh').onclick=()=>{loadMap();game.call('New_ZZZF.TacticalMap.refresh')};
+    scope.state.subscribe('map',value=>{state=value||null;renderSide()});
+    scope.state.subscribe('static',applyStaticMap);
+
+    document.getElementById('fullscreen').onclick=()=>scope.call('toggleFullscreen');
+    document.getElementById('interaction').onclick=()=>scope.call('toggleInteraction');
+    document.getElementById('refresh').onclick=()=>scope.call('refresh');
 
     canvas.addEventListener('contextmenu',e=>e.preventDefault());
     canvas.addEventListener('mousedown',e=>{
       if(!state||!state.interactive)return;
       const r=canvas.getBoundingClientRect();const u=(e.clientX-r.left)/r.width;const v=1-(e.clientY-r.top)/r.height;
-      if(e.button===0)game.call('New_ZZZF.TacticalMap.mapClick',{u,v,mode:'move'});
-      else if(e.button===1){e.preventDefault();game.call('New_ZZZF.TacticalMap.cameraClick',{u,v});}
-      else if(e.button===2)game.call('New_ZZZF.TacticalMap.mapClick',{u,v,mode:'face'});
+      if(e.button===0)scope.call('mapClick',{u,v,mode:'move'});
+      else if(e.button===1){e.preventDefault();scope.call('cameraClick',{u,v});}
+      else if(e.button===2)scope.call('mapClick',{u,v,mode:'face'});
     });
-    window.addEventListener('keydown',e=>{if(e.key==='Escape'&&state&&state.interactive){e.preventDefault();game.call('New_ZZZF.TacticalMap.exitInteraction')}});
+    window.addEventListener('keydown',e=>{if(e.key==='Escape'&&state&&state.interactive){e.preventDefault();scope.call('exitInteraction')}});
     window.addEventListener('pagehide',()=>{} ,{once:true});
-    loadMap();
   })();
   </script>
 </body>
