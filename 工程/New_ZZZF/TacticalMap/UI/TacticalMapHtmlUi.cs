@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,8 +12,9 @@ using New_ZZZF.TacticalMap.Tracking;
 namespace New_ZZZF.TacticalMap.UI
 {
     /// <summary>
-    /// TacticalMap 的全新 HTMLUI Consumer。
-    /// 只负责数据发布、页面生命周期和用户动作转发；不直接访问 WebView2。
+    /// TacticalMap HTMLUI Consumer。
+    /// 遵循 BannerlordHtmlUI ConsumerScope 的标准生命周期：
+    /// RegisterPage 返回真实 scoped page id，State/Command/Request 均通过 Scope 注册。
     /// </summary>
     public sealed class TacticalMapHtmlUi : IDisposable
     {
@@ -29,11 +29,12 @@ namespace New_ZZZF.TacticalMap.UI
 
         private const string OwnerId = "New_ZZZF.TacticalMap";
         private const string ContentRootId = "tacticalmap";
-        private const string PageId = "tacticalmap";
+        private const string PageName = "tacticalmap";
 
         private HtmlUiConsumerScope _scope;
         private TacticalMapController _controller;
         private string _contentRootId;
+        private string _pageId;
         private bool _registered;
         private bool _visible;
         private bool _fullscreen;
@@ -48,6 +49,7 @@ namespace New_ZZZF.TacticalMap.UI
         public bool IsFullscreen => _fullscreen;
         public bool IsInteractive => _interactive;
         public UiState State => _state;
+        public string PageId => _pageId;
 
         public void InitializeOnFrameworkReady()
         {
@@ -68,12 +70,15 @@ namespace New_ZZZF.TacticalMap.UI
 
                 _scope = HtmlUiService.CreateScope(OwnerId);
                 _contentRootId = _scope.RegisterContentRoot(ContentRootId, uiRoot);
-                _scope.RegisterPage(new HtmlUiPage(PageId, "index.html")
+
+                _pageId = _scope.RegisterPage(new HtmlUiPage(PageName, "index.html")
                 {
                     ContentRootId = _contentRootId,
                     HotReload = true,
                     DefaultInputMode = HtmlUiInputMode.Passive
                 });
+
+                HtmlUiLogger.Info("TacticalMap Consumer page registered: " + _pageId);
 
                 _scope.RegisterCommand("mapClick", HandleMapClick);
                 _scope.RegisterCommand("cameraClick", HandleCameraClick);
@@ -92,8 +97,7 @@ namespace New_ZZZF.TacticalMap.UI
             }
             catch (Exception ex)
             {
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"[TMap][HtmlUI] 注册失败: {ex.GetType().Name}: {ex.Message}"));
+                HtmlUiLogger.Error("TacticalMap Consumer registration failed.", ex);
             }
         }
 
@@ -116,16 +120,9 @@ namespace New_ZZZF.TacticalMap.UI
 
         public void SetVisible(bool visible)
         {
-            if (!visible)
-            {
-                SetUiState(UiState.Hidden);
-                return;
-            }
-
-            if (_state == UiState.Hidden)
-                SetUiState(UiState.CompactPassive);
-            else
-                ApplyOpenState();
+            SetUiState(visible
+                ? (_state == UiState.Hidden ? UiState.CompactPassive : _state)
+                : UiState.Hidden);
         }
 
         public void SetUiState(UiState state)
@@ -142,16 +139,12 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 if (_visible)
                     ApplyOpenState();
-                else
-                {
-                    HtmlUiService.Pages.Close(PageId);
-                    HtmlUiService.Hide();
-                }
+                else if (!string.IsNullOrWhiteSpace(_pageId))
+                    HtmlUiService.Pages.Close(_pageId);
             }
             catch (Exception ex)
             {
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"[TMap][HtmlUI] 状态切换失败: {ex.GetType().Name}: {ex.Message}"));
+                HtmlUiLogger.Error("TacticalMap UI state transition failed.", ex);
             }
         }
 
@@ -195,46 +188,30 @@ namespace New_ZZZF.TacticalMap.UI
 
         private void ApplyOpenState()
         {
-            if (!_registered || !HtmlUiService.IsReady)
+            if (!_registered || !HtmlUiService.IsReady || string.IsNullOrWhiteSpace(_pageId))
                 return;
 
-            if (!HtmlUiService.Pages.Open(PageId))
+            if (!HtmlUiService.Pages.Open(_pageId))
             {
-                _visible = false;
-                _state = UiState.Hidden;
-                _interactive = false;
-                _fullscreen = false;
-                ApplyInputMode();
-                InformationManager.DisplayMessage(new InformationMessage("[TMap][HtmlUI] 页面打开失败: " + PageId));
+                HtmlUiLogger.Warn("TacticalMap page open failed: " + _pageId);
                 return;
             }
 
-            ApplyInputMode();
-            PublishState(!_staticPublished);
-        }
-
-        private void ApplyInputMode()
-        {
-            if (!HtmlUiService.IsReady)
-                return;
-
+            // 页面自己的 DefaultInputMode 已经是 Passive。
+            // 这里仅在交互状态下显式切换为 Captured；退出交互时回到 Passive。
             try
             {
                 if (_interactive)
-                {
                     HtmlUiService.CaptureInput();
-                }
                 else
-                {
-                    // 被动模式仍然需要显示 WebView，只是不抢夺游戏输入焦点。
-                    HtmlUiService.Show();
-                }
+                    HtmlUiService.ReleaseInput();
             }
             catch (Exception ex)
             {
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"[TMap][HtmlUI] 输入模式切换失败: {ex.GetType().Name}: {ex.Message}"));
+                HtmlUiLogger.Error("TacticalMap input mode transition failed.", ex);
             }
+
+            PublishState(!_staticPublished);
         }
 
         private void HandleMapClick(JToken payload)
@@ -302,7 +279,7 @@ namespace New_ZZZF.TacticalMap.UI
             Vec2? camera = _controller.CameraTarget;
             Vec2 facing = _controller.PlayerFacing;
 
-            HtmlUiService.State.Set("tacticalmap", new
+            _scope.SetState("map", new
             {
                 visible = _visible,
                 fullscreen = _fullscreen,
@@ -328,7 +305,7 @@ namespace New_ZZZF.TacticalMap.UI
 
             if (forceStatic && cache.IsBaked)
             {
-                HtmlUiService.State.Set("tacticalmap.static", BuildMapData());
+                _scope.SetState("static", BuildMapData());
                 _staticPublished = true;
             }
 
@@ -386,18 +363,17 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                if (_scope != null)
-                    _scope.Dispose();
+                _scope?.Dispose();
             }
             catch (Exception ex)
             {
-                InformationManager.DisplayMessage(new InformationMessage(
-                    $"[TMap][HtmlUI] 释放异常: {ex.GetType().Name}: {ex.Message}"));
+                HtmlUiLogger.Error("TacticalMap Consumer dispose failed.", ex);
             }
 
             _scope = null;
             _controller = null;
             _contentRootId = null;
+            _pageId = null;
             _registered = false;
             _visible = false;
             _fullscreen = false;
