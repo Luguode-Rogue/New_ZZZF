@@ -1,4 +1,5 @@
 using System;
+using TaleWorlds.InputSystem;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
@@ -8,7 +9,7 @@ namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
     /// TacticalMap 战场 MissionBehavior。
-    /// 只负责控制器生命周期和后端数据刷新；HTMLUI 自身由 Consumer 管理。
+    /// 只负责控制器生命周期、后端数据刷新和 N 键显示切换；HTMLUI 自身由 Consumer 管理。
     /// </summary>
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
@@ -17,6 +18,7 @@ namespace New_ZZZF.TacticalMap.Core
         private bool _initialized;
         private bool _ready;
         private bool _uiAttached;
+        private bool _nDown;
 
         public override void OnAfterMissionCreated()
         {
@@ -58,11 +60,27 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 ui.AttachController(_controller);
                 ui.ResetForMission();
-                ui.SetVisible(true);
                 _uiAttached = true;
             }
 
-            _controller.SetVisible(_missionScreen, true);
+            bool nDown = Input.IsKeyDown(InputKey.N);
+            if (nDown && !_nDown)
+            {
+                _nDown = true;
+                if (ui != null)
+                {
+                    ui.SetVisible(!ui.IsVisible);
+                    TaleWorlds.Library.InformationManager.DisplayMessage(
+                        new TaleWorlds.Library.InformationMessage(
+                            ui.IsVisible ? "[TMap] HTMLUI 已显示" : "[TMap] HTMLUI 已隐藏"));
+                }
+            }
+            else if (!nDown)
+            {
+                _nDown = false;
+            }
+
+            _controller.SetVisible(_missionScreen, ui != null && ui.IsVisible);
             _controller.Tick(Mission, _missionScreen, dt);
             ui?.Tick(dt);
         }
@@ -124,6 +142,7 @@ namespace New_ZZZF.TacticalMap.Core
             _ready = false;
             _initialized = false;
             _uiAttached = false;
+            _nDown = false;
 
             base.OnEndMission();
         }
