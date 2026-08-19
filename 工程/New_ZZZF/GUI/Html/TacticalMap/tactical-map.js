@@ -58,7 +58,12 @@
 
   function applyRuntime(state) {
     runtimeState = state;
-    if (selectedFormation >= (state.formations || []).length) selectedFormation = -1;
+    if (state.selectedFormation) {
+      const index = (state.formations || []).findIndex(f => f.player && f.name === state.selectedFormation);
+      selectedFormation = index;
+    } else if (selectedFormation >= (state.formations || []).length) {
+      selectedFormation = -1;
+    }
     updateChrome();
     updateFormationList();
     updateDetails();
@@ -84,7 +89,8 @@
     const formations = runtimeState?.formations || [];
     formations.forEach((f, index) => {
       const item = document.createElement('div');
-      item.className = `formation-item ${f.enemy ? 'enemy' : 'friendly'} ${index === selectedFormation ? 'selected' : ''}`;
+      const selected = index === selectedFormation;
+      item.className = `formation-item ${f.enemy ? 'enemy' : 'friendly'} ${selected ? 'selected' : ''}`;
       item.innerHTML = `<span class="index">${escapeHtml(f.name || index + 1)}</span>` +
         `<span><span class="name">${f.enemy ? '敌军' : (f.player ? '我军' : '友军')}</span><br><span class="meta">编队 ${escapeHtml(f.name || index + 1)}</span></span>` +
         `<span class="meta">${Number(f.count || 0)}</span>`;
@@ -93,6 +99,9 @@
         updateFormationList();
         updateDetails();
         scheduleRender();
+        if (f.player) {
+          app.call('selectFormation', { name: f.name }).catch(() => {});
+        }
       });
       formationList.appendChild(item);
     });
