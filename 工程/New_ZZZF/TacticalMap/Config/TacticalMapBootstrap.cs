@@ -7,7 +7,7 @@ namespace New_ZZZF.TacticalMap.Config
 {
     /// <summary>
     /// TacticalMap 运行时入口。
-    /// 当前仅负责 TacticalMap Core 的运行时初始化；HTMLUI 已清除，后续重新设计后再接入。
+    /// 负责 TacticalMap Core 与战场 MissionBehavior 的运行时初始化；HTMLUI Consumer 由 SubModule 初始化。
     /// </summary>
     public static class TacticalMapBootstrap
     {
@@ -26,7 +26,7 @@ namespace New_ZZZF.TacticalMap.Config
             TacticalCameraPatch.Patch(_harmony);
 
             InformationManager.DisplayMessage(new InformationMessage(
-                "[TMap] 引导完成：TacticalMap Core 已初始化，HTMLUI 当前未接入"));
+                "[TMap] 引导完成：TacticalMap Core + HTMLUI Consumer 已注册"));
         }
 
         public static void OnMissionStart(Mission mission)
