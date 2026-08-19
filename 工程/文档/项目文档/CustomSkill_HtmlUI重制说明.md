@@ -7,6 +7,20 @@
 本分支继续承担 New_ZZZF 的 BannerlordHtmlUI 实际 UI 重制验证。
 TacticalMap 已作为第一项 HtmlUI 试验；CustomSkill 现在升级为第二项、并采用 HTML-first 接管。
 
+## 统一资源放置规则
+
+本项目涉及 `_Module`、Mod-root 资源、程序集旁 HtmlUI 运行时资源时，统一遵循 BannerlordHtmlUI 的：
+
+[`Project/BUTR_PROJECT_LAYOUT_RULES.md`](https://github.com/Luguode-Rogue/BannerlordHtmlUI/blob/dev/Project/BUTR_PROJECT_LAYOUT_RULES.md)
+
+本文不再自行定义“HTML 源码应该放哪里/Build 后应该复制到哪里”的第二套规则。实际路径必须同时核对：
+
+```text
+最终 Modules/<ModId>/ 路径
+→ Consumer .csproj Deployment Target
+→ 代码中的 Assembly.Location / ContentRoot
+```
+
 ## 当前架构
 
 `Shift+M` 直接打开 `CustomSkillHtmlUi`。
@@ -81,15 +95,13 @@ HtmlUI 只承担：
 
 ## 运行时资源
 
-HTML 源目录：
+资源的工程源位置与最终部署位置不在本文单独规定；统一查：
 
-`工程/New_ZZZF/GUI/Html/CustomSkill/`
+[`BUTR_PROJECT_LAYOUT_RULES.md`](https://github.com/Luguode-Rogue/BannerlordHtmlUI/blob/dev/Project/BUTR_PROJECT_LAYOUT_RULES.md)
 
-运行时目录：
+并结合本 Consumer 的 `.csproj`、`SubModule.cs` / HtmlUI Consumer 代码确认 `Assembly.Location` 对应的 ContentRoot。
 
-`Modules/New_ZZZF/bin/Win64_Shipping_Client/CustomSkillUI/`
-
-当前 `Directory.Build.targets` 已加入自动复制目标；如果本地构建链未执行该 Target，仍可手动复制整个 `CustomSkill` 目录到上述运行时目录。
+本项目不要求用户手工复制 HTML/CSS/JS；构建/部署目标负责把运行时资源放到代码实际读取的位置。
 
 ## 后续清理方向
 
