@@ -3,12 +3,13 @@ using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
 using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.UI;
 
 namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
     /// TacticalMap 战场 MissionBehavior。
-    /// 当前仅负责控制器生命周期和后端数据刷新；HTMLUI 已清除，后续重新设计后再接入。
+    /// Controller 负责游戏逻辑，TacticalMapHtmlUi 负责 HTMLUI 生命周期和表现。
     /// </summary>
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
@@ -54,6 +55,8 @@ namespace New_ZZZF.TacticalMap.Core
 
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
+            TacticalMapHtmlUi.Instance.AttachController(_controller);
+            TacticalMapHtmlUi.Instance.Tick(dt);
         }
 
         private void InitializeController()
@@ -69,10 +72,21 @@ namespace New_ZZZF.TacticalMap.Core
 
             _controller = new TacticalMapController(Mission);
             _ready = _controller.Initialize(Mission);
+            if (_ready)
+                TacticalMapHtmlUi.Instance.AttachController(_controller);
         }
 
         protected override void OnEndMission()
         {
+            try
+            {
+                TacticalMapHtmlUi.Instance.DetachController();
+            }
+            catch
+            {
+                // UI cleanup must not throw during mission shutdown.
+            }
+
             try
             {
                 if (_controller != null && _missionScreen != null)
