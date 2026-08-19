@@ -9,56 +9,35 @@
     *{box-sizing:border-box}
     html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:var(--text);font-family:Segoe UI,Microsoft YaHei,sans-serif}
     body{pointer-events:none}
-    #root{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
-    #shell{position:relative;pointer-events:auto;width:min(92vw,760px);height:min(92vh,760px);display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:12px;padding:12px;border:1px solid var(--line);background:var(--panel);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);backdrop-filter:blur(6px)}
-    #shell.compact{width:min(38vw,420px);height:min(38vw,420px);grid-template-columns:1fr;padding:8px}
-    #side{display:flex;flex-direction:column;gap:10px;min-width:0}
+    #root{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:flex-end;padding:24px 24px 0 0;pointer-events:none}
+    #shell{position:relative;pointer-events:auto;width:min(38vw,420px);height:min(38vw,420px);display:grid;grid-template-columns:1fr;gap:12px;padding:8px;border:1px solid var(--line);background:var(--panel);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.35);backdrop-filter:blur(6px)}
+    #shell.fullscreen{width:min(92vw,1100px);height:min(92vh,760px);grid-template-columns:minmax(0,1fr) 220px;padding:12px;position:fixed;inset:50% auto auto 50%;transform:translate(-50%,-50%)}
+    #side{display:none;flex-direction:column;gap:10px;min-width:0}.fullscreen #side{display:flex}
     .card{border:1px solid var(--line);border-radius:8px;padding:9px;background:rgba(255,255,255,.035)}
-    .title{font-size:13px;font-weight:700;margin-bottom:6px}
-    .muted{color:var(--muted);font-size:11px}
+    .title{font-size:13px;font-weight:700;margin-bottom:6px}.muted{color:var(--muted);font-size:11px}
     #mapWrap{position:relative;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;pointer-events:auto}
     #map{width:100%;height:100%;display:block;border-radius:8px;background:#10151a;image-rendering:auto;pointer-events:auto;touch-action:none}
     #hint{position:absolute;left:10px;bottom:10px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:rgba(0,0,0,.48);font-size:11px;pointer-events:none}
-    #toolbar{position:absolute;left:10px;top:10px;display:flex;gap:6px;pointer-events:auto}
+    #toolbar{position:absolute;left:10px;top:10px;display:flex;gap:6px;pointer-events:auto}.fullscreen #toolbar{left:12px;top:12px}
     button{border:1px solid var(--line);background:rgba(0,0,0,.5);color:var(--text);border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer;pointer-events:auto}
     button:hover{background:rgba(255,255,255,.12)}
-    #legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px}
-    .legendItem{display:flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block}.square{width:9px;height:9px;border:2px solid;border-radius:2px;display:inline-block}
+    #legend{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px}.legendItem{display:flex;align-items:center;gap:6px}.dot{width:9px;height:9px;border-radius:50%;display:inline-block}.square{width:9px;height:9px;border:2px solid;border-radius:2px;display:inline-block}
     #formations{max-height:260px;overflow:auto;font-size:11px}.formation{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}.formation:last-child{border-bottom:0}
-    .formationMarker{width:8px;height:8px;border:2px solid;border-radius:2px;flex:0 0 auto}
-    .badge{display:inline-block;padding:2px 5px;border-radius:4px;font-size:10px;background:rgba(255,255,255,.08)}
-    .hidden{display:none!important}
+    .formationMarker{width:8px;height:8px;border:2px solid;border-radius:2px;flex:0 0 auto}.badge{display:inline-block;padding:2px 5px;border-radius:4px;font-size:10px;background:rgba(255,255,255,.08)}
     #status{font-size:11px;line-height:1.5}.statusRow{display:flex;justify-content:space-between;gap:8px}
   </style>
 </head>
 <body>
   <div id="root">
-    <section id="shell" class="compact">
+    <section id="shell">
       <div id="mapWrap">
         <canvas id="map" width="160" height="160"></canvas>
-        <div id="toolbar">
-          <button id="fullscreen">全屏</button>
-          <button id="interaction">交互</button>
-          <button id="refresh">刷新</button>
-        </div>
+        <div id="toolbar"><button id="fullscreen">全屏</button><button id="interaction">交互</button><button id="refresh">刷新</button></div>
         <div id="hint">被动模式：查看战场态势</div>
       </div>
       <aside id="side">
-        <div class="card" id="status">
-          <div class="title">战场态势</div>
-          <div class="statusRow"><span>状态</span><span id="uiState">等待</span></div>
-          <div class="statusRow"><span>玩家</span><span id="playerState">--</span></div>
-          <div class="statusRow"><span>镜头</span><span id="cameraState">--</span></div>
-          <div class="statusRow"><span>Agent显示</span><span id="lodState">--</span></div>
-        </div>
-        <div class="card"><div class="title">图例</div><div id="legend">
-          <div class="legendItem"><span class="dot" style="background:var(--player)"></span>玩家</div>
-          <div class="legendItem"><span class="dot" style="background:var(--camera)"></span>镜头目标</div>
-          <div class="legendItem"><span class="square" style="border-color:var(--friend)"></span>友军编队</div>
-          <div class="legendItem"><span class="square" style="border-color:var(--enemy)"></span>敌军编队</div>
-          <div class="legendItem"><span class="dot" style="background:var(--friend)"></span>友军Agent</div>
-          <div class="legendItem"><span class="dot" style="background:var(--enemy)"></span>敌军Agent</div>
-        </div></div>
+        <div class="card" id="status"><div class="title">战场态势</div><div class="statusRow"><span>状态</span><span id="uiState">等待</span></div><div class="statusRow"><span>玩家</span><span id="playerState">--</span></div><div class="statusRow"><span>镜头</span><span id="cameraState">--</span></div><div class="statusRow"><span>Agent显示</span><span id="lodState">--</span></div></div>
+        <div class="card"><div class="title">图例</div><div id="legend"><div class="legendItem"><span class="dot" style="background:var(--player)"></span>玩家</div><div class="legendItem"><span class="dot" style="background:var(--camera)"></span>镜头目标</div><div class="legendItem"><span class="square" style="border-color:var(--friend)"></span>友军编队</div><div class="legendItem"><span class="square" style="border-color:var(--enemy)"></span>敌军编队</div><div class="legendItem"><span class="dot" style="background:var(--friend)"></span>友军Agent</div><div class="legendItem"><span class="dot" style="background:var(--enemy)"></span>敌军Agent</div></div></div>
         <div class="card"><div class="title">编队</div><div id="formations"></div></div>
       </aside>
     </section>
@@ -66,117 +45,22 @@
   <script src="/runtime.js"></script>
   <script>
   (()=>{
-    const game=window.game;
-    const scope=game.scope('New_ZZZF.TacticalMap');
-    const shell=document.getElementById('shell');
-    const canvas=document.getElementById('map');
-    const ctx=canvas.getContext('2d');
-    const formationsEl=document.getElementById('formations');
-    const stateEl=document.getElementById('uiState');
-    const playerEl=document.getElementById('playerState');
-    const cameraEl=document.getElementById('cameraState');
-    const lodEl=document.getElementById('lodState');
-    const hintEl=document.getElementById('hint');
-    let mapInfo={terrain:null,risk:null,width:160,height:160,worldW:1,worldH:1};
-    let state=null;
-
+    const game=window.game; const scope=game.scope('New_ZZZF.TacticalMap'); const shell=document.getElementById('shell'); const canvas=document.getElementById('map'); const ctx=canvas.getContext('2d');
+    const formationsEl=document.getElementById('formations'); const stateEl=document.getElementById('uiState'); const playerEl=document.getElementById('playerState'); const cameraEl=document.getElementById('cameraState'); const lodEl=document.getElementById('lodState'); const hintEl=document.getElementById('hint');
+    let mapInfo={terrain:null,risk:null,width:160,height:160,worldW:1,worldH:1}; let state=null;
     const stateNames={Hidden:'隐藏',CompactPassive:'小地图·被动',CompactInteractive:'小地图·交互',FullPassive:'全屏·被动',FullInteractive:'全屏·交互'};
-
-    function decodeRgba(base64,w,h){
-      const raw=atob(base64||'');
-      const out=new Uint8ClampedArray(raw.length);
-      for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);
-      return new ImageData(out,w,h);
-    }
-
-    function applyStaticMap(data){
-      if(!data||!data.ready)return;
-      mapInfo={...mapInfo,width:data.width,height:data.height,worldW:data.worldW||1,worldH:data.worldH||1,
-        terrain:decodeRgba(data.terrainRgba,data.width,data.height),
-        risk:decodeRgba(data.riskRgba,data.width,data.height)};
-      draw();
-    }
-
+    function decodeRgba(base64,w,h){const raw=atob(base64||'');const out=new Uint8ClampedArray(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return new ImageData(out,w,h)}
+    function applyStaticMap(data){if(!data||!data.ready)return;mapInfo={...mapInfo,width:data.width,height:data.height,worldW:data.worldW||1,worldH:data.worldH||1,terrain:decodeRgba(data.terrainRgba,data.width,data.height),risk:decodeRgba(data.riskRgba,data.width,data.height)};draw()}
     function clearCanvas(){ctx.clearRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#11171d';ctx.fillRect(0,0,canvas.width,canvas.height)}
     function marker(x,y,r,fill,stroke){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.lineWidth=2;ctx.strokeStyle=stroke;ctx.stroke()}}
     function square(x,y,s,stroke,fill){ctx.fillStyle=fill||'transparent';ctx.fillRect(x-s/2,y-s/2,s,s);ctx.lineWidth=2;ctx.strokeStyle=stroke;ctx.strokeRect(x-s/2,y-s/2,s,s)}
-    function arrow(x,y,dx,dy,color){const len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx*14,y+dy*14);ctx.stroke();ctx.beginPath();ctx.moveTo(x+dx*14,y+dy*14);ctx.lineTo(x+dx*8-dy*4,y+dy*8+dx*4);ctx.moveTo(x+dx*14,y+dy*14);ctx.lineTo(x+dx*8+dy*4,y+dy*8-dx*4);ctx.stroke()}
-
-    function draw(){
-      clearCanvas();
-      if(mapInfo.terrain)ctx.putImageData(mapInfo.terrain,0,0);
-      if(mapInfo.risk){ctx.globalAlpha=.28;ctx.globalCompositeOperation='screen';ctx.putImageData(mapInfo.risk,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
-      if(!state)return;
-      const toXY=(u,v)=>({x:Math.max(0,Math.min(canvas.width-1,u*canvas.width)),y:Math.max(0,Math.min(canvas.height-1,(1-v)*canvas.height))});
-      const camera=state.camera;
-      const player=state.player;
-      const cam=camera?toXY(camera.u,camera.v):null;
-      const playerPt=player?toXY(player.u,player.v):null;
-      const radius=Number(state.agentDetailDistance)||0;
-      const detailMode=!!(camera&&radius>0);
-
-      (state.formations||[]).forEach(f=>{
-        const p=toXY(f.u,f.v);
-        const color=f.player?'#5aa8ff':f.enemy?'#ff5b68':'#d4d9df';
-        square(p.x,p.y,10,color,'rgba(0,0,0,.25)');
-        if(f.facingX||f.facingY)arrow(p.x,p.y,f.facingX,f.facingY,color);
-      });
-
-      (state.agents||[]).forEach(a=>{
-        if(detailMode&&cam){
-          const dx=(a.u-camera.u)*mapInfo.worldW;const dy=(a.v-camera.v)*mapInfo.worldH;
-          if(Math.hypot(dx,dy)>radius)return;
-        }else if(detailMode){return}
-        const p=toXY(a.u,a.v);marker(p.x,p.y,2.2,a.player?'#5aa8ff':a.neutral?'#d4d9df':'#ff5b68');
-      });
-
-      if(playerPt){marker(playerPt.x,playerPt.y,5,'#ffe36b','#fff3a4');if(player.facingX||player.facingY)arrow(playerPt.x,playerPt.y,player.facingX,player.facingY,'#ffe36b')}
-      if(cam)marker(cam.x,cam.y,5,'#ff9b4a',null);
-    }
-
-    function renderSide(){
-      const s=state||{};
-      stateEl.textContent=stateNames[s.uiState]||'等待';
-      playerEl.textContent=s.player?'在线':'--';
-      cameraEl.textContent=s.camera?'已锁定':'自由';
-      const near=!!(s.camera&&s.agentDetailDistance);
-      lodEl.textContent=near?'近距离显示Agent':'编队聚合';
-      formationsEl.textContent='';
-      for(const f of (s.formations||[])){
-        const row=document.createElement('div');row.className='formation';
-        const m=document.createElement('span');m.className='formationMarker';m.style.borderColor=f.player?'#5aa8ff':f.enemy?'#ff5b68':'#d4d9df';
-        const name=document.createElement('span');name.textContent=f.name||`编队 ${f.id+1}`;name.style.flex='1';
-        const count=document.createElement('span');count.className='badge';count.textContent=String(f.count);
-        row.append(m,name,count);formationsEl.appendChild(row);
-      }
-      if(!formationsEl.children.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='暂无编队数据';formationsEl.appendChild(empty)}
-      hintEl.textContent=s.interactive?'左键移动 · 中键镜头 · 右键朝向 · ESC退出交互':'被动模式：查看战场态势 · N进入交互';
-      shell.classList.toggle('compact',!s.fullscreen);
-      draw();
-    }
-
-    scope.state.subscribe('map',value=>{state=value||null;renderSide()});
-    scope.state.subscribe('static',applyStaticMap);
-
-    document.getElementById('fullscreen').onclick=()=>scope.call('toggleFullscreen');
-    document.getElementById('interaction').onclick=()=>scope.call('toggleInteraction');
-    document.getElementById('refresh').onclick=()=>scope.call('refresh');
-
-    const handlePointer=(e)=>{
-      if(!state||!state.interactive)return;
-      e.preventDefault();
-      e.stopPropagation();
-      const r=canvas.getBoundingClientRect();
-      const u=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
-      const v=Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height));
-      if(e.button===0)scope.call('mapClick',{u,v,mode:'move'});
-      else if(e.button===1)scope.call('cameraClick',{u,v});
-      else if(e.button===2)scope.call('mapClick',{u,v,mode:'face'});
-    };
-
-    canvas.addEventListener('pointerdown',handlePointer);
-    canvas.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation()});
-    window.addEventListener('keydown',e=>{if(e.key==='Escape'&&state&&state.interactive){e.preventDefault();e.stopPropagation();scope.call('exitInteraction')}});
+    function arrow(x,y,dx,dy,color){const len=Math.hypot(dx,dy)||1;dx/=len;dy/=len;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+dx*14,y+dy*14);ctx.stroke()}
+    function draw(){clearCanvas();if(mapInfo.terrain)ctx.putImageData(mapInfo.terrain,0,0);if(mapInfo.risk){ctx.globalAlpha=.28;ctx.globalCompositeOperation='screen';ctx.putImageData(mapInfo.risk,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}if(!state)return;const toXY=(u,v)=>({x:Math.max(0,Math.min(canvas.width-1,u*canvas.width)),y:Math.max(0,Math.min(canvas.height-1,(1-v)*canvas.height))});const camera=state.camera;const player=state.player;const cam=camera?toXY(camera.u,camera.v):null;const playerPt=player?toXY(player.u,player.v):null;const radius=Number(state.agentDetailDistance)||0;const detailMode=!!(camera&&radius>0);(state.formations||[]).forEach(f=>{const p=toXY(f.u,f.v);const color=f.player?'#5aa8ff':f.enemy?'#ff5b68':'#d4d9df';square(p.x,p.y,10,color,'rgba(0,0,0,.25)');if(f.facingX||f.facingY)arrow(p.x,p.y,f.facingX,f.facingY,color)});(state.agents||[]).forEach(a=>{if(detailMode&&cam){const dx=(a.u-camera.u)*mapInfo.worldW,dy=(a.v-camera.v)*mapInfo.worldH;if(Math.hypot(dx,dy)>radius)return}else if(detailMode)return;const p=toXY(a.u,a.v);marker(p.x,p.y,2.2,a.player?'#5aa8ff':a.neutral?'#d4d9df':'#ff5b68')});if(playerPt){marker(playerPt.x,playerPt.y,5,'#ffe36b','#fff3a4');if(player.facingX||player.facingY)arrow(playerPt.x,playerPt.y,player.facingX,player.facingY,'#ffe36b')}if(cam)marker(cam.x,cam.y,5,'#ff9b4a',null)}
+    function renderSide(){const s=state||{};stateEl.textContent=stateNames[s.uiState]||'等待';playerEl.textContent=s.player?'在线':'--';cameraEl.textContent=s.camera?'已锁定':'自由';lodEl.textContent=s.camera&&s.agentDetailDistance?'近距离显示Agent':'编队聚合';formationsEl.textContent='';for(const f of(s.formations||[])){const row=document.createElement('div');row.className='formation';const m=document.createElement('span');m.className='formationMarker';m.style.borderColor=f.player?'#5aa8ff':f.enemy?'#ff5b68':'#d4d9df';const name=document.createElement('span');name.textContent=f.name||`编队 ${f.id+1}`;name.style.flex='1';const count=document.createElement('span');count.className='badge';count.textContent=String(f.count);row.append(m,name,count);formationsEl.appendChild(row)}if(!formationsEl.children.length){const empty=document.createElement('div');empty.className='muted';empty.textContent='暂无编队数据';formationsEl.appendChild(empty)}hintEl.textContent=s.interactive?'左键移动 · 中键镜头 · 右键朝向 · ESC退出交互':'被动模式：查看战场态势 · N进入交互';shell.classList.toggle('fullscreen',!!s.fullscreen);draw()}
+    scope.state.subscribe('map',value=>{state=value||null;renderSide()}); scope.state.subscribe('static',applyStaticMap);
+    document.getElementById('fullscreen').onclick=()=>scope.call('toggleFullscreen'); document.getElementById('interaction').onclick=()=>scope.call('toggleInteraction'); document.getElementById('refresh').onclick=()=>scope.call('refresh');
+    const handlePointer=(e)=>{if(!state||!state.interactive)return;e.preventDefault();e.stopPropagation();const r=canvas.getBoundingClientRect();const u=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));const v=Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height));if(e.button===0)scope.call('mapClick',{u,v,mode:'move'});else if(e.button===1)scope.call('cameraClick',{u,v});else if(e.button===2)scope.call('mapClick',{u,v,mode:'face'})};
+    canvas.addEventListener('pointerdown',handlePointer);canvas.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation()});window.addEventListener('keydown',e=>{if(e.key==='Escape'&&state&&state.interactive){e.preventDefault();e.stopPropagation();scope.call('exitInteraction')}});
   })();
   </script>
 </body>
