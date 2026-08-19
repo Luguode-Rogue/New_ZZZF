@@ -18,7 +18,6 @@ namespace New_ZZZF.TacticalMap.Core
         private bool _initialized;
         private bool _ready;
         private bool _uiAttached;
-        private bool _nDown;
 
         public override void OnAfterMissionCreated()
         {
@@ -63,21 +62,12 @@ namespace New_ZZZF.TacticalMap.Core
                 _uiAttached = true;
             }
 
-            bool nDown = Input.IsKeyDown(InputKey.N);
-            if (nDown && !_nDown)
+            if (Input.IsKeyPressed(InputKey.N) && ui != null)
             {
-                _nDown = true;
-                if (ui != null)
-                {
-                    ui.SetVisible(!ui.IsVisible);
-                    TaleWorlds.Library.InformationManager.DisplayMessage(
-                        new TaleWorlds.Library.InformationMessage(
-                            ui.IsVisible ? "[TMap] HTMLUI 已显示" : "[TMap] HTMLUI 已隐藏"));
-                }
-            }
-            else if (!nDown)
-            {
-                _nDown = false;
+                ui.SetVisible(!ui.IsVisible);
+                TaleWorlds.Library.InformationManager.DisplayMessage(
+                    new TaleWorlds.Library.InformationMessage(
+                        ui.IsVisible ? "[TMap] HTMLUI 已显示" : "[TMap] HTMLUI 已隐藏"));
             }
 
             _controller.SetVisible(_missionScreen, ui != null && ui.IsVisible);
@@ -142,7 +132,6 @@ namespace New_ZZZF.TacticalMap.Core
             _ready = false;
             _initialized = false;
             _uiAttached = false;
-            _nDown = false;
 
             base.OnEndMission();
         }
