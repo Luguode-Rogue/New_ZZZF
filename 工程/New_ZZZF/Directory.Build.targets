@@ -34,6 +34,22 @@
     </Reference>
   </ItemGroup>
 
+  <Target Name="DeployNewZZZFDll"
+          AfterTargets="Build"
+          Condition="'$(TargetFramework)' == 'net472' and Exists('$(GameFolder)\Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll') and Exists('$(TargetPath)')">
+    <Message Importance="High" Text="[New_ZZZF] Deploy managed assembly: '$(TargetPath)' -> '$(HtmlUiBinaryDeployDir)\$(TargetFileName)'" />
+    <MakeDir Directories="$(HtmlUiBinaryDeployDir)" />
+    <Copy
+      SourceFiles="$(TargetPath)"
+      DestinationFiles="$(HtmlUiBinaryDeployDir)\$(TargetFileName)"
+      SkipUnchangedFiles="true" />
+    <WriteLinesToFile
+      File="$(HtmlUiBinaryDeployDir)\New_ZZZF.buildstamp.txt"
+      Lines="Module=New_ZZZF;Target=$(TargetPath);Deployed=$(HtmlUiBinaryDeployDir)\$(TargetFileName);BuildConfiguration=$(Configuration);TargetFramework=$(TargetFramework)"
+      Overwrite="true"
+      Encoding="UTF-8" />
+  </Target>
+
   <Target Name="DeployCustomSkillHtmlUi"
           AfterTargets="Build"
           Condition="'$(TargetFramework)' == 'net472' and Exists('$(GameFolder)\Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll') and Exists('$(CustomSkillHtmlUiSource)')">
