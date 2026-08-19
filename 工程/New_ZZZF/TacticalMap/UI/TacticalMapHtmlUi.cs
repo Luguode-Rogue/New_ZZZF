@@ -238,8 +238,8 @@ namespace New_ZZZF.TacticalMap.UI
             if (_controller == null) return;
             if (!_pageOpened && _registered && HtmlUiService.IsReady) OpenForMission();
 
-            if (!IsInteractive)
-                UpdateToggleKey(dt);
+            // MouseCaptured deliberately leaves keyboard focus with Bannerlord, so N is always consumed by the game-side state machine.
+            UpdateToggleKey(dt);
 
             if (!_pageOpened) return;
             _publishAccum += Math.Max(0f, dt);
@@ -339,16 +339,21 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                HtmlUiInputMode mode;
                 if (_mode == TacticalMapUiMode.Hidden)
-                    mode = HtmlUiInputMode.Hidden;
+                {
+                    HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden);
+                    TacticalMapLog.Info("InputMode=Hidden, Mode=" + _mode);
+                }
                 else if (IsInteractive)
-                    mode = HtmlUiInputMode.Captured;
+                {
+                    HtmlUiMouseCapture.Capture();
+                    TacticalMapLog.Info("InputMode=MouseCaptured, Mode=" + _mode);
+                }
                 else
-                    mode = HtmlUiInputMode.Passive;
-
-                HtmlUiService.SetInputMode(mode);
-                TacticalMapLog.Info("InputMode=" + mode + ", Mode=" + _mode);
+                {
+                    HtmlUiService.SetInputMode(HtmlUiInputMode.Passive);
+                    TacticalMapLog.Info("InputMode=Passive, Mode=" + _mode);
+                }
             }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMap HtmlUI input mode change failed.", ex); }
         }
