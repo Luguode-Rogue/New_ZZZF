@@ -187,6 +187,11 @@ namespace New_ZZZF
             base.OnApplicationTick(dt);
             CustomSkillHtmlUi.Instance.Tick(dt);
 
+            // HTML 技能界面处于 Captured 模式时，New_ZZZF 自己的全局热键也必须停掉，
+            // 否则 F8/F11/L/Ctrl+F5~F9 等会在 HTML 已经完全接管输入后仍从 GameThread 执行。
+            if (CustomSkillHtmlUi.Instance.IsVisible)
+                return;
+
             if (Game.Current == null) return;
 
             bool shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
