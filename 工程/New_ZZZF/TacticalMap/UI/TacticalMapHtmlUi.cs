@@ -346,7 +346,8 @@ namespace New_ZZZF.TacticalMap.UI
                 }
                 else if (IsInteractive)
                 {
-                    HtmlUiMouseCapture.Capture();
+                    // Framework owns native mouse capture. TacticalMap only selects the semantic mode.
+                    HtmlUiService.SetInputMode(HtmlUiInputMode.MouseCaptured);
                     TacticalMapLog.Info("InputMode=MouseCaptured, Mode=" + _mode);
                 }
                 else
