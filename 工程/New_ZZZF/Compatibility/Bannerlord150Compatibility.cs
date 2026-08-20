@@ -22,7 +22,7 @@ namespace New_ZZZF
 
             global::Helpers.PerkHelper.AddPerkBonusFromCaptain(
                 perk,
-                character.CurrentBattleEnvironment,
+                BattleEnvironment.Any,
                 character,
                 ref bonuses);
         }
@@ -39,7 +39,7 @@ namespace New_ZZZF
 
             global::Helpers.PerkHelper.AddPerkBonusForCharacter(
                 perk,
-                character.CurrentBattleEnvironment,
+                BattleEnvironment.Any,
                 character,
                 isPrimaryBonus,
                 ref bonuses);
@@ -57,7 +57,7 @@ namespace New_ZZZF
 
             global::Helpers.PerkHelper.AddEpicPerkBonusForCharacter(
                 perk,
-                character.CurrentBattleEnvironment,
+                BattleEnvironment.Any,
                 character,
                 skillType,
                 isPrimaryBonus,

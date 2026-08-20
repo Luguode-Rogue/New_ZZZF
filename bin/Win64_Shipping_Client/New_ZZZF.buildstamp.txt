@@ -1,0 +1,5 @@
+﻿Module=New_ZZZF
+Target=E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\New_ZZZF\bin\x64\Debug\net472\New_ZZZF.dll
+Deployed=E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\bin\Win64_Shipping_Client\New_ZZZF.dll
+BuildConfiguration=Debug
+TargetFramework=net472
