@@ -106,7 +106,7 @@ namespace New_ZZZF.TacticalMap.Core
             if (mode == _lastLayoutMode) return;
 
             _lastLayoutMode = mode;
-            if (mode == TacticalMapUiMode.CompactPassive || mode == TacticalMapUiMode.CompactInteractive)
+            if (mode != TacticalMapUiMode.FullInteractive && mode != TacticalMapUiMode.FullPassive)
             {
                 HtmlUiOverlayLayout.UseTopRight(CompactOverlayWidth, CompactOverlayHeight, CompactOverlayMargin);
                 TacticalMapLog.Info("Overlay layout=TopRight size=" + CompactOverlayWidth + "x" + CompactOverlayHeight + " margin=" + CompactOverlayMargin + ". Mode=" + mode);
