@@ -187,24 +187,38 @@ namespace New_ZZZF
             base.OnApplicationTick(dt);
             CustomSkillHtmlUi.Instance.Tick(dt);
 
-            // HTML 技能界面处于 Captured 模式时，New_ZZZF 自己的全局热键也必须停掉，
-            // 否则 F8/F11/L/Ctrl+F5~F9 等会在 HTML 已经完全接管输入后仍从 GameThread 执行。
+            // 新 HTML 技能界面拥有全输入时，不处理 New_ZZZF 的其它全局热键。
             if (CustomSkillHtmlUi.Instance.IsVisible)
                 return;
 
             if (Game.Current == null) return;
 
-            bool shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
-            if (shiftDown && Input.IsKeyPressed(InputKey.M)
-                && Campaign.Current != null
+            if (Campaign.Current != null
                 && Mission.Current == null
                 && !Game.Current.GameStateManager.ActiveState.IsMenuState)
             {
-                TacticalMapLog.Info("CustomSkill Shift+M input detected.");
-                if (CustomSkillHtmlUi.Instance.IsVisible)
-                    CustomSkillHtmlUi.Instance.Close();
-                else
+                bool shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
+                bool shiftMPressed = shiftDown && Input.IsKeyPressed(InputKey.M);
+                bool mPressed = !shiftDown && Input.IsKeyPressed(InputKey.M);
+
+                // M：新的 HTML 技能界面
+                if (mPressed)
+                {
+                    if (ScreenManager.TopScreen is CustomSkillScreen)
+                        ScreenManager.PopScreen();
                     CustomSkillHtmlUi.Instance.TryOpen();
+                    return;
+                }
+
+                // Shift+M：旧的 Gauntlet 技能界面
+                if (shiftMPressed)
+                {
+                    if (ScreenManager.TopScreen is CustomSkillScreen)
+                        ScreenManager.PopScreen();
+                    if (!CustomSkillHtmlUi.Instance.IsVisible)
+                        ScreenManager.PushScreen(new CustomSkillScreen());
+                    return;
+                }
             }
 
             if (Input.IsKeyPressed(InputKey.F11) && Campaign.Current != null
