@@ -6,8 +6,8 @@ namespace New_ZZZF.GUI
 {
     /// <summary>
     /// Keeps CustomSkillHtmlUi's local lifecycle state synchronized with BannerlordHtmlUI's page lifecycle.
-    /// Framework-owned closes (ESC, page manager close, consumer scope teardown, etc.) must always clear
-    /// the consumer-side _visible / VM / active-state-disable state as well.
+    /// Framework-owned closes (ESC, page manager close, consumer scope teardown, etc.) must also clear
+    /// the consumer-side visible/VM/active-state state.
     /// </summary>
     [HarmonyPatch(typeof(HtmlUiPageManager), nameof(HtmlUiPageManager.CloseCurrent))]
     internal static class CustomSkillHtmlLifecyclePatch
@@ -32,17 +32,10 @@ namespace New_ZZZF.GUI
                 var ui = CustomSkillHtmlUi.Instance;
                 if (!ui.IsVisible) return;
 
-                // The page manager has already completed the Framework-side close at this point.
-                // Calling Close() here is safe: Pages.Close(pageId) sees no current page and becomes a no-op,
-                // while the consumer-side VM/active-state state is released exactly once.
-                if (string.Equals(ui.CurrentPageId, "New_ZZZF.CustomSkill.customskill.html", StringComparison.OrdinalIgnoreCase))
-                {
-                    ui.SyncFrameworkClosed();
-                    return;
-                }
-
-                // If another page transition closed the skill page, the local flag still must be cleared.
-                ui.SyncFrameworkClosed();
+                // Framework has already completed the page close. Close() now only releases
+                // the consumer-side VM and active-state-disable request; the page close itself is a no-op.
+                HtmlUiLogger.Info("CustomSkill lifecycle sync: framework page closed; releasing consumer state.");
+                ui.Close();
             }
             catch (Exception ex)
             {
