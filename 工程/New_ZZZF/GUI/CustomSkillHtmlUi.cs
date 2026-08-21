@@ -30,6 +30,11 @@ namespace New_ZZZF.GUI
         private string _catalogSearch = string.Empty;
         private float _publishAccum;
         private string _lastSignature;
+        private string _lastModelStamp;
+        private string _catalogCacheKey;
+        private List<object> _catalogCache;
+        private string _forgeCacheKey;
+        private object _forgeCache;
 
         public static CustomSkillHtmlUi Instance => _instance.Value;
         public bool IsVisible => _visible;
@@ -63,8 +68,6 @@ namespace New_ZZZF.GUI
 
         private void OnPageOpened()
         {
-            // PageManager is authoritative for the page; the consumer only records its
-            // business/UI state. Do not reacquire native focus here.
             HtmlUiLogger.Info("CustomSkill page Opened callback.");
         }
 
@@ -81,6 +84,7 @@ namespace New_ZZZF.GUI
                 if (_vm == null) return;
                 _vm.CurrentTargetTypeInt = payload?["value"]?.ToObject<int>() ?? 0;
                 _view = "main";
+                InvalidateStateCaches();
             }));
             _scope.RegisterCommand("selectHero", payload => Execute(() =>
             {
@@ -89,6 +93,7 @@ namespace New_ZZZF.GUI
                 if (index < 0 || index >= _vm.Roster.Count) return;
                 SelectTargetMethod.Invoke(_vm, new object[] { _vm.Roster[index] });
                 _view = "main";
+                InvalidateStateCaches();
             }));
             _scope.RegisterCommand("selectSlot", payload => Execute(() =>
             {
@@ -98,6 +103,7 @@ namespace New_ZZZF.GUI
                 _vm.SelectSlotByIndex(index);
                 _catalogSearch = string.Empty;
                 _view = "catalog";
+                InvalidateStateCaches();
             }));
             _scope.RegisterCommand("clearSlot", payload => Execute(() =>
             {
@@ -105,10 +111,16 @@ namespace New_ZZZF.GUI
                 int index = payload?["index"]?.ToObject<int>() ?? -1;
                 if (index < 0 || index >= _vm.Skills.Count) return;
                 _vm.ClearSkillSlot(_vm.Skills[index]);
+                InvalidateStateCaches();
             }));
             _scope.RegisterCommand("searchCatalog", payload => ExecuteWithoutStateRefresh(() =>
             {
-                _catalogSearch = payload?["text"]?.ToObject<string>() ?? string.Empty;
+                var next = payload?["text"]?.ToObject<string>() ?? string.Empty;
+                if (!string.Equals(_catalogSearch, next, StringComparison.Ordinal))
+                {
+                    _catalogSearch = next;
+                    InvalidateCatalogCache();
+                }
             }));
             _scope.RegisterCommand("catalogBack", _ => Execute(() => BackToMain()));
             _scope.RegisterCommand("catalogSelect", payload => Execute(() => AssignCatalogSkill(payload?["skillId"]?.ToObject<string>())));
@@ -118,15 +130,19 @@ namespace New_ZZZF.GUI
             _scope.RegisterCommand("toggleDebug", _ => Execute(() => _vm?.ExecuteToggleDebug()));
             _scope.RegisterCommand("openForge", _ => Execute(OpenForge));
             _scope.RegisterCommand("forgeBack", _ => Execute(CloseForge));
-            _scope.RegisterCommand("forgeAdd", payload => Execute(() => _forgeVm?.ExecuteAddNode(payload?["id"]?.ToObject<string>())));
-            _scope.RegisterCommand("forgeRemove", payload => Execute(() => _forgeVm?.ExecuteRemoveNode(payload?["id"]?.ToObject<string>())));
-            _scope.RegisterCommand("forgeClear", _ => Execute(() => _forgeVm?.ExecuteClearBuild()));
-            _scope.RegisterCommand("forgeConfirm", _ => Execute(() => _forgeVm?.ExecuteConfirmSpell()));
+            _scope.RegisterCommand("forgeAdd", payload => Execute(() => { _forgeVm?.ExecuteAddNode(payload?["id"]?.ToObject<string>()); InvalidateForgeCache(); }));
+            _scope.RegisterCommand("forgeRemove", payload => Execute(() => { _forgeVm?.ExecuteRemoveNode(payload?["id"]?.ToObject<string>()); InvalidateForgeCache(); }));
+            _scope.RegisterCommand("forgeClear", _ => Execute(() => { _forgeVm?.ExecuteClearBuild(); InvalidateForgeCache(); }));
+            _scope.RegisterCommand("forgeConfirm", _ => Execute(() => { _forgeVm?.ExecuteConfirmSpell(); InvalidateForgeCache(); InvalidateStateCaches(); }));
             _scope.RegisterCommand("forgeEquip", payload => Execute(() => _forgeVm?.ExecuteEquipSpell(payload?["id"]?.ToObject<string>())));
-            _scope.RegisterCommand("forgeEdit", payload => Execute(() => _forgeVm?.ExecuteEditSpell(payload?["id"]?.ToObject<string>())));
+            _scope.RegisterCommand("forgeEdit", payload => Execute(() => { _forgeVm?.ExecuteEditSpell(payload?["id"]?.ToObject<string>()); InvalidateForgeCache(); }));
             _scope.RegisterCommand("forgeSetName", payload => ExecuteWithoutStateRefresh(() =>
             {
-                if (_forgeVm != null) _forgeVm.NewSpellName = payload?["value"]?.ToObject<string>() ?? string.Empty;
+                if (_forgeVm != null)
+                {
+                    _forgeVm.NewSpellName = payload?["value"]?.ToObject<string>() ?? string.Empty;
+                    InvalidateForgeCache();
+                }
             }));
             _scope.RegisterCommand("close", _ => Execute(Close));
             _scope.RegisterRequest("getState", _ => Task.FromResult<object>(BuildState()));
@@ -162,6 +178,7 @@ namespace New_ZZZF.GUI
                 _catalogSearch = string.Empty;
                 _publishAccum = 0f;
                 _lastSignature = null;
+                InvalidateStateCaches();
 
                 if (Game.Current != null && !_activeStateDisabled)
                 {
@@ -194,6 +211,7 @@ namespace New_ZZZF.GUI
             if (_vm == null) return;
             if (_forgeVm == null) _forgeVm = new New_ZZZF.SpellForge.SpellForgeVM(_vm, CloseForge);
             _view = "forge";
+            InvalidateForgeCache();
         }
 
         private void CloseForge()
@@ -201,6 +219,7 @@ namespace New_ZZZF.GUI
             _forgeVm = null;
             _view = "main";
             _catalogSearch = string.Empty;
+            InvalidateStateCaches();
         }
 
         private void BackToMain()
@@ -210,6 +229,7 @@ namespace New_ZZZF.GUI
                 _vm?.ExecuteCloseCatalog();
                 _catalogSearch = string.Empty;
                 _view = "main";
+                InvalidateStateCaches();
                 return;
             }
             if (_view == "forge") CloseForge();
@@ -224,6 +244,7 @@ namespace New_ZZZF.GUI
             _vm.ExecuteCloseCatalog();
             _catalogSearch = string.Empty;
             _view = "main";
+            InvalidateStateCaches();
         }
 
         public void Close()
@@ -231,12 +252,9 @@ namespace New_ZZZF.GUI
             if (!_visible && !_activeStateDisabled && _vm == null && _forgeVm == null) return;
             try
             {
-                // Mark local state closed before invoking PageManager so any synchronous
-                // page callback observes the consumer as already closed.
                 bool wasRegistered = _registered && HtmlUiService.IsReady && !string.IsNullOrEmpty(_pageId);
                 ReleaseLocalState();
-                if (wasRegistered)
-                    HtmlUiService.Pages.Close(_pageId);
+                if (wasRegistered) HtmlUiService.Pages.Close(_pageId);
             }
             catch (Exception ex)
             {
@@ -267,13 +285,14 @@ namespace New_ZZZF.GUI
             _vm = null;
             _lastSignature = null;
             _publishAccum = 0f;
+            InvalidateStateCaches();
         }
 
         public void Tick(float dt)
         {
             if (!_visible || _vm == null) return;
             _publishAccum += Math.Max(0f, dt);
-            if (_publishAccum < 0.10f) return;
+            if (_publishAccum < 0.20f) return;
             _publishAccum = 0f;
             PublishState(false);
         }
@@ -283,6 +302,10 @@ namespace New_ZZZF.GUI
             if (!_registered || !_visible || _vm == null || _scope == null) return;
             try
             {
+                var modelStamp = BuildCheapModelStamp();
+                if (!force && string.Equals(modelStamp, _lastModelStamp, StringComparison.Ordinal)) return;
+                _lastModelStamp = modelStamp;
+
                 var state = BuildState();
                 string signature = Newtonsoft.Json.JsonConvert.SerializeObject(state);
                 if (!force && string.Equals(signature, _lastSignature, StringComparison.Ordinal)) return;
@@ -290,6 +313,48 @@ namespace New_ZZZF.GUI
                 _scope.SetState(StateKey, state);
             }
             catch (Exception ex) { HtmlUiLogger.Error("CustomSkillHtmlUi state publish failed.", ex); }
+        }
+
+        private string BuildCheapModelStamp()
+        {
+            var parts = new List<string>(32)
+            {
+                _view ?? string.Empty,
+                _catalogSearch ?? string.Empty,
+                _vm?.CurrentTargetTypeInt.ToString() ?? "-1",
+                _vm?.CurrentHeroId ?? string.Empty,
+                _vm?.IsDirty == true ? "1" : "0",
+                _vm?.ExportStatusText ?? string.Empty,
+                GetActiveSlotIndex().ToString()
+            };
+
+            if (_vm?.Skills != null)
+            {
+                for (int i = 0; i < _vm.Skills.Count; i++)
+                {
+                    var slot = _vm.Skills[i];
+                    parts.Add(slot?.Skill?.SkillId ?? string.Empty);
+                    parts.Add(slot?.IsEquipped == true ? "1" : "0");
+                }
+            }
+
+            if (_vm?.Proficiencies != null)
+                for (int i = 0; i < _vm.Proficiencies.Count; i++)
+                {
+                    var p = _vm.Proficiencies[i];
+                    parts.Add(p?.Value.ToString() ?? "0");
+                }
+
+            if (_forgeVm != null)
+            {
+                parts.Add(_forgeVm.NewSpellName ?? string.Empty);
+                parts.Add(_forgeVm.BuildDescription ?? string.Empty);
+                parts.Add(_forgeVm.ValidationMessage ?? string.Empty);
+                parts.Add(_forgeVm.CurrentBuild?.Count.ToString() ?? "0");
+                parts.Add(_forgeVm.AllSpells?.Count.ToString() ?? "0");
+            }
+
+            return string.Join("|", parts);
         }
 
         private object BuildState()
@@ -312,8 +377,8 @@ namespace New_ZZZF.GUI
                 heroes = BuildHeroState(),
                 slots = BuildSlotState(),
                 proficiencies = BuildProficiencyState(),
-                catalog = BuildCatalogState(),
-                forge = _view == "forge" ? BuildForgeState() : null
+                catalog = GetCatalogStateCached(),
+                forge = _view == "forge" ? GetForgeStateCached() : null
             };
         }
 
@@ -367,10 +432,21 @@ namespace New_ZZZF.GUI
             return result;
         }
 
+        private List<object> GetCatalogStateCached()
+        {
+            if (_view != "catalog" || _vm?.ActiveSlot == null || _vm.Catalog?.AllSkills == null)
+                return new List<object>();
+
+            var key = (_vm.ActiveSlot.SlotFilterType.ToString()) + "|" + (_catalogSearch ?? string.Empty);
+            if (_catalogCache != null && string.Equals(_catalogCacheKey, key, StringComparison.Ordinal)) return _catalogCache;
+            _catalogCacheKey = key;
+            _catalogCache = BuildCatalogState();
+            return _catalogCache;
+        }
+
         private List<object> BuildCatalogState()
         {
             var result = new List<object>();
-            if (_view != "catalog" || _vm?.ActiveSlot == null || _vm.Catalog?.AllSkills == null) return result;
             string filter = (_catalogSearch ?? string.Empty).Trim();
             foreach (var skill in _vm.Catalog.AllSkills)
             {
@@ -385,10 +461,13 @@ namespace New_ZZZF.GUI
             return result.OrderBy(x => JObject.FromObject(x)["name"]?.Value<string>(), StringComparer.CurrentCultureIgnoreCase).ToList();
         }
 
-        private object BuildForgeState()
+        private object GetForgeStateCached()
         {
             if (_forgeVm == null) return null;
-            return new
+            var key = (_forgeVm.NewSpellName ?? string.Empty) + "|" + (_forgeVm.BuildDescription ?? string.Empty) + "|" + (_forgeVm.ValidationMessage ?? string.Empty) + "|" + (_forgeVm.CurrentBuild?.Count ?? 0) + "|" + (_forgeVm.AllSpells?.Count ?? 0);
+            if (_forgeCache != null && string.Equals(_forgeCacheKey, key, StringComparison.Ordinal)) return _forgeCache;
+            _forgeCacheKey = key;
+            _forgeCache = new
             {
                 newSpellName = _forgeVm.NewSpellName ?? string.Empty,
                 buildDescription = _forgeVm.BuildDescription ?? string.Empty,
@@ -397,6 +476,7 @@ namespace New_ZZZF.GUI
                 currentBuild = BuildForgeEntries(_forgeVm.CurrentBuild),
                 allSpells = BuildForgeEntries(_forgeVm.AllSpells)
             };
+            return _forgeCache;
         }
 
         private static List<object> BuildForgeEntries(IEnumerable<New_ZZZF.SpellForge.ForgeEntryVM> entries)
@@ -406,6 +486,26 @@ namespace New_ZZZF.GUI
             foreach (var entry in entries)
                 if (entry != null) result.Add(new { id = entry.SkillId ?? string.Empty, name = entry.SkillName ?? string.Empty, description = entry.Description ?? string.Empty });
             return result;
+        }
+
+        private void InvalidateStateCaches()
+        {
+            _lastModelStamp = null;
+            _lastSignature = null;
+            InvalidateCatalogCache();
+            InvalidateForgeCache();
+        }
+
+        private void InvalidateCatalogCache()
+        {
+            _catalogCacheKey = null;
+            _catalogCache = null;
+        }
+
+        private void InvalidateForgeCache()
+        {
+            _forgeCacheKey = null;
+            _forgeCache = null;
         }
 
         private int GetActiveSlotIndex()
