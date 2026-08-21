@@ -25,6 +25,7 @@ using System.Collections.Generic;
 using New_ZZZF.ActionExplorer;
 using TaleWorlds.Engine.GauntletUI;
 using New_ZZZF.GUI;
+using BannerlordHtmlUI;
 
 namespace New_ZZZF
 {
@@ -65,6 +66,7 @@ namespace New_ZZZF
 
             CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
             TacticalMapLog.Info("CustomSkillHtmlUi.InitializeOnFrameworkReady registered.");
+            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
 
         public override void OnNewGameCreated(Game game, object initializerObject)
@@ -136,11 +138,13 @@ namespace New_ZZZF
 
         protected override void OnSubModuleUnloaded()
         {
+            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_BEGIN");
             TacticalMapLog.Section("SUBMODULE UNLOAD");
             try { TacticalMapHtmlUi.Instance.Dispose(); }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
             try { CustomSkillHtmlUi.Instance.Dispose(); }
             catch (Exception ex) { TacticalMapLog.Error("CustomSkillHtmlUi.Dispose failed.", ex); }
+            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
             base.OnSubModuleUnloaded();
         }
 
@@ -187,28 +191,52 @@ namespace New_ZZZF
             base.OnApplicationTick(dt);
             CustomSkillHtmlUi.Instance.Tick(dt);
 
-            // 新 HTML 技能界面拥有全输入时，不处理 New_ZZZF 的其它全局热键。
-            if (CustomSkillHtmlUi.Instance.IsVisible)
-                return;
-
             var game = Game.Current;
-            if (game == null) return;
+            var stateManager = game?.GameStateManager;
+            var activeState = stateManager?.ActiveState;
+            var customVisible = CustomSkillHtmlUi.Instance.IsVisible;
+            var mPressed = Input.IsKeyPressed(InputKey.M);
+            var shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
+            var campaignAvailable = Campaign.Current != null;
+            var missionActive = Mission.Current != null;
+            var isMenuState = activeState?.IsMenuState ?? true;
 
-            var stateManager = game.GameStateManager;
-            if (stateManager == null || stateManager.ActiveState == null)
+            if (mPressed || (Input.IsKeyDown(InputKey.M) && shiftDown))
+            {
+                HtmlUiInputTraceLogger.Event(
+                    "NEW_ZZZF_M_GATE "
+                    + "mPressed=" + mPressed
+                    + " shiftDown=" + shiftDown
+                    + " customVisible=" + customVisible
+                    + " game=" + (game != null)
+                    + " campaign=" + campaignAvailable
+                    + " mission=" + missionActive
+                    + " activeState=" + (activeState == null ? "<null>" : activeState.GetType().FullName)
+                    + " isMenuState=" + isMenuState);
+            }
+
+            // 新 HTML 技能界面拥有全输入时，不处理 New_ZZZF 的其它全局热键。
+            if (customVisible)
+            {
+                if (mPressed || shiftDown)
+                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_BLOCKED_BY_CUSTOM_SKILL_VISIBLE");
                 return;
+            }
+
+            if (game == null) return;
+            if (stateManager == null || activeState == null) return;
 
             if (Campaign.Current != null
                 && Mission.Current == null
                 && !stateManager.ActiveState.IsMenuState)
             {
-                bool shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
-                bool shiftMPressed = shiftDown && Input.IsKeyPressed(InputKey.M);
-                bool mPressed = !shiftDown && Input.IsKeyPressed(InputKey.M);
+                bool shiftMPressed = shiftDown && mPressed;
+                bool normalMPressed = !shiftDown && mPressed;
 
                 // M：新的 HTML 技能界面
-                if (mPressed)
+                if (normalMPressed)
                 {
+                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_ACCEPTED_OPEN_HTML");
                     if (ScreenManager.TopScreen is CustomSkillScreen)
                         ScreenManager.PopScreen();
                     CustomSkillHtmlUi.Instance.TryOpen();
@@ -218,6 +246,7 @@ namespace New_ZZZF
                 // Shift+M：旧的 Gauntlet 技能界面
                 if (shiftMPressed)
                 {
+                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_SHIFT_M_ACCEPTED_OPEN_GAUNTLET");
                     if (CustomSkillHtmlUi.Instance.IsVisible)
                         CustomSkillHtmlUi.Instance.Close();
                     if (!(ScreenManager.TopScreen is CustomSkillScreen))
