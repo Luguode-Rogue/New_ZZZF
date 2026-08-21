@@ -14,11 +14,16 @@ namespace New_ZZZF.TacticalMap.Core
     /// </summary>
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
+        private const int CompactOverlayWidth = 400;
+        private const int CompactOverlayHeight = 400;
+        private const int CompactOverlayMargin = 16;
+
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
         private bool _initialized;
         private bool _ready;
         private float _heartbeatAccum;
+        private TacticalMapUiMode _lastLayoutMode = (TacticalMapUiMode)(-1);
 
         public override void OnAfterMissionCreated()
         {
@@ -78,6 +83,7 @@ namespace New_ZZZF.TacticalMap.Core
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
             TacticalMapHtmlUi.Instance.Tick(dt);
+            ApplyOverlayLayoutIfChanged();
 
             // Input ownership is changed only on TacticalMap mode transitions via ApplyInputMode().
             // Do not re-submit CaptureInput() every MissionTick: HtmlUiService marshals it to the WebView2 UI thread,
@@ -89,6 +95,24 @@ namespace New_ZZZF.TacticalMap.Core
                 TacticalMapLog.Info("Mission heartbeat. UIVisible=" + TacticalMapHtmlUi.Instance.IsVisible +
                                     " Mode=" + TacticalMapHtmlUi.Instance.Mode +
                                     " Baked=" + _controller.Cache.IsBaked);
+            }
+        }
+
+        private void ApplyOverlayLayoutIfChanged()
+        {
+            var mode = TacticalMapHtmlUi.Instance.Mode;
+            if (mode == _lastLayoutMode) return;
+
+            _lastLayoutMode = mode;
+            if (mode == TacticalMapUiMode.CompactPassive || mode == TacticalMapUiMode.CompactInteractive)
+            {
+                HtmlUiOverlayLayout.UseTopRight(CompactOverlayWidth, CompactOverlayHeight, CompactOverlayMargin);
+                TacticalMapLog.Info("Overlay layout=TopRight size=" + CompactOverlayWidth + "x" + CompactOverlayHeight + " margin=" + CompactOverlayMargin + ". Mode=" + mode);
+            }
+            else
+            {
+                HtmlUiOverlayLayout.UseFullWindow();
+                TacticalMapLog.Info("Overlay layout=FullWindow. Mode=" + mode);
             }
         }
 
@@ -158,6 +182,15 @@ namespace New_ZZZF.TacticalMap.Core
 
             try
             {
+                HtmlUiOverlayLayout.UseFullWindow();
+            }
+            catch (Exception ex)
+            {
+                TacticalMapLog.Debug("Failed to restore full-window overlay layout during mission end: " + ex.GetBaseException().Message);
+            }
+
+            try
+            {
                 if (_controller != null && _missionScreen != null)
                 {
                     _controller.SetVisible(_missionScreen, false);
@@ -188,6 +221,7 @@ namespace New_ZZZF.TacticalMap.Core
             _ready = false;
             _initialized = false;
             _heartbeatAccum = 0f;
+            _lastLayoutMode = (TacticalMapUiMode)(-1);
 
             base.OnEndMission();
             TacticalMapLog.Info("OnEndMission completed.");
