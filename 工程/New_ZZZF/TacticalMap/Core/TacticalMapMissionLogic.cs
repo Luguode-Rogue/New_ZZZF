@@ -60,6 +60,8 @@ namespace New_ZZZF.TacticalMap.Core
                     TacticalMapHtmlUi.Instance.DetachController();
                     _controller = null;
                     _ready = false;
+                    HtmlUiOverlayLayout.UseFullWindow();
+                    _lastLayoutMode = (TacticalMapUiMode)(-1);
                 }
                 return;
             }
@@ -153,6 +155,7 @@ namespace New_ZZZF.TacticalMap.Core
                 if (_ready)
                 {
                     TacticalMapHtmlUi.Instance.AttachController(_controller);
+                    ApplyOverlayLayoutIfChanged();
                     TacticalMapLog.Info("TacticalMapHtmlUi.AttachController completed. Mode=" + TacticalMapHtmlUi.Instance.Mode);
                 }
                 else
