@@ -4,9 +4,11 @@ using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 using ConfigTacticalSettings = New_ZZZF.TacticalMap.Config.TacticalSettings;
+using TacticalFeatureGate = New_ZZZF.TacticalMap.Config.FeatureGate;
+using TacticalFeature = New_ZZZF.TacticalMap.Config.TacticalFeature;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
-using New_ZZZF.TacticalMap.UI;
+using TacticalMapLayer = New_ZZZF.TacticalMap.UI.TacticalMapLayer;
 using System;
 
 namespace New_ZZZF.TacticalMap.Core
@@ -140,7 +142,7 @@ namespace New_ZZZF.TacticalMap.Core
         public void HandleHtmlCameraClick(float u, float v)
         {
             Vec2 world = _cache.UVToWorld(new Vec2(Clamp01(u), Clamp01(v)));
-            if (FeatureGate.IsEnabled(TacticalFeature.CameraLink) && CameraController.Instance != null)
+            if (TacticalFeatureGate.IsEnabled(TacticalFeature.CameraLink) && CameraController.Instance != null)
                 CameraController.Instance.Enable(world);
         }
 
@@ -149,7 +151,7 @@ namespace New_ZZZF.TacticalMap.Core
             Vec2 world = _cache.UVToWorld(new Vec2(Clamp01(uv.X), Clamp01(uv.Y)));
             _orderSystem.IssueOrder(_mission, world, mode);
 
-            if (cameraLink && FeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
+            if (cameraLink && TacticalFeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
                 CameraController.Instance.Enable(world);
         }
 
