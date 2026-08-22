@@ -5,13 +5,11 @@ using New_ZZZF.TacticalMap.Diagnostics;
 
 namespace New_ZZZF
 {
-    /// <summary>
-    /// 每次最终命中只输出一行伤害诊断日志。
-    /// 记录：Reduction 输入 → 原版护甲置零后的 Reduction → New_ZZZF 状态修正
-    /// → damage-refactor 护甲/保底 → 最终伤害。
-    /// </summary>
     internal static class DamageTrace
     {
+        // 默认关闭：伤害计算处于 Mission 原生 Tick 热路径，诊断日志必须显式开启。
+        public static bool Enabled = false;
+
         public static void LogFinal(
             in AttackInformation attackInformation,
             in AttackCollisionData collisionData,
@@ -22,6 +20,9 @@ namespace New_ZZZF
             float finalDamage,
             bool customBattle)
         {
+            if (!Enabled)
+                return;
+
             Agent attacker = attackInformation.AttackerAgent;
             Agent victim = attackInformation.VictimAgent;
 
