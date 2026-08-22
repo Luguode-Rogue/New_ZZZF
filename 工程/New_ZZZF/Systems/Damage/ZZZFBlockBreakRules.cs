@@ -4,8 +4,7 @@ using TaleWorlds.MountAndBlade;
 namespace New_ZZZF
 {
     /// <summary>
-    /// 统一破格挡规则。保留原有 New_ZZZF 设定。
-    /// 不在原生 DecideCrushedThrough 回调中直接修改 Agent 装备。
+    /// 统一破格挡规则。保留原有 New_ZZZF 设定；斧类缴械只登记请求，实际卸下装备由 MissionBehavior 延后执行。
     /// </summary>
     internal static class ZZZFBlockBreakRules
     {
@@ -64,14 +63,20 @@ namespace New_ZZZF
             if (defendItem != null && defendItem.IsShield)
                 threshold *= 1.2f;
 
-            // 保留原有斧类缴械概率判定，但延迟实际装备修改。
-            // RemoveEquippedWeapon 不能在 native 战斗判定回调中直接调用。
             if (attackerWeapon.WeaponClass == WeaponClass.OneHandedAxe || attackerWeapon.WeaponClass == WeaponClass.TwoHandedAxe)
             {
                 float disarmChance = 0.2f + proficiencyDifference / 500f *
                     (1f + (attackerMovementSkill - defenderMovementSkill) / 1000f);
 
-                _ = disarmChance > MBRandom.RandomFloat;
+                if (disarmChance > MBRandom.RandomFloat)
+                {
+                    EquipmentIndex wieldedIndex = defenderAgent.GetOffhandWieldedItemIndex();
+                    if (wieldedIndex == EquipmentIndex.None)
+                        wieldedIndex = defenderAgent.GetPrimaryWieldedItemIndex();
+
+                    if (wieldedIndex != EquipmentIndex.None)
+                        ZZZFDisarmMissionBehavior.QueueDisarm(defenderAgent, wieldedIndex);
+                }
             }
 
             return totalAttackEnergy > threshold;
@@ -79,9 +84,6 @@ namespace New_ZZZF
 
         private static int GetMovementSkill(Agent agent)
         {
-            if (agent == null || agent.Character == null)
-                return 0;
-
             return agent.Mount != null
                 ? agent.Character.GetSkillValue(DefaultSkills.Riding)
                 : agent.Character.GetSkillValue(DefaultSkills.Athletics);
