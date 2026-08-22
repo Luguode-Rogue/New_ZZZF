@@ -117,7 +117,7 @@ namespace New_ZZZF
         {
             RenameSkill(DefaultSkills.OneHanded, "{=ZZZF_SwordMastery}Sword Mastery", "{=ZZZF_SwordMastery_Desc}Sword Mastery");
             RenameSkill(DefaultSkills.TwoHanded, "{=ZZZF_AxeMastery}Axe Mastery", "{=ZZZF_AxeMastery_Desc}Axe Mastery");
-            RenameSkill(DefaultSkills.Polearm, "{=ZZZF_HammerMastery}Hammer Mastery", "{=ZZZF_HammerMastery_Desc}Hammer Mastery");
+            RenameSkill(DefaultSkills.Polearm, "{=ZZZF_HammerMastery}Hammer Mastery", "{=ZZF_HammerMastery_Desc}Hammer Mastery");
             RenameSkill(DefaultSkills.Throwing, "{=ZZZF_SpearMastery}Spear Mastery", "{=ZZZF_SpearMastery_Desc}Spear Mastery");
         }
 
@@ -131,9 +131,11 @@ namespace New_ZZZF
             gameStarterObject.AddModel(new WOW_DefaultStrikeMagnitudeModel());
             gameStarterObject.AddModel(new WOW_CustomBattleAgentStatCalculateModel());
             gameStarterObject.AddModel(new WOW_CustomAgentApplyDamageModel());
+            gameStarterObject.AddModel(new ZZZFIntegratedCustomAgentApplyDamageModel());
             if (game.GameType is Campaign)
             {
                 gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
+                gameStarterObject.AddModel(new ZZZFIntegratedSandboxAgentApplyDamageModel());
                 gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
                 gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());
                 gameStarterObject.AddModel(new WOW_DefaultPartySpeedCalculatingModel());
