@@ -32,6 +32,8 @@ namespace New_ZZZF
         protected override void OnSubModuleLoad()
         {
             base.OnSubModuleLoad();
+            DamageLog.Enabled = true;
+            DamageLog.Initialize();
             TacticalMapBootstrap.OnSubModuleLoad();
         }
 
