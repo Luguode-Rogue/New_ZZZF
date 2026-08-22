@@ -1,3 +1,5 @@
+using System;
+using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
@@ -6,6 +8,8 @@ namespace New_ZZZF
 {
     internal static class DamageCalculationRules
     {
+        private static readonly Random Random = new Random();
+
         public static float GetMinimumDamageRatio(Agent attacker)
         {
             BasicCharacterObject character = attacker?.Character;
@@ -14,24 +18,17 @@ namespace New_ZZZF
 
             if (character.IsHero)
             {
-                Hero hero = (character as CharacterObject)?.HeroObject;
-                return hero == null ? 0f : TaleWorlds.Library.MathF.Max(0f, hero.Level * 0.01f);
+                CharacterObject characterObject = character as CharacterObject;
+                Hero hero = characterObject?.HeroObject;
+                return hero == null ? 0f : MathF.Max(0f, hero.Level * 0.01f);
             }
 
             if (character.IsSoldier)
-                return TaleWorlds.Library.MathF.Max(0f, character.GetBattleTier() * 0.05f);
+                return MathF.Max(0f, character.GetBattleTier() * 0.05f);
 
             return 0f;
         }
 
-        /// <summary>
-        /// Applies the damage-refactor rule after the native damage reduction stage
-        /// has been run with armor neutralized.
-        ///
-        /// The armor passed in here is AttackInformation.ArmorAmountFloat, i.e. the
-        /// native adjusted armor value after Bannerlord's armor perks/penetration
-        /// handling. We deliberately do not recompute those perks here.
-        /// </summary>
         public static float ApplyRefactoredArmor(
             in AttackInformation attackInformation,
             float damageBeforeArmor)
@@ -39,12 +36,12 @@ namespace New_ZZZF
             if (damageBeforeArmor <= 0f)
                 return 0f;
 
-            float armor = TaleWorlds.Library.MathF.Max(0f, attackInformation.ArmorAmountFloat);
+            float armor = MathF.Max(0f, attackInformation.ArmorAmountFloat);
             float armorResult = damageBeforeArmor - armor;
             float minimumResult = damageBeforeArmor * GetMinimumDamageRatio(attackInformation.AttackerAgent);
 
-            return TaleWorlds.Library.MathF.Clamp(
-                TaleWorlds.Library.MathF.Max(armorResult, minimumResult),
+            return MathF.Clamp(
+                MathF.Max(armorResult, minimumResult),
                 0f,
                 1000f);
         }
@@ -60,7 +57,7 @@ namespace New_ZZZF
             if (attacker != null &&
                 SkillSystemBehavior.ActiveComponents.TryGetValue(attacker.Index, out var attackerComponent) &&
                 attackerComponent.StateContainer.HasState("ZhanYiBuff") &&
-                SkillSystemBehavior.Random.NextFloat() > 0.5f)
+                Random.NextDouble() > 0.5)
             {
                 damage += 50f;
             }
@@ -86,7 +83,7 @@ namespace New_ZZZF
             if (attacker != null &&
                 SkillSystemBehavior.ActiveComponents.TryGetValue(attacker.Index, out var attackerComponent) &&
                 attackerComponent.StateContainer.HasState("ZhanYiBuff") &&
-                SkillSystemBehavior.Random.NextFloat() > 0.5f)
+                Random.NextDouble() > 0.5)
             {
                 damage += 50f;
             }
