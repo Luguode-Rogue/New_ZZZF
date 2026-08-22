@@ -36,30 +36,51 @@ namespace New_ZZZF
             float baseDamage)
         {
             if (attackInformation.IsFriendlyFire)
+            {
+                DamageTrace.LogFinal(
+                    in attackInformation,
+                    in collisionData,
+                    baseDamage,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    customBattle: false);
                 return 0f;
+            }
 
-            // ArmorAmountFloat has already passed Bannerlord's native armor-perk and
-            // armor-penetration adjustment. Keep that real adjusted value for the new rule.
             float adjustedArmor = attackInformation.ArmorAmountFloat;
 
             // Skip only native armor reduction. All other native reduction logic remains active.
             AttackInformation noArmor = attackInformation;
             noArmor.ArmorAmountFloat = 0f;
 
-            float damage = base.ApplyDamageReductions(
+            float nativeWithoutArmor = base.ApplyDamageReductions(
                 in noArmor,
                 in collisionData,
                 baseDamage);
 
-            damage = DamageCalculationRules.ApplyCampaignFinalRules(
+            float stateAdjustedDamage = DamageCalculationRules.ApplyCampaignFinalRules(
                 in attackInformation,
-                damage);
+                nativeWithoutArmor);
 
             AttackInformation armorContext = attackInformation;
             armorContext.ArmorAmountFloat = adjustedArmor;
-            return DamageCalculationRules.ApplyRefactoredArmor(
+            float finalDamage = DamageCalculationRules.ApplyRefactoredArmor(
                 in armorContext,
-                damage);
+                stateAdjustedDamage);
+
+            DamageTrace.LogFinal(
+                in attackInformation,
+                in collisionData,
+                baseDamage,
+                nativeWithoutArmor,
+                stateAdjustedDamage,
+                adjustedArmor,
+                finalDamage,
+                customBattle: false);
+
+            return finalDamage;
         }
     }
 
@@ -93,27 +114,50 @@ namespace New_ZZZF
             float baseDamage)
         {
             if (attackInformation.IsFriendlyFire)
+            {
+                DamageTrace.LogFinal(
+                    in attackInformation,
+                    in collisionData,
+                    baseDamage,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    customBattle: true);
                 return 0f;
+            }
 
             float adjustedArmor = attackInformation.ArmorAmountFloat;
 
             AttackInformation noArmor = attackInformation;
             noArmor.ArmorAmountFloat = 0f;
 
-            float damage = base.ApplyDamageReductions(
+            float nativeWithoutArmor = base.ApplyDamageReductions(
                 in noArmor,
                 in collisionData,
                 baseDamage);
 
-            damage = DamageCalculationRules.ApplyCustomBattleFinalRules(
+            float stateAdjustedDamage = DamageCalculationRules.ApplyCustomBattleFinalRules(
                 in attackInformation,
-                damage);
+                nativeWithoutArmor);
 
             AttackInformation armorContext = attackInformation;
             armorContext.ArmorAmountFloat = adjustedArmor;
-            return DamageCalculationRules.ApplyRefactoredArmor(
+            float finalDamage = DamageCalculationRules.ApplyRefactoredArmor(
                 in armorContext,
-                damage);
+                stateAdjustedDamage);
+
+            DamageTrace.LogFinal(
+                in attackInformation,
+                in collisionData,
+                baseDamage,
+                nativeWithoutArmor,
+                stateAdjustedDamage,
+                adjustedArmor,
+                finalDamage,
+                customBattle: true);
+
+            return finalDamage;
         }
     }
 }
