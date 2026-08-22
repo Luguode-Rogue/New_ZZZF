@@ -4,6 +4,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
+using MathF = TaleWorlds.Library.MathF;
 
 namespace New_ZZZF
 {
