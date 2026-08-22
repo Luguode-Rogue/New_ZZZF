@@ -1,4 +1,5 @@
 using System;
+using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 
@@ -6,7 +7,6 @@ namespace New_ZZZF
 {
     internal static class DamageTrace
     {
-        // 默认关闭：伤害计算处于 Mission 原生 Tick 热路径，诊断日志必须显式开启。
         public static bool Enabled = false;
 
         public static void LogFinal(
@@ -24,24 +24,17 @@ namespace New_ZZZF
 
             Agent attacker = attackInformation.AttackerAgent;
             Agent victim = attackInformation.VictimAgent;
-
             bool zhanYi = false;
             bool jianRenBuQu = false;
             bool tianQi = false;
 
-            if (attacker != null &&
-                SkillSystemBehavior.ActiveComponents.TryGetValue(attacker.Index, out var attackerComponent))
-            {
+            if (attacker != null && SkillSystemBehavior.ActiveComponents.TryGetValue(attacker.Index, out var attackerComponent))
                 zhanYi = attackerComponent.StateContainer.HasState("ZhanYiBuff");
-            }
 
-            if (victim != null &&
-                SkillSystemBehavior.ActiveComponents.TryGetValue(victim.Index, out var victimComponent))
+            if (victim != null && SkillSystemBehavior.ActiveComponents.TryGetValue(victim.Index, out var victimComponent))
             {
-                jianRenBuQu = victimComponent.StateContainer.HasState("JianRenBuQuuBuff") ||
-                              victimComponent.StateContainer.HasState("JianRenBuQu");
-                tianQi = victimComponent.StateContainer.HasState("TianQiBuff") ||
-                         victimComponent.StateContainer.HasState("TianQi");
+                jianRenBuQu = victimComponent.StateContainer.HasState("JianRenBuQuuBuff") || victimComponent.StateContainer.HasState("JianRenBuQu");
+                tianQi = victimComponent.StateContainer.HasState("TianQiBuff") || victimComponent.StateContainer.HasState("TianQi");
             }
 
             float minimumRatio = GetMinimumDamageRatio(attacker);
@@ -50,13 +43,10 @@ namespace New_ZZZF
             float minimumResult = stateAdjustedDamage * minimumRatio;
             float stateDelta = stateAdjustedDamage - nativeWithoutArmor;
 
-            int attackerIndex = attacker != null ? attacker.Index : -1;
-            int victimIndex = victim != null ? victim.Index : -1;
-
             DamageLog.Info(string.Format(
                 "[DAMAGE] atk={0} vic={1} mode={2} dmgType={3} in={4:F2} native0={5:F2} state={6:F2} stateDelta={7:+0.00;-0.00;0.00} armorAdj={8:F2} armorResult={9:F2} min={10:F2}@{11:P0} final={12:F2} FF={13} ZY={14} JR={15} TQ={16} missile={17}",
-                attackerIndex,
-                victimIndex,
+                attacker != null ? attacker.Index : -1,
+                victim != null ? victim.Index : -1,
                 customBattle ? "Custom" : "Campaign",
                 collisionData.DamageType,
                 damageBeforeReduction,
