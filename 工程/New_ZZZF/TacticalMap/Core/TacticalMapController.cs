@@ -3,17 +3,14 @@ using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
-using New_ZZZF.TacticalMap.Config;
+using TacticalConfig = New_ZZZF.TacticalMap.Config.TacticalSettings;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
-using New_ZZZF.TacticalMap.UI;
+using TacticalMapLayer = New_ZZZF.TacticalMap.UI.TacticalMapLayer;
 using System;
 
 namespace New_ZZZF.TacticalMap.Core
 {
-    /// <summary>
-    /// 小地图总控制器：烘焙地形、驱动追踪器、派发编队指令、管理 UI 层与镜头联动。
-    /// </summary>
     public sealed class TacticalMapController
     {
         private readonly Mission _mission;
@@ -44,7 +41,7 @@ namespace New_ZZZF.TacticalMap.Core
         public TacticalMapController(Mission mission)
         {
             _mission = mission;
-            var settings = TacticalSettings.Instance;
+            var settings = TacticalConfig.Instance;
             _cache = new TerrainCache(settings);
             _formationTracker = new FormationTracker();
             _agentTracker = new AgentTracker(_cache);
@@ -64,7 +61,7 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 _layer = new TacticalMapLayer(this);
                 _layer.Create(ms);
-                _accum = TacticalSettings.Instance.UpdateInterval;
+                _accum = TacticalConfig.Instance.UpdateInterval;
             }
             else if (!visible && _layer != null)
             {
@@ -96,7 +93,7 @@ namespace New_ZZZF.TacticalMap.Core
             }
 
             _accum += dt;
-            if (_accum >= TacticalSettings.Instance.UpdateInterval)
+            if (_accum >= TacticalConfig.Instance.UpdateInterval)
             {
                 _accum = 0f;
                 _formationTracker.Update(mission);
