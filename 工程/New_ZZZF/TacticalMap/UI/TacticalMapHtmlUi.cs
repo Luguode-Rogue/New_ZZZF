@@ -88,9 +88,9 @@ namespace New_ZZZF.TacticalMap.UI
             });
             _scope.RegisterCommand("longPressNext", _ => AdvanceLongPress());
             _scope.RegisterCommand("escape", _ => SetInteractive(false));
-            _scope.RegisterCommand("move", payload => ExecuteUv(payload, _controller?.HandleHtmlMoveClick));
-            _scope.RegisterCommand("face", payload => ExecuteUv(payload, _controller?.HandleHtmlFaceClick));
-            _scope.RegisterCommand("camera", payload => ExecuteUv(payload, _controller?.HandleHtmlCameraClick));
+            _scope.RegisterCommand("move", payload => ExecuteUv(payload, (u, v) => { if (_controller != null) _controller.HandleHtmlMoveClick(u, v); }));
+            _scope.RegisterCommand("face", payload => ExecuteUv(payload, (u, v) => { if (_controller != null) _controller.HandleHtmlFaceClick(u, v); }));
+            _scope.RegisterCommand("camera", payload => ExecuteUv(payload, (u, v) => { if (_controller != null) _controller.HandleHtmlCameraClick(u, v); }));
             _scope.RegisterCommand("close", _ => DetachController());
             _scope.RegisterCommand("refresh", _ => PublishState(true));
             _scope.RegisterRequest("getState", _ => System.Threading.Tasks.Task.FromResult<object>(BuildState()));
@@ -417,7 +417,6 @@ namespace New_ZZZF.TacticalMap.UI
                 agentDetailDistance = settings.AgentDetailDistance
             };
 
-            // Base64 很大，只在地形签名发生变化时发送；Runtime 通过 state snapshot 保留静态数据。
             if (terrainBase == null && risk == null)
             {
                 state.terrainBaseRgba = null;
