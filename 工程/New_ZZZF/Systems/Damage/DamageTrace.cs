@@ -1,7 +1,6 @@
 using System;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
-using New_ZZZF.TacticalMap.Diagnostics;
 
 namespace New_ZZZF
 {
@@ -54,7 +53,7 @@ namespace New_ZZZF
             int attackerIndex = attacker != null ? attacker.Index : -1;
             int victimIndex = victim != null ? victim.Index : -1;
 
-            TacticalMapLog.Info(string.Format(
+            DamageLog.Info(string.Format(
                 "[DAMAGE] atk={0} vic={1} mode={2} dmgType={3} in={4:F2} native0={5:F2} state={6:F2} stateDelta={7:+0.00;-0.00;0.00} armorAdj={8:F2} armorResult={9:F2} min={10:F2}@{11:P0} final={12:F2} FF={13} ZY={14} JR={15} TQ={16} missile={17}",
                 attackerIndex,
                 victimIndex,
