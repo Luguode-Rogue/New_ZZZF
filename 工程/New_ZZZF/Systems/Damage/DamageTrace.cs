@@ -7,7 +7,7 @@ namespace New_ZZZF
 {
     internal static class DamageTrace
     {
-        public static bool Enabled = false;
+        public static bool Enabled = true;
 
         public static void LogFinal(
             in AttackInformation attackInformation,
