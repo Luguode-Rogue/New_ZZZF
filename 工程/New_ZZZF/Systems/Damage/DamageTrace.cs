@@ -65,6 +65,41 @@ namespace New_ZZZF
                 collisionData.AffectorWeaponSlotOrMissileIndex));
         }
 
+        public static void LogDisarmQueued(
+            Agent attacker,
+            Agent defender,
+            EquipmentIndex equipmentIndex,
+            float chance,
+            float roll)
+        {
+            if (!Enabled)
+                return;
+
+            DamageLog.Info(string.Format(
+                "[DISARM] phase=queued atk={0} vic={1} slot={2} chance={3:P1} roll={4:F4} result={5}",
+                attacker != null ? attacker.Index : -1,
+                defender != null ? defender.Index : -1,
+                equipmentIndex,
+                chance,
+                roll,
+                chance > roll ? "QUEUE" : "MISS"));
+        }
+
+        public static void LogDisarmExecution(
+            Agent defender,
+            EquipmentIndex requestedIndex,
+            string result)
+        {
+            if (!Enabled)
+                return;
+
+            DamageLog.Info(string.Format(
+                "[DISARM] phase=execute vic={0} requestedSlot={1} result={2}",
+                defender != null ? defender.Index : -1,
+                requestedIndex,
+                result));
+        }
+
         private static float GetMinimumDamageRatio(Agent attacker)
         {
             BasicCharacterObject character = attacker != null ? attacker.Character : null;
