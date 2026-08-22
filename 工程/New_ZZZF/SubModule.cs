@@ -96,6 +96,7 @@ namespace New_ZZZF
             mission.AddMissionBehavior(new SkillSystemBehavior());
             mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
             mission.AddMissionBehavior(new HeroChangeMissionBehavior());
+            mission.AddMissionBehavior(new ZZZFDisarmMissionBehavior());
             TacticalMapBootstrap.OnMissionStart(mission);
             mission.AddMissionBehavior(new AffixMissionBehavior());
             mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
@@ -151,7 +152,6 @@ namespace New_ZZZF
             base.OnApplicationTick(dt);
             if (Game.Current != null)
             {
-                // ---- 新版技能界面（M键，纯MVVM，不依赖物品系统） ----
                 if (Input.IsKeyPressed(InputKey.M) && Campaign.Current != null
                     && Mission.Current == null
                     && !Game.Current.GameStateManager.ActiveState.IsMenuState
