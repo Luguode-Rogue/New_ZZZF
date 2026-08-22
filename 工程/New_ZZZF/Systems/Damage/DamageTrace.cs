@@ -7,34 +7,29 @@ using New_ZZZF.TacticalMap.Diagnostics;
 namespace New_ZZZF
 {
     /// <summary>
-    /// 一次攻击的跨阶段诊断上下文。
-    /// StrikeMagnitude 阶段记录输入/中间结果，ApplyDamageReductions 阶段补齐最终结果，最终只输出一行。
+    /// 跨伤害阶段的诊断上下文。
+    /// 目标：一次命中最终只写一行日志，同时保留 StrikeMagnitude 与最终结算信息。
     /// </summary>
     internal static class DamageTrace
     {
         private sealed class Context
         {
-            public DateTime CreatedAt;
             public int AttackerIndex;
             public int VictimIndex;
             public int MissileIndex;
-            public StrikeType StrikeType;
-            public DamageType DamageType;
+            public string AttackKind;
+            public string DamageType;
             public float StrikeMagnitude;
-            public float NativeArmor;
             public float AdjustedArmor;
             public float DamageBeforeReduction;
             public float DamageAfterNativeWithoutArmor;
             public float DamageAfterStateRules;
-            public float ArmorResult;
-            public float MinimumResult;
             public float FinalDamage;
             public bool FriendlyFire;
             public bool ZhanYi;
             public bool JianRenBuQu;
             public bool TianQi;
             public bool CustomBattle;
-            public string Source;
         }
 
         private static readonly ConcurrentDictionary<string, Context> Pending =
@@ -43,25 +38,21 @@ namespace New_ZZZF
         public static string BeginStrike(
             in AttackInformation attackInformation,
             in AttackCollisionData collisionData,
-            StrikeType strikeType,
-            DamageType damageType,
-            float strikeMagnitude,
-            float armor)
+            string attackKind,
+            string damageType,
+            float strikeMagnitude)
         {
-            string key = BuildKey(attackInformation, collisionData, strikeType, damageType);
+            string key = BuildKey(attackInformation, collisionData, attackKind, damageType);
             Pending[key] = new Context
             {
-                CreatedAt = DateTime.UtcNow,
                 AttackerIndex = attackInformation.AttackerAgent != null ? attackInformation.AttackerAgent.Index : -1,
                 VictimIndex = attackInformation.VictimAgent != null ? attackInformation.VictimAgent.Index : -1,
                 MissileIndex = collisionData.AffectorWeaponSlotOrMissileIndex,
-                StrikeType = strikeType,
-                DamageType = damageType,
+                AttackKind = attackKind ?? "Unknown",
+                DamageType = damageType ?? "Unknown",
                 StrikeMagnitude = strikeMagnitude,
-                NativeArmor = armor,
-                AdjustedArmor = armor,
-                FriendlyFire = attackInformation.IsFriendlyFire,
-                Source = "StrikeMagnitude"
+                AdjustedArmor = Math.Max(0f, attackInformation.ArmorAmountFloat),
+                FriendlyFire = attackInformation.IsFriendlyFire
             };
             return key;
         }
@@ -75,37 +66,38 @@ namespace New_ZZZF
             float damageAfterStateRules,
             float adjustedArmor,
             float finalDamage,
-            bool customBattle)
+            bool customBattle,
+            string attackKind = null,
+            string damageType = null)
         {
             if (string.IsNullOrEmpty(key))
-                key = BuildKey(attackInformation, collisionData, attackInformation.StrikeType, collisionData.DamageType);
+                key = BuildKey(attackInformation, collisionData, attackKind ?? "Unknown", damageType ?? "Unknown");
 
             Context context;
             if (!Pending.TryRemove(key, out context))
             {
                 context = new Context
                 {
-                    CreatedAt = DateTime.UtcNow,
                     AttackerIndex = attackInformation.AttackerAgent != null ? attackInformation.AttackerAgent.Index : -1,
                     VictimIndex = attackInformation.VictimAgent != null ? attackInformation.VictimAgent.Index : -1,
                     MissileIndex = collisionData.AffectorWeaponSlotOrMissileIndex,
-                    StrikeType = attackInformation.StrikeType,
-                    DamageType = collisionData.DamageType,
-                    NativeArmor = adjustedArmor,
-                    AdjustedArmor = adjustedArmor
+                    AttackKind = attackKind ?? "Unknown",
+                    DamageType = damageType ?? "Unknown",
+                    AdjustedArmor = Math.Max(0f, adjustedArmor),
+                    FriendlyFire = attackInformation.IsFriendlyFire
                 };
             }
 
             context.DamageBeforeReduction = damageBeforeReduction;
             context.DamageAfterNativeWithoutArmor = damageAfterNativeWithoutArmor;
             context.DamageAfterStateRules = damageAfterStateRules;
-            context.AdjustedArmor = adjustedArmor;
-            context.ArmorResult = damageAfterStateRules - adjustedArmor;
+            context.AdjustedArmor = Math.Max(0f, adjustedArmor);
             context.FinalDamage = finalDamage;
             context.CustomBattle = customBattle;
 
             Agent attacker = attackInformation.AttackerAgent;
             Agent victim = attackInformation.VictimAgent;
+
             if (attacker != null &&
                 SkillSystemBehavior.ActiveComponents.TryGetValue(attacker.Index, out var attackerComponent))
             {
@@ -122,40 +114,41 @@ namespace New_ZZZF
             }
 
             float minimumRatio = GetMinimumDamageRatio(attacker);
-            context.MinimumResult = damageAfterStateRules * minimumRatio;
+            float armorResult = damageAfterStateRules - context.AdjustedArmor;
+            float minimumResult = damageAfterStateRules * minimumRatio;
 
-            TacticalMapLog.Info(
-                string.Format(
-                    "[DAMAGE] atk={0} vic={1} type={2}/{3} src={4} strike={5:F2} armor={6:F2} armorAdj={7:F2} native0Armor={8:F2} state={9:F2} armorRule={10:F2} min={11:F2}@{12:P0} final={13:F2} FF={14} ZhanYi={15} JianRen={16} TianQi={17}",
-                    context.AttackerIndex,
-                    context.VictimIndex,
-                    context.StrikeType,
-                    context.DamageType,
-                    context.CustomBattle ? "Custom" : "Campaign",
-                    context.StrikeMagnitude,
-                    context.NativeArmor,
-                    context.AdjustedArmor,
-                    context.DamageAfterNativeWithoutArmor,
-                    context.DamageAfterStateRules,
-                    context.ArmorResult,
-                    context.MinimumResult,
-                    minimumRatio,
-                    context.FinalDamage,
-                    context.FriendlyFire,
-                    context.ZhanYi,
-                    context.JianRenBuQu,
-                    context.TianQi));
+            TacticalMapLog.Info(string.Format(
+                "[DAMAGE] atk={0} vic={1} kind={2} type={3} mode={4} strike={5:F2} n={6:F2} native0={7:F2} state={8:F2} armor={9:F2} armorResult={10:F2} min={11:F2}@{12:P0} final={13:F2} FF={14} ZY={15} JR={16} TQ={17}",
+                context.AttackerIndex,
+                context.VictimIndex,
+                context.AttackKind,
+                context.DamageType,
+                context.CustomBattle ? "Custom" : "Campaign",
+                context.StrikeMagnitude,
+                context.DamageBeforeReduction,
+                context.DamageAfterNativeWithoutArmor,
+                context.DamageAfterStateRules,
+                context.AdjustedArmor,
+                armorResult,
+                minimumResult,
+                minimumRatio,
+                context.FinalDamage,
+                context.FriendlyFire,
+                context.ZhanYi,
+                context.JianRenBuQu,
+                context.TianQi));
         }
 
         private static string BuildKey(
             in AttackInformation attackInformation,
             in AttackCollisionData collisionData,
-            StrikeType strikeType,
-            DamageType damageType)
+            string attackKind,
+            string damageType)
         {
             int attacker = attackInformation.AttackerAgent != null ? attackInformation.AttackerAgent.Index : -1;
             int victim = attackInformation.VictimAgent != null ? attackInformation.VictimAgent.Index : -1;
-            return attacker + ":" + victim + ":" + collisionData.AffectorWeaponSlotOrMissileIndex + ":" + (int)strikeType + ":" + (int)damageType;
+            return attacker + ":" + victim + ":" + collisionData.AffectorWeaponSlotOrMissileIndex + ":" +
+                   (attackKind ?? "Unknown") + ":" + (damageType ?? "Unknown");
         }
 
         private static float GetMinimumDamageRatio(Agent attacker)
