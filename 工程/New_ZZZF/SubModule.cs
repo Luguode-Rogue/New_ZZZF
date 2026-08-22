@@ -131,10 +131,12 @@ namespace New_ZZZF
             gameStarterObject.AddModel(new WOW_DefaultStrikeMagnitudeModel());
             gameStarterObject.AddModel(new WOW_CustomBattleAgentStatCalculateModel());
             gameStarterObject.AddModel(new WOW_CustomAgentApplyDamageModel());
+            gameStarterObject.AddModel(new ZZZFCustomDamageRefactorModel());
             if (game.GameType is Campaign)
             {
                 gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
                 gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
+                gameStarterObject.AddModel(new ZZZFSandboxDamageRefactorModel());
                 gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());
                 gameStarterObject.AddModel(new WOW_DefaultPartySpeedCalculatingModel());
                 CampaignGameStarter campaignGameStarter = gameStarterObject as CampaignGameStarter;
