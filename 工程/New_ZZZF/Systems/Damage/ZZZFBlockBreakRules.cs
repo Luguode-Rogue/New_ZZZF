@@ -67,16 +67,21 @@ namespace New_ZZZF
             {
                 float disarmChance = 0.2f + proficiencyDifference / 500f *
                     (1f + (attackerMovementSkill - defenderMovementSkill) / 1000f);
+                float roll = MBRandom.RandomFloat;
+                EquipmentIndex wieldedIndex = defenderAgent.GetOffhandWieldedItemIndex();
+                if (wieldedIndex == EquipmentIndex.None)
+                    wieldedIndex = defenderAgent.GetPrimaryWieldedItemIndex();
 
-                if (disarmChance > MBRandom.RandomFloat)
-                {
-                    EquipmentIndex wieldedIndex = defenderAgent.GetOffhandWieldedItemIndex();
-                    if (wieldedIndex == EquipmentIndex.None)
-                        wieldedIndex = defenderAgent.GetPrimaryWieldedItemIndex();
+                bool triggered = disarmChance > roll && wieldedIndex != EquipmentIndex.None;
+                DamageTrace.LogDisarmQueued(
+                    attackerAgent,
+                    defenderAgent,
+                    wieldedIndex,
+                    disarmChance,
+                    roll);
 
-                    if (wieldedIndex != EquipmentIndex.None)
-                        ZZZFDisarmMissionBehavior.QueueDisarm(defenderAgent, wieldedIndex);
-                }
+                if (triggered)
+                    ZZZFDisarmMissionBehavior.QueueDisarm(defenderAgent, wieldedIndex);
             }
 
             return totalAttackEnergy > threshold;
