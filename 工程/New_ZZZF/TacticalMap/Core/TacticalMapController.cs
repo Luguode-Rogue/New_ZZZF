@@ -13,8 +13,6 @@ namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
     /// 小地图总控制器：烘焙地形、驱动追踪器、派发编队指令、管理 UI 层与镜头联动。
-    /// 绘制由 MinimapWidget 直接在 OnRender 里完成（读取本控制器暴露的数据），不再依赖位图纹理。
-    /// 所有对外依赖都收敛在这里，方便整个 TacticalMap 文件夹整体抽离成独立 mod。
     /// </summary>
     public sealed class TacticalMapController
     {
@@ -31,14 +29,15 @@ namespace New_ZZZF.TacticalMap.Core
         private Vec2? _camTarget;
         private Vec2 _playerFacing = Vec2.Zero;
         private int _agentVersion;
+        private readonly List<AgentSnapshot> _agentSnapshots = new List<AgentSnapshot>();
 
         public TerrainCache Cache => _cache;
         public bool IsVisible => _visible;
         public List<FormationSnapshot> FormationSnapshots => _formationTracker.Snapshots;
+        public IReadOnlyList<AgentSnapshot> AgentSnapshots => _agentSnapshots;
         public Vec2? PlayerPos => _playerPos;
         public Vec2? CameraTarget => _camTarget;
         public Vec2 PlayerFacing => _playerFacing;
-        // 动态单位层（每个 agent 一个点），供 MinimapWidget 烘焙成纹理
         public byte[] AgentRGBA => _cache.AgentRGBA;
         public int AgentDataVersion => _agentVersion;
 
@@ -53,7 +52,6 @@ namespace New_ZZZF.TacticalMap.Core
             CameraController.Instance = new CameraController();
         }
 
-        /// <summary>战斗开局烘焙地形；失败返回 false（UI 不会显示）。</summary>
         public bool Initialize(Mission mission)
         {
             if (mission == null || mission.Scene == null) return false;
@@ -66,7 +64,7 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 _layer = new TacticalMapLayer(this);
                 _layer.Create(ms);
-                _accum = TacticalSettings.Instance.UpdateInterval; // 立刻出第一帧
+                _accum = TacticalSettings.Instance.UpdateInterval;
             }
             else if (!visible && _layer != null)
             {
@@ -77,26 +75,22 @@ namespace New_ZZZF.TacticalMap.Core
             _visible = visible;
         }
 
-        /// <summary>每帧调用（仅在可见时）。标记/密度按 UpdateInterval 节流刷新；绘制由控件每帧完成。</summary>
         public void Tick(Mission mission, MissionScreen ms, float dt)
         {
             if (!_visible || _layer == null) return;
 
-            _playerPos = (_mission.MainAgent != null) ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
+            _playerPos = _mission.MainAgent != null ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
             if (_mission.MainAgent != null)
             {
-                float af = _mission.MainAgent.LookDirectionAsAngle; // 朝向角（弧度，绕 Z 轴）
+                float af = _mission.MainAgent.LookDirectionAsAngle;
                 _playerFacing = new Vec2((float)Math.Cos(af), (float)Math.Sin(af));
             }
-            _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
+            _camTarget = CameraController.Instance != null && CameraController.Instance.Active
                 ? CameraController.Instance.TargetWorldPos : (Vec2?)null;
 
-            // 驱动相机状态机（飞出 → 停留 → 飞回）。必须每帧调用，
-            // 且要在 CameraController.Initialize 之后才有效。
             if (CameraController.Instance != null)
             {
                 CameraController.Instance.Initialize(ms, mission.Scene);
-                // 每帧幂等记录玩家基准高度（agent 就绪后即生效一次，之后值不变）
                 CameraController.Instance.CaptureBaseHeight(mission);
                 CameraController.Instance.Tick(dt);
             }
@@ -107,49 +101,83 @@ namespace New_ZZZF.TacticalMap.Core
                 _accum = 0f;
                 _formationTracker.Update(mission);
                 _agentTracker.Update(mission);
-                _agentVersion++;   // 单位层已刷新，通知纹理缓存重建
+                RefreshAgentSnapshots(mission);
+                _agentVersion++;
             }
         }
 
-        /// <summary>小地图点击：根据按键决定移动 / 攻击移动 / 朝向，并可联动镜头。</summary>
+        private void RefreshAgentSnapshots(Mission mission)
+        {
+            _agentSnapshots.Clear();
+            if (mission == null) return;
+
+            foreach (Agent agent in mission.Agents)
+            {
+                if (agent == null || agent.Health <= 0f || !agent.IsHuman)
+                    continue;
+
+                Vec2 uv = _cache.WorldToUV(agent.Position.AsVec2);
+                if (uv.X < 0f || uv.X > 1f || uv.Y < 0f || uv.Y > 1f)
+                    continue;
+
+                _agentSnapshots.Add(new AgentSnapshot
+                {
+                    U = uv.X,
+                    V = uv.Y,
+                    PlayerTeam = agent.Team != null && agent.Team.IsPlayerTeam,
+                    Neutral = agent.Team == null
+                });
+            }
+        }
+
         public void HandleClick(Vec2 mousePixel, bool shift, bool rightButton)
         {
             if (_layer == null) return;
             if (!_layer.HitTestMinimap(mousePixel, out Vec2 uv)) return;
-            Vec2 world = _cache.UVToWorld(uv);
-
-            TacticalClickMode mode = rightButton ? TacticalClickMode.Face
-                : shift ? TacticalClickMode.AttackMove
-                : TacticalClickMode.Move;
-            _orderSystem.IssueOrder(_mission, world, mode);
-
-            if (FeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
-            {
-                CameraController.Instance.Enable(world);
-            }
+            IssueOrderFromUv(uv, rightButton ? TacticalClickMode.Face : shift ? TacticalClickMode.AttackMove : TacticalClickMode.Move, true);
         }
 
-        /// <summary>C 键：切换“小地图点击联动镜头”模式。</summary>
+        public void HandleHtmlMoveClick(float u, float v) => IssueOrderFromUv(new Vec2(u, v), TacticalClickMode.Move, false);
+        public void HandleHtmlFaceClick(float u, float v) => IssueOrderFromUv(new Vec2(u, v), TacticalClickMode.Face, false);
+        public void HandleHtmlCameraClick(float u, float v)
+        {
+            Vec2 world = _cache.UVToWorld(new Vec2(Clamp01(u), Clamp01(v)));
+            if (FeatureGate.IsEnabled(TacticalFeature.CameraLink) && CameraController.Instance != null)
+                CameraController.Instance.Enable(world);
+        }
+
+        private void IssueOrderFromUv(Vec2 uv, TacticalClickMode mode, bool cameraLink)
+        {
+            Vec2 world = _cache.UVToWorld(new Vec2(Clamp01(uv.X), Clamp01(uv.Y)));
+            _orderSystem.IssueOrder(_mission, world, mode);
+
+            if (cameraLink && FeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
+                CameraController.Instance.Enable(world);
+        }
+
+        private static float Clamp01(float value)
+        {
+            return value < 0f ? 0f : value > 1f ? 1f : value;
+        }
+
         public void ToggleCameraFollow()
         {
             _cameraLink = !_cameraLink;
             if (CameraController.Instance != null)
             {
-                // 同步开关：关闭时让镜头平滑飞回原位
                 CameraController.Instance.PreviewModeEnabled = _cameraLink;
-                if (!_cameraLink) { CameraController.Instance.Disable(); }
+                if (!_cameraLink) CameraController.Instance.Disable();
             }
+
             string msg = _cameraLink ? "战术地图：已开启 点击联动镜头" : "战术地图：已关闭 点击联动镜头";
             InformationManager.DisplayMessage(new InformationMessage(msg, new Color(0.2f, 0.9f, 1f, 1f)));
 
-            // 调试用：输出【当前真实相机】的姿态（按 C 时打印），方便把调好的角度回贴给开发
             if (CameraController.Instance != null)
             {
                 CameraController.Instance.ReadRealCameraAngles(out float bearing, out float pitch, out Vec3 eye);
                 float bearingDeg = bearing * 57.29578f;
                 float pitchDeg = pitch * 57.29578f;
-                // 归一化到 [0,360)
-                if (bearingDeg < 0f) { bearingDeg += 360f; }
+                if (bearingDeg < 0f) bearingDeg += 360f;
                 InformationManager.DisplayMessage(new InformationMessage(
                     $"[Cam] 真实相机 bearing={bearingDeg:F1}° pitch={pitchDeg:F1}° eye=({eye.x:F1},{eye.y:F1},{eye.z:F1})",
                     new Color(1f, 0.85f, 0.2f, 1f)));
@@ -157,6 +185,14 @@ namespace New_ZZZF.TacticalMap.Core
                     $"[Cam] 固定参数(供替换): ViewBearing={bearing:F6}f; ViewHeight={(float)Math.Max(0, eye.z):F1}f;",
                     new Color(1f, 0.85f, 0.2f, 1f)));
             }
+        }
+
+        public sealed class AgentSnapshot
+        {
+            public float U { get; set; }
+            public float V { get; set; }
+            public bool PlayerTeam { get; set; }
+            public bool Neutral { get; set; }
         }
     }
 }
