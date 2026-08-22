@@ -1,89 +1,18 @@
-using System;
 using SandBox.GameComponents;
-using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
-using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
-using MathF = TaleWorlds.Library.MathF;
 
 namespace New_ZZZF
 {
     /// <summary>
-    /// Shared final reduction rules for the integrated damage pipeline.
-    /// The native reduction phase is still executed, but it is given a copy of
-    /// AttackInformation whose ArmorAmountFloat is zero so native armor reduction
-    /// cannot run a second time.
-    /// </summary>
-    internal static class ZZZFIntegratedDamageRules
-    {
-        public static float GetMinimumDamageRatio(Agent attacker)
-        {
-            BasicCharacterObject character = attacker?.Character;
-            if (character == null)
-                return 0f;
-
-            if (character.IsHero)
-            {
-                Hero hero = (character as CharacterObject)?.HeroObject;
-                return hero == null ? 0f : MathF.Max(0f, hero.Level * 0.01f);
-            }
-
-            if (character.IsSoldier)
-                return MathF.Max(0f, character.GetBattleTier() * 0.05f);
-
-            return 0f;
-        }
-
-        public static float ApplyLegacyStateModifiers(
-            in AttackInformation attackInformation,
-            float baseDamage,
-            bool disableFriendlyFire)
-        {
-            if (disableFriendlyFire && attackInformation.IsFriendlyFire)
-                return 0f;
-
-            Random random = new Random();
-
-            Agent attacker = attackInformation.AttackerAgent;
-            if (attacker != null && SkillSystemBehavior.ActiveComponents.TryGetValue(attacker.Index, out var attackerComponent))
-            {
-                if (attackerComponent.StateContainer.HasState("ZhanYiBuff") && random.NextFloat() > 0.5f)
-                    baseDamage += 50f;
-            }
-
-            Agent victim = attackInformation.VictimAgent;
-            if (victim != null && SkillSystemBehavior.ActiveComponents.TryGetValue(victim.Index, out var victimComponent))
-            {
-                if (victimComponent.StateContainer.HasState("JianRenBuQuuBuff") ||
-                    victimComponent.StateContainer.HasState("TianQiBuff"))
-                {
-                    baseDamage = 1f;
-                }
-            }
-
-            return baseDamage;
-        }
-
-        public static float ApplyRefactoredArmor(
-            in AttackInformation attackInformation,
-            float damageBeforeArmor)
-        {
-            if (damageBeforeArmor <= 0f)
-                return 0f;
-
-            float armor = MathF.Max(0f, attackInformation.ArmorAmountFloat);
-            float armorResult = damageBeforeArmor - armor;
-            float minimumResult = damageBeforeArmor * GetMinimumDamageRatio(attackInformation.AttackerAgent);
-
-            return MathF.Max(0f, MathF.Max(armorResult, minimumResult));
-        }
-    }
-
-    /// <summary>
-    /// Campaign/Sandbox damage model.
-    /// Keeps the original model's non-armor reduction pipeline while replacing
-    /// the native armor calculation and legacy final armor subtraction with the
-    /// unified New_ZZZF armor/minimum-damage rule.
+    /// Integrates the damage-refactor armor rule into the existing New_ZZZF
+    /// AgentApplyDamageModel pipeline without replacing any of the existing
+    /// StrikeMagnitude, missile, affix, crush-through or skill logic.
+    ///
+    /// AttackInformation.ArmorAmountFloat is already the native adjusted armor
+    /// value. Bannerlord performs armor-perk and armor-penetration adjustments
+    /// before this stage, so we consume that value rather than reimplementing
+    /// those perks here.
     /// </summary>
     public sealed class ZZZFIntegratedSandboxAgentApplyDamageModel : WOW_SandboxAgentApplyDamageModel
     {
@@ -92,34 +21,42 @@ namespace New_ZZZF
             in AttackCollisionData collisionData,
             float baseDamage)
         {
-            float armor = attackInformation.ArmorAmountFloat;
-            AttackInformation noArmorAttackInformation = attackInformation;
-            noArmorAttackInformation.ArmorAmountFloat = 0f;
+            // The original New_ZZZF final formula explicitly disabled friendly fire.
+            if (attackInformation.IsFriendlyFire)
+                return 0f;
 
-            // Run the native Sandbox reduction pipeline with armor neutralized.
+            // Preserve the real, already-adjusted armor for the new armor rule.
+            float adjustedArmor = attackInformation.ArmorAmountFloat;
+
+            // Run Bannerlord's native reduction stage with armor neutralized.
+            // This skips only native armor subtraction while retaining every other
+            // native reduction/perk/banner effect.
+            AttackInformation noArmor = attackInformation;
+            noArmor.ArmorAmountFloat = 0f;
+
             float damage = base.ApplyDamageReductions(
-                in noArmorAttackInformation,
+                in noArmor,
                 in collisionData,
                 baseDamage);
 
-            damage = ZZZFIntegratedDamageRules.ApplyLegacyStateModifiers(
+            // Preserve the original New_ZZZF final-state rules first.
+            damage = DamageCalculationRules.ApplyCampaignFinalRules(
                 in attackInformation,
-                damage,
-                disableFriendlyFire: false);
+                damage);
 
-            // Use the real armor only here, exactly once, with the damage-refactor rule.
-            AttackInformation finalAttackInformation = attackInformation;
-            finalAttackInformation.ArmorAmountFloat = armor;
-            return ZZZFIntegratedDamageRules.ApplyRefactoredArmor(
-                in finalAttackInformation,
+            // Replace the old Armor * 0.1 subtraction with damage-refactor:
+            // max(damage - adjustedArmor, damage * minimumRatio).
+            AttackInformation armorContext = attackInformation;
+            armorContext.ArmorAmountFloat = adjustedArmor;
+            return DamageCalculationRules.ApplyRefactoredArmor(
+                in armorContext,
                 damage);
         }
     }
 
     /// <summary>
-    /// Custom Battle damage model.
-    /// Same pipeline as the Campaign model, with the original Mod's explicit
-    /// friendly-fire shutdown preserved.
+    /// Custom Battle equivalent of the integrated pipeline.
+    /// Existing New_ZZZF skill/strike rules remain in their original models.
     /// </summary>
     public sealed class ZZZFIntegratedCustomAgentApplyDamageModel : WOW_CustomAgentApplyDamageModel
     {
@@ -128,28 +65,26 @@ namespace New_ZZZF
             in AttackCollisionData collisionData,
             float baseDamage)
         {
-            float armor = attackInformation.ArmorAmountFloat;
-            AttackInformation noArmorAttackInformation = attackInformation;
-            noArmorAttackInformation.ArmorAmountFloat = 0f;
+            float adjustedArmor = attackInformation.ArmorAmountFloat;
 
-            if (attackInformation.IsFriendlyFire)
-                return 0f;
+            AttackInformation noArmor = attackInformation;
+            noArmor.ArmorAmountFloat = 0f;
 
-            // Run the native Custom Battle reduction pipeline with armor neutralized.
             float damage = base.ApplyDamageReductions(
-                in noArmorAttackInformation,
+                in noArmor,
                 in collisionData,
                 baseDamage);
 
-            damage = ZZZFIntegratedDamageRules.ApplyLegacyStateModifiers(
+            // Preserve the exact Custom Battle final-state names used by the
+            // existing New_ZZZF code, then apply the new armor rule.
+            damage = DamageCalculationRules.ApplyCustomBattleFinalRules(
                 in attackInformation,
-                damage,
-                disableFriendlyFire: false);
+                damage);
 
-            AttackInformation finalAttackInformation = attackInformation;
-            finalAttackInformation.ArmorAmountFloat = armor;
-            return ZZZFIntegratedDamageRules.ApplyRefactoredArmor(
-                in finalAttackInformation,
+            AttackInformation armorContext = attackInformation;
+            armorContext.ArmorAmountFloat = adjustedArmor;
+            return DamageCalculationRules.ApplyRefactoredArmor(
+                in armorContext,
                 damage);
         }
     }
