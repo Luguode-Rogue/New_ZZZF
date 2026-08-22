@@ -30,6 +30,7 @@ namespace New_ZZZF.TacticalMap.Core
         public TerrainCache Cache => _cache;
         public bool IsVisible => _visible;
         public List<FormationSnapshot> FormationSnapshots => _formationTracker.Snapshots;
+        public IReadOnlyList<AgentSnapshot> AgentSnapshots => BuildAgentSnapshots();
         public Vec2? PlayerPos => _playerPos;
         public Vec2? CameraTarget => _camTarget;
         public Vec2 PlayerFacing => _playerFacing;
@@ -100,6 +101,33 @@ namespace New_ZZZF.TacticalMap.Core
             }
         }
 
+        private IReadOnlyList<AgentSnapshot> BuildAgentSnapshots()
+        {
+            var result = new List<AgentSnapshot>();
+            if (_mission == null || !_cache.IsBaked)
+                return result;
+
+            foreach (Agent agent in _mission.Agents)
+            {
+                if (agent == null || agent.Health <= 0f || !agent.IsHuman)
+                    continue;
+
+                Vec2 uv = _cache.WorldToUV(agent.Position.AsVec2);
+                if (uv.X < 0f || uv.X > 1f || uv.Y < 0f || uv.Y > 1f)
+                    continue;
+
+                result.Add(new AgentSnapshot
+                {
+                    U = uv.X,
+                    V = uv.Y,
+                    PlayerTeam = agent.Team != null && agent.Team.IsPlayerTeam,
+                    Neutral = agent.Team == null
+                });
+            }
+
+            return result;
+        }
+
         public void HandleClick(Vec2 mousePixel, bool shift, bool rightButton)
         {
             if (_layer == null) return;
@@ -141,6 +169,14 @@ namespace New_ZZZF.TacticalMap.Core
                     $"[Cam] 固定参数(供替换): ViewBearing={bearing:F6}f; ViewHeight={(float)Math.Max(0, eye.z):F1}f;",
                     new Color(1f, 0.85f, 0.2f, 1f)));
             }
+        }
+
+        public sealed class AgentSnapshot
+        {
+            public float U { get; set; }
+            public float V { get; set; }
+            public bool PlayerTeam { get; set; }
+            public bool Neutral { get; set; }
         }
     }
 }
