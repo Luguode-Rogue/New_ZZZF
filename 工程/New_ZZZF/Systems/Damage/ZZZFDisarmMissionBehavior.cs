@@ -11,21 +11,32 @@ namespace New_ZZZF
     /// </summary>
     public sealed class ZZZFDisarmMissionBehavior : MissionLogic
     {
-        private static readonly Queue<DisarmRequest> Pending = new Queue<DisarmRequest>();
+        private static ZZZFDisarmMissionBehavior _current;
+        private readonly Queue<DisarmRequest> _pending = new Queue<DisarmRequest>();
+
+        public ZZZFDisarmMissionBehavior()
+        {
+            _current = this;
+            _pending.Clear();
+        }
 
         internal static void QueueDisarm(Agent defenderAgent, EquipmentIndex equipmentIndex)
         {
             if (defenderAgent == null || equipmentIndex == EquipmentIndex.None)
                 return;
 
-            Pending.Enqueue(new DisarmRequest(defenderAgent, equipmentIndex));
+            ZZZFDisarmMissionBehavior current = _current;
+            if (current == null)
+                return;
+
+            current._pending.Enqueue(new DisarmRequest(defenderAgent, equipmentIndex));
         }
 
         public override void OnMissionTick(float dt)
         {
-            int count = Pending.Count;
+            int count = _pending.Count;
             for (int i = 0; i < count; i++)
-                Execute(Pending.Dequeue());
+                Execute(_pending.Dequeue());
         }
 
         private static void Execute(DisarmRequest request)
