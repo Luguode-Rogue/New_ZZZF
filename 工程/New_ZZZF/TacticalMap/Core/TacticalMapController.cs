@@ -3,7 +3,7 @@ using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
-using New_ZZZF.TacticalMap.Config;
+using ConfigTacticalSettings = New_ZZZF.TacticalMap.Config.TacticalSettings;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
 using New_ZZZF.TacticalMap.UI;
@@ -40,7 +40,7 @@ namespace New_ZZZF.TacticalMap.Core
         public TacticalMapController(Mission mission)
         {
             _mission = mission;
-            var settings = TacticalSettings.Instance;
+            var settings = ConfigTacticalSettings.Instance;
             _cache = new TerrainCache(settings);
             _formationTracker = new FormationTracker();
             _agentTracker = new AgentTracker(_cache);
@@ -60,7 +60,7 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 _layer = new TacticalMapLayer(this);
                 _layer.Create(ms);
-                _accum = TacticalSettings.Instance.UpdateInterval;
+                _accum = ConfigTacticalSettings.Instance.UpdateInterval;
             }
             else if (!visible && _layer != null)
             {
@@ -92,7 +92,7 @@ namespace New_ZZZF.TacticalMap.Core
             }
 
             _accum += dt;
-            if (_accum >= TacticalSettings.Instance.UpdateInterval)
+            if (_accum >= ConfigTacticalSettings.Instance.UpdateInterval)
             {
                 _accum = 0f;
                 _formationTracker.Update(mission);
@@ -132,17 +132,30 @@ namespace New_ZZZF.TacticalMap.Core
         {
             if (_layer == null) return;
             if (!_layer.HitTestMinimap(mousePixel, out Vec2 uv)) return;
-            Vec2 world = _cache.UVToWorld(uv);
+            IssueOrderFromUv(uv, rightButton ? TacticalClickMode.Face : shift ? TacticalClickMode.AttackMove : TacticalClickMode.Move, true);
+        }
 
-            TacticalClickMode mode = rightButton ? TacticalClickMode.Face
-                : shift ? TacticalClickMode.AttackMove
-                : TacticalClickMode.Move;
+        public void HandleHtmlMoveClick(float u, float v) => IssueOrderFromUv(new Vec2(u, v), TacticalClickMode.Move, false);
+        public void HandleHtmlFaceClick(float u, float v) => IssueOrderFromUv(new Vec2(u, v), TacticalClickMode.Face, false);
+        public void HandleHtmlCameraClick(float u, float v)
+        {
+            Vec2 world = _cache.UVToWorld(new Vec2(Clamp01(u), Clamp01(v)));
+            if (FeatureGate.IsEnabled(TacticalFeature.CameraLink) && CameraController.Instance != null)
+                CameraController.Instance.Enable(world);
+        }
+
+        private void IssueOrderFromUv(Vec2 uv, TacticalClickMode mode, bool cameraLink)
+        {
+            Vec2 world = _cache.UVToWorld(new Vec2(Clamp01(uv.X), Clamp01(uv.Y)));
             _orderSystem.IssueOrder(_mission, world, mode);
 
-            if (FeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
-            {
+            if (cameraLink && FeatureGate.IsEnabled(TacticalFeature.CameraLink) && _cameraLink && CameraController.Instance != null)
                 CameraController.Instance.Enable(world);
-            }
+        }
+
+        private static float Clamp01(float value)
+        {
+            return value < 0f ? 0f : value > 1f ? 1f : value;
         }
 
         public void ToggleCameraFollow()
