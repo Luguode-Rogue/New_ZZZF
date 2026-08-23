@@ -4,18 +4,16 @@ using System.Linq;
 using HarmonyLib;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
+using TaleWorlds.ObjectSystem;
 
 namespace New_ZZZF
 {
     /// <summary>
     /// 装备词缀实例生命周期修复补丁。
-    ///
     /// 本文件集中放置本轮修复，便于后续一次性删除本文件撤销整组热修。
     /// </summary>
     internal static class AffixLifecycleFixes
     {
-        private static readonly Dictionary<string, int> Empty = new Dictionary<string, int>();
-
         internal static void ProcessInventoryExchange(
             AffixCampaignBehavior behavior,
             List<(ItemRosterElement, int)> purchasedItems,
@@ -58,8 +56,7 @@ namespace New_ZZZF
                     string itemId = itemElement.EquipmentElement.Item?.StringId ?? "null";
                     string modifierId = itemElement.EquipmentElement.ItemModifier?.StringId ?? "null";
                     AffixLifecycleDebugLog.Info(
-                        $"出售事件: item={itemId}, amount={amount}, modifier={modifierId}, " +
-                        "当前阶段不执行实例清理。");
+                        $"出售事件: item={itemId}, amount={amount}, modifier={modifierId}, 当前阶段不执行实例清理。");
                 }
             }
 
