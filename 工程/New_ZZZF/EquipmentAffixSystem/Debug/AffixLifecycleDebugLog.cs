@@ -4,38 +4,42 @@ using System.IO;
 namespace New_ZZZF
 {
     /// <summary>
-    /// 装备词缀生命周期排查日志。
-    /// 所有本轮新增诊断日志统一写入此文件，排查完成后删除本文件即可移除本轮日志。
+    /// 装备词缀实例生命周期诊断日志。
+    /// 本轮排查的所有新增日志统一从这里输出，排查完成后可整体删除本文件。
     /// </summary>
     internal static class AffixLifecycleDebugLog
     {
-        private static readonly object SyncRoot = new object();
-        private static readonly string LogPath = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory,
-            "Modules",
-            "New_ZZZF",
-            "affix_lifecycle_debug.log");
+        private static readonly object Sync = new object();
 
-        public static bool Enabled = true;
+        private static string FilePath
+        {
+            get
+            {
+                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+                return Path.GetFullPath(Path.Combine(
+                    baseDirectory,
+                    "..", "..", "Modules", "New_ZZZF",
+                    "affix_lifecycle_debug.log"));
+            }
+        }
 
-        public static void Info(string message) => Write("INFO", message);
-        public static void Warn(string message) => Write("WARN", message);
-        public static void Error(string message) => Write("ERROR", message);
+        internal static void Info(string message) => Write("INFO", message);
+        internal static void Warn(string message) => Write("WARN", message);
+        internal static void Error(string message) => Write("ERROR", message);
 
         private static void Write(string level, string message)
         {
-            if (!Enabled) return;
-
             try
             {
-                lock (SyncRoot)
+                lock (Sync)
                 {
-                    string directory = Path.GetDirectoryName(LogPath);
+                    string path = FilePath;
+                    string directory = Path.GetDirectoryName(path);
                     if (!string.IsNullOrEmpty(directory))
                         Directory.CreateDirectory(directory);
 
                     File.AppendAllText(
-                        LogPath,
+                        path,
                         $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level}] {message}{Environment.NewLine}");
                 }
             }
