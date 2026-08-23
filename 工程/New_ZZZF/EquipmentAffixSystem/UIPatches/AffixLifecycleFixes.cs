@@ -277,16 +277,87 @@ namespace New_ZZZF
             if (behavior == null || string.IsNullOrEmpty(instanceId))
                 return;
 
-            var bindings = behavior.BindingMap.Values
+            string oldModifierId = "zzzf_affix_" + instanceId;
+            var oldBindings = behavior.BindingMap.Values
                 .Where(b => b != null && b.InstanceId == instanceId)
                 .ToList();
 
-            if (bindings.Count > 0)
+            var oldRoster = GetRosterEntries(behavior, oldModifierId);
+            bool oldRecordExists = behavior.ItemRecordMap.ContainsKey(instanceId);
+            bool oldModifierMapped = behavior.ModifierToInstanceMap.ContainsKey(oldModifierId);
+
+            AffixLifecycleDebugLog.Info(
+                $"重铸开始: oldInstance={instanceId}, oldModifier={oldModifierId}, " +
+                $"oldRecord={oldRecordExists}, oldModifierMapped={oldModifierMapped}, " +
+                $"bindings={oldBindings.Count}, rosterEntries={oldRoster}");
+        }
+
+        private static void Postfix(string instanceId, AffixInstance __result)
+        {
+            var behavior = AffixCampaignBehavior.Current;
+            if (behavior == null || string.IsNullOrEmpty(instanceId))
+                return;
+
+            string oldModifierId = "zzzf_affix_" + instanceId;
+            var newRecord = __result == null
+                ? null
+                : behavior.ItemRecordMap.Values.FirstOrDefault(r =>
+                    r != null && ReferenceEquals(r.Affix, __result));
+
+            string newInstanceId = newRecord?.InstanceId;
+            string newModifierId = string.IsNullOrEmpty(newInstanceId)
+                ? null
+                : "zzzf_affix_" + newInstanceId;
+
+            var oldBindings = behavior.BindingMap.Values
+                .Where(b => b != null && b.InstanceId == instanceId)
+                .ToList();
+            var newBindings = string.IsNullOrEmpty(newInstanceId)
+                ? new List<AffixBinding>()
+                : behavior.BindingMap.Values
+                    .Where(b => b != null && b.InstanceId == newInstanceId)
+                    .ToList();
+
+            string oldRoster = GetRosterEntries(behavior, oldModifierId);
+            string newRoster = string.IsNullOrEmpty(newModifierId)
+                ? "none"
+                : GetRosterEntries(behavior, newModifierId);
+
+            bool oldRecordExists = behavior.ItemRecordMap.ContainsKey(instanceId);
+            bool oldModifierMapped = behavior.ModifierToInstanceMap.ContainsKey(oldModifierId);
+
+            AffixLifecycleDebugLog.Info(
+                $"重铸结束: oldInstance={instanceId}, result={(newRecord != null ? "成功" : "失败")}, " +
+                $"newInstance={newInstanceId ?? "null"}, newModifier={newModifierId ?? "null"}, " +
+                $"oldRecord={oldRecordExists}, oldModifierMapped={oldModifierMapped}, " +
+                $"oldBindings={oldBindings.Count}, newBindings={newBindings.Count}, " +
+                $"oldRoster={oldRoster}, newRoster={newRoster}");
+
+            if (newRecord != null && oldBindings.Count > 0 && newBindings.Count == 0)
             {
                 AffixLifecycleDebugLog.Warn(
-                    $"重铸已装备实例: instance={instanceId}, bindings={bindings.Count}。" +
-                    "当前代码只明确替换玩家库存元素，是否同步已装备槽位仍需运行时确认。");
+                    $"重铸后发现旧装备绑定未迁移: oldInstance={instanceId}, newInstance={newInstanceId}。" +
+                    "仅记录，不修改装备槽或 Mission 数据。");
             }
+        }
+
+        private static string GetRosterEntries(AffixCampaignBehavior behavior, string modifierId)
+        {
+            var roster = MobileParty.MainParty?.ItemRoster;
+            if (roster == null)
+                return "roster=null";
+
+            var entries = new List<string>();
+            for (int i = 0; i < roster.Count; i++)
+            {
+                var element = roster.GetElementCopyAtIndex(i);
+                if (element.EquipmentElement.ItemModifier?.StringId != modifierId)
+                    continue;
+
+                entries.Add($"index={i},item={element.EquipmentElement.Item?.StringId ?? "null"},amount={element.Amount}");
+            }
+
+            return entries.Count == 0 ? "none" : string.Join("; ", entries);
         }
     }
 }
