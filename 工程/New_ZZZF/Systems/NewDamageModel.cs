@@ -537,7 +537,7 @@ namespace New_ZZZF
 
             num = MathF.Max(
                 num,
-                weapon.GetModifiedThrustDamageForCurrentUsage());
+                (float)weapon.GetModifiedThrustDamageForCurrentUsage());
 
             if (item.IsCraftedByPlayer)
             {
@@ -679,7 +679,7 @@ namespace New_ZZZF
 
             num = MathF.Max(
                 num,
-                weapon.GetModifiedThrustDamageForCurrentUsage());
+                (float)weapon.GetModifiedThrustDamageForCurrentUsage());
 
             string? affixInstId = AffixMissionBehavior.GetAgentWeaponInstanceId(
                 attackInformation.AttackerAgent,
