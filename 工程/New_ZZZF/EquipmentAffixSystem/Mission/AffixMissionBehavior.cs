@@ -20,17 +20,9 @@ namespace New_ZZZF
     /// </summary>
     public class AffixMissionBehavior : MissionLogic
     {
-        /// <summary>
-        /// Agent.Index → AgentAffixContext 缓存。
-        /// static 是因为 NewDamageModel 需要通过静态方法访问。
-        /// </summary>
         private static readonly Dictionary<int, AgentAffixContext> _agentAffixCache
             = new Dictionary<int, AgentAffixContext>();
 
-        /// <summary>
-        /// 根据 Agent 和装备槽获取词缀物品的 InstanceId。
-        /// 未绑定时返回 null。
-        /// </summary>
         public static string? GetAgentWeaponInstanceId(Agent? agent, EquipmentIndex slot)
         {
             if (agent == null) return null;
@@ -153,12 +145,23 @@ namespace New_ZZZF
             if (element.ItemModifier != null)
             {
                 string modifierId = element.ItemModifier.StringId;
-                if (!string.IsNullOrEmpty(modifierId) &&
-                    behavior != null &&
-                    behavior.ModifierToInstanceMap.TryGetValue(modifierId, out string? modifierInstanceId) &&
-                    !string.IsNullOrEmpty(modifierInstanceId))
+                if (!string.IsNullOrEmpty(modifierId))
                 {
-                    return modifierInstanceId;
+                    if (behavior != null &&
+                        behavior.ModifierToInstanceMap.TryGetValue(
+                            modifierId,
+                            out string? modifierInstanceId) &&
+                        !string.IsNullOrEmpty(modifierInstanceId))
+                    {
+                        return modifierInstanceId;
+                    }
+
+                    if (modifierId.StartsWith("zzzf_affix_", System.StringComparison.Ordinal))
+                    {
+                        AffixLifecycleDebugLog.Warn(
+                            $"Mission 装备存在词缀 Modifier 但无法找到 InstanceId: " +
+                            $"modifier={modifierId}, agentSlot={slot}");
+                    }
                 }
             }
 
@@ -166,7 +169,14 @@ namespace New_ZZZF
             {
                 string? boundInstanceId = behavior.GetEquippedInstanceId(hero, slot);
                 if (!string.IsNullOrEmpty(boundInstanceId))
-                    return boundInstanceId;
+                {
+                    if (behavior.GetAffixByInstanceId(boundInstanceId) != null)
+                        return boundInstanceId;
+
+                    AffixLifecycleDebugLog.Warn(
+                        $"Hero 装备绑定指向不存在的词缀实例: hero={hero.StringId}, " +
+                        $"slot={slot}, instance={boundInstanceId}");
+                }
             }
 
             return null;
