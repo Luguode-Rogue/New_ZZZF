@@ -34,8 +34,8 @@ namespace New_ZZZF.TacticalMap.Tracking
             Vec2 playerFacing = Vec2.Zero;
             if (mainAgent != null)
             {
-                Vec2 look = mainAgent.LookDirection.AsVec2;
-                playerFacing = look.LengthSquared > 1E-4f ? look.Normalized() : Vec2.Zero;
+                float angle = mainAgent.LookDirectionAsAngle;
+                playerFacing = new Vec2((float)Math.Cos(angle), (float)Math.Sin(angle));
             }
 
             var playerTeam = mission.PlayerTeam;
@@ -98,6 +98,7 @@ namespace New_ZZZF.TacticalMap.Tracking
                                 : "none") +
                             " currentDirection=(" + currentDirection.X.ToString("F4") + "," + currentDirection.Y.ToString("F4") + ")" +
                             " facing=(" + snap.Facing.X.ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
+                            " displayFacing=(" + (-snap.Facing.X).ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
                             " playerWorld=" + (playerWorld.HasValue
                                 ? "(" + playerWorld.Value.X.ToString("F2") + "," + playerWorld.Value.Y.ToString("F2") + ")"
                                 : "none") +
