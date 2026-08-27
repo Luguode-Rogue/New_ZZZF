@@ -12,7 +12,9 @@ namespace New_ZZZF.TacticalMap.Config
 
         public bool EnableMinimap = true;
 
-        public bool EnableRiskOverlay = true;
+        // Movement-cost heat is intentionally disabled by default. It paints smooth slope changes
+        // as red bands and obscures the actual terrain/obstacle map.
+        public bool EnableRiskOverlay = false;
         public bool EnableUnitMarkers = true;
         public bool EnableAgentMarkers = true;
         public bool EnableCameraLink = true;
@@ -32,8 +34,10 @@ namespace New_ZZZF.TacticalMap.Config
         public int BakeResolution = 256;
         public float UpdateInterval = 0.2f;
 
-        public float CliffSlopeThreshold = 0.55f;
-        public float CliffHeightJump = 2.5f;
+        // Bannerlord's normal.z-derived slope value is not an angle; 0.45 already represents
+        // a genuinely steep surface. Lowering the previous 0.55 avoids missing carved ledges.
+        public float CliffSlopeThreshold = 0.45f;
+        public float CliffHeightJump = 1.6f;
         public float WaterHeightFraction = 0.05f;
         public float HighGroundReferenceHeight = 3.0f;
 
