@@ -5,6 +5,7 @@ using TaleWorlds.ScreenSystem;
 using New_ZZZF.TacticalMap.UI;
 using New_ZZZF.TacticalMap.Diagnostics;
 using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.Terrain;
 
 namespace New_ZZZF.TacticalMap.Core
 {
@@ -86,7 +87,13 @@ namespace New_ZZZF.TacticalMap.Core
                 _controller = new TacticalMapController(Mission);
                 _ready = _controller.Initialize(Mission);
                 if (_ready)
+                {
+                    // The terrain bake only samples the heightmap/material layers. Scene geometry
+                    // such as houses and fences lives in GameEntity physics, so add its XY footprint
+                    // before the HTML static snapshot is published.
+                    SceneObstacleMap.Rebuild(_controller.Cache, Mission.Scene);
                     TacticalMapHtmlUi.Instance.AttachController(_controller);
+                }
             }
             catch (Exception ex)
             {
