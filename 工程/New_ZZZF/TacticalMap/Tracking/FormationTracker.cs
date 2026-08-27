@@ -38,7 +38,6 @@ namespace New_ZZZF.TacticalMap.Tracking
 
             Agent mainAgent = mission.MainAgent;
             Vec2? playerWorld = mainAgent != null ? (Vec2?)mainAgent.Position.AsVec2 : null;
-            Vec2 playerFacing = mainAgent != null ? new Vec2(mainAgent.LookDirection.X, mainAgent.LookDirection.Y) : Vec2.Zero;
             var playerTeam = mission.PlayerTeam;
             foreach (var team in mission.Teams)
             {
@@ -118,7 +117,6 @@ namespace New_ZZZF.TacticalMap.Tracking
                             " playerWorld=" + (playerWorld.HasValue
                                 ? "(" + playerWorld.Value.X.ToString("F2") + "," + playerWorld.Value.Y.ToString("F2") + ")"
                                 : "none") +
-                            " playerFacing=(" + playerFacing.X.ToString("F4") + "," + playerFacing.Y.ToString("F4") + ")" +
                             " deltaPlayer=(" + deltaFromPlayer.X.ToString("F2") + "," + deltaFromPlayer.Y.ToString("F2") + ")" +
                             " deltaOrder=(" + deltaToOrder.X.ToString("F2") + "," + deltaToOrder.Y.ToString("F2") + ")");
                     }
