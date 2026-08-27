@@ -24,7 +24,8 @@ namespace New_ZZZF.TacticalMap.Tracking
 
     /// <summary>
     /// Refreshes formation-level situational awareness at a throttled rate.
-    /// The map uses the current order position when available, so the display communicates intent as well as location.
+    /// CurrentDirection is authoritative for the actual movement/facing indicator.
+    /// OrderPosition is only exposed as a forward destination when it lies in front of the formation.
     /// </summary>
     public sealed class FormationTracker
     {
@@ -37,6 +38,7 @@ namespace New_ZZZF.TacticalMap.Tracking
 
             Agent mainAgent = mission.MainAgent;
             Vec2? playerWorld = mainAgent != null ? (Vec2?)mainAgent.Position.AsVec2 : null;
+            Vec2 playerFacing = mainAgent != null ? new Vec2(mainAgent.LookDirection.X, mainAgent.LookDirection.Y) : Vec2.Zero;
             var playerTeam = mission.PlayerTeam;
             foreach (var team in mission.Teams)
             {
@@ -51,6 +53,34 @@ namespace New_ZZZF.TacticalMap.Tracking
                 {
                     if (formation == null || formation.CountOfUnits <= 0) continue;
 
+                    Vec2 rawCurrentDirection = formation.CurrentDirection;
+                    Vec2 currentDirection = rawCurrentDirection.LengthSquared > 1E-4f
+                        ? rawCurrentDirection.Normalized()
+                        : Vec2.Zero;
+
+                    bool hasOrder = formation.OrderPositionIsValid;
+                    Vec2 orderPosition = hasOrder ? formation.OrderPosition : formation.CachedAveragePosition;
+                    Vec2 directionToOrder = hasOrder ? orderPosition - formation.CachedAveragePosition : Vec2.Zero;
+
+                    // OrderPosition can remain behind a moving formation. In that case it is not a useful
+                    // "next destination" for the tactical display, so suppress the destination line.
+                    if (hasOrder && directionToOrder.LengthSquared > 1E-4f)
+                    {
+                        Vec2 orderDirection = directionToOrder.Normalized();
+                        if (currentDirection.LengthSquared > 1E-4f &&
+                            Vec2.DotProduct(currentDirection, orderDirection) <= 0f)
+                        {
+                            hasOrder = false;
+                            orderPosition = formation.CachedAveragePosition;
+                            directionToOrder = Vec2.Zero;
+                        }
+                    }
+
+                    // Actual formation direction takes priority over the order point.
+                    Vec2 facing = currentDirection;
+                    if (facing.LengthSquared <= 1E-4f && directionToOrder.LengthSquared > 1E-4f)
+                        facing = directionToOrder.Normalized();
+
                     var snap = new FormationSnapshot
                     {
                         IsPlayer = isPlayer,
@@ -60,20 +90,10 @@ namespace New_ZZZF.TacticalMap.Tracking
                         Color = team.Color,
                         Count = formation.CountOfUnits,
                         Name = formation.FormationIndex.ToString(),
-                        HasOrder = formation.OrderPositionIsValid,
-                        OrderPosition = formation.OrderPositionIsValid ? formation.OrderPosition : formation.CachedAveragePosition
+                        HasOrder = hasOrder,
+                        OrderPosition = orderPosition,
+                        Facing = facing
                     };
-
-                    Vec2 facing = Vec2.Zero;
-                    if (formation.OrderPositionIsValid)
-                    {
-                        Vec2 directionToOrder = formation.OrderPosition - formation.CachedAveragePosition;
-                        if (directionToOrder.LengthSquared > 1E-4f)
-                            facing = directionToOrder.Normalized();
-                    }
-                    if (facing.LengthSquared <= 1E-4f && formation.CurrentDirection.LengthSquared > 1E-4f)
-                        facing = formation.CurrentDirection.Normalized();
-                    snap.Facing = facing;
 
                     Snapshots.Add(snap);
 
@@ -84,7 +104,6 @@ namespace New_ZZZF.TacticalMap.Tracking
                         Vec2 deltaFromPlayer = playerWorld.HasValue ? pos - playerWorld.Value : Vec2.Zero;
                         Vec2 deltaToOrder = snap.HasOrder ? order - pos : Vec2.Zero;
 
-                        // Temporary diagnostic. Keep it in the dedicated DirectionDebug log.
                         TacticalMapDirectionLog.Info(
                             "ENEMY_MAP_TRACE " +
                             "formation=" + snap.Name +
@@ -92,12 +111,14 @@ namespace New_ZZZF.TacticalMap.Tracking
                             " world=(" + pos.X.ToString("F2") + "," + pos.Y.ToString("F2") + ")" +
                             " order=" + (snap.HasOrder
                                 ? "(" + order.X.ToString("F2") + "," + order.Y.ToString("F2") + ")"
-                                : "none") +
+                                : "suppressed") +
+                            " currentDirection=(" + currentDirection.X.ToString("F4") + "," + currentDirection.Y.ToString("F4") + ")" +
                             " facing=(" + snap.Facing.X.ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
-                            " displayFacing=(" + (-snap.Facing.X).ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
+                            " displayFacing=(" + snap.Facing.X.ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
                             " playerWorld=" + (playerWorld.HasValue
                                 ? "(" + playerWorld.Value.X.ToString("F2") + "," + playerWorld.Value.Y.ToString("F2") + ")"
                                 : "none") +
+                            " playerFacing=(" + playerFacing.X.ToString("F4") + "," + playerFacing.Y.ToString("F4") + ")" +
                             " deltaPlayer=(" + deltaFromPlayer.X.ToString("F2") + "," + deltaFromPlayer.Y.ToString("F2") + ")" +
                             " deltaOrder=(" + deltaToOrder.X.ToString("F2") + "," + deltaToOrder.Y.ToString("F2") + ")");
                     }
