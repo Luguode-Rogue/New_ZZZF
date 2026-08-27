@@ -8,9 +8,9 @@ New_ZZZF 是一个持续扩展的 Bannerlord Mod 工程，包含技能系统、T
 
 ## 当前文档分层
 
-- 架构：`ARCHITECTURE.md`
-- 开发规范：`DEV_GUIDE.md`
-- 测试：以后统一补充到 `TESTING_GUIDE.md`
+- 架构：`PROJECT_ARCHITECTURE.md`
+- 开发规范：`DEVELOPMENT_GUIDE.md`
+- 测试：`TESTING_GUIDE.md`
 - 重构/审查历史：`REFACTOR_LOG.md`、`CODE_REVIEW.md`、`REFACTOR_PLAN.md`
 - 功能主文档：`../功能/`
 - 技术参考：`../技术参考/`
