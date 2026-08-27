@@ -535,9 +535,10 @@ namespace New_ZZZF
                 explainedNumber.ResultNumber,
                 isThrown);
 
-            num = MathF.Max(
-                num,
-                (float)weapon.GetModifiedThrustDamageForCurrentUsage());
+            // Disabled: do not force thrust magnitude up to the weapon's modified thrust damage.
+            // num = MathF.Max(
+            //     num,
+            //     (float)weapon.GetModifiedThrustDamageForCurrentUsage());
 
             if (item.IsCraftedByPlayer)
             {
@@ -677,9 +678,10 @@ namespace New_ZZZF
                 extraLinearSpeed,
                 isThrown);
 
-            num = MathF.Max(
-                num,
-                (float)weapon.GetModifiedThrustDamageForCurrentUsage());
+            // Disabled: do not force thrust magnitude up to the weapon's modified thrust damage.
+            // num = MathF.Max(
+            //     num,
+            //     (float)weapon.GetModifiedThrustDamageForCurrentUsage());
 
             string? affixInstId = AffixMissionBehavior.GetAgentWeaponInstanceId(
                 attackInformation.AttackerAgent,
