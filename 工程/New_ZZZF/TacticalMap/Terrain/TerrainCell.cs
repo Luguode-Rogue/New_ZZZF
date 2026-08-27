@@ -34,6 +34,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         public float MovementCost;           // 0..1, higher means harder/slower to cross.
         public float RelativeHeight;         // -1..1, local elevation against nearby terrain.
         public float HighGround;             // 0..1, local elevation advantage.
+        public bool IsHighGround;            // Readable tactical flag derived from HighGround.
         public float HeightBreak;            // 0..1, local height discontinuity.
 
         // Compatibility alias for older callers. This now means movement difficulty, not combat danger.
