@@ -97,21 +97,30 @@ namespace New_ZZZF.TacticalMap.UI
                     _controller?.HandleHtmlSelectFormation(name);
                 PublishState(true);
             });
-            _scope.RegisterCommand("move", payload => ExecuteUv("move", payload, controller => controller.HandleHtmlMoveClick));
-            _scope.RegisterCommand("face", payload => ExecuteUv("face", payload, controller => controller.HandleHtmlFaceClick));
-            _scope.RegisterCommand("camera", payload => ExecuteUv("camera", payload, controller => controller.HandleHtmlCameraClick));
+            _scope.RegisterCommand("move", payload =>
+            {
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("move", payload, controller.HandleHtmlMoveClick);
+            });
+            _scope.RegisterCommand("face", payload =>
+            {
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("face", payload, controller.HandleHtmlFaceClick);
+            });
+            _scope.RegisterCommand("camera", payload =>
+            {
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("camera", payload, controller.HandleHtmlCameraClick);
+            });
             _scope.RegisterCommand("refresh", _ => PublishState(true));
             _scope.RegisterRequest("getState", _ => Task.FromResult<object>(BuildRuntimeState()));
         }
 
-        private void ExecuteUv(string command, JToken payload, Func<TacticalMapController, Action<float, float>> resolver)
+        private static void ExecuteUv(string command, JToken payload, Action<float, float> handler)
         {
-            TacticalMapController controller = _controller;
-            if (controller == null || payload == null) return;
+            if (handler == null || payload == null) return;
             float u = payload["u"]?.Value<float>() ?? -1f;
             float v = payload["v"]?.Value<float>() ?? -1f;
-            Action<float, float> handler = resolver(controller);
-            if (handler == null) return;
             handler(u, v);
         }
 
@@ -255,7 +264,7 @@ namespace New_ZZZF.TacticalMap.UI
         private object BuildRuntimeState()
         {
             Terrain.TerrainCache cache = _controller.Cache;
-            TacticalSettings settings = TacticalSettings.Instance;
+            New_ZZZF.TacticalMap.Config.TacticalSettings settings = New_ZZZF.TacticalMap.Config.TacticalSettings.Instance;
             var formations = new List<object>();
             foreach (var f in _controller.FormationSnapshots)
             {
