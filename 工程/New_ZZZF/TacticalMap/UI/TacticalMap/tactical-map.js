@@ -45,6 +45,16 @@
     } catch (_) { return null; }
   }
 
+  // The game-side UV currently uses an inverted X axis. The HTML canvas does not.
+  // Keep the conversion at the UI boundary so terrain, markers, paths and arrows share one screen coordinate system.
+  function screenU(mapU) {
+    return 1 - Number(mapU || 0);
+  }
+
+  function screenFacingU(mapFacingU) {
+    return -Number(mapFacingU || 0);
+  }
+
   function scheduleRender() {
     if (rafPending) return;
     rafPending = true;
@@ -125,14 +135,14 @@
     }
     const f = formations[selectedFormation];
     const orderText = f.hasOrder
-      ? Number(f.orderU || 0).toFixed(3) + ', ' + Number(f.orderV || 0).toFixed(3)
+      ? screenU(f.orderU).toFixed(3) + ', ' + Number(f.orderV || 0).toFixed(3)
       : '无当前目标';
     detailBody.innerHTML =
       '<div class="detail-row"><span>关系</span><span>' + relationText(f) + '</span></div>' +
       '<div class="detail-row"><span>编号</span><span>' + escapeHtml(f.name || '-') + '</span></div>' +
       '<div class="detail-row"><span>人数</span><span>' + Number(f.count || 0) + '</span></div>' +
-      '<div class="detail-row"><span>位置</span><span>' + Number(f.u || 0).toFixed(3) + ', ' + Number(f.v || 0).toFixed(3) + '</span></div>' +
-      '<div class="detail-row"><span>指向</span><span>' + Number(f.facingU || 0).toFixed(2) + ', ' + Number(f.facingV || 0).toFixed(2) + '</span></div>' +
+      '<div class="detail-row"><span>位置</span><span>' + screenU(f.u).toFixed(3) + ', ' + Number(f.v || 0).toFixed(3) + '</span></div>' +
+      '<div class="detail-row"><span>指向</span><span>' + screenFacingU(f.facingU).toFixed(2) + ', ' + Number(f.facingV || 0).toFixed(2) + '</span></div>' +
       '<div class="detail-row"><span>当前命令点</span><span>' + orderText + '</span></div>';
   }
 
@@ -142,14 +152,13 @@
       ctx.fillRect(x, y, w, h);
       return;
     }
+    // Terrain RGBA is baked in world-X order already; do not mirror it a second time here.
     ctx.save();
-    ctx.translate(x + w, y);
-    ctx.scale(-1, 1);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(terrainCanvas, 0, 0, w, h);
+    ctx.drawImage(terrainCanvas, x, y, w, h);
     if (tacticalCanvas && staticState?.enableRisk) {
       ctx.globalAlpha = 0.46;
-      ctx.drawImage(tacticalCanvas, 0, 0, w, h);
+      ctx.drawImage(tacticalCanvas, x, y, w, h);
     }
     ctx.restore();
     ctx.strokeStyle = 'rgba(225,205,140,.70)';
@@ -193,10 +202,15 @@
     const s = runtimeState;
     if (!s) return;
     (s.formations || []).forEach((f, index) => {
-      const px = x + f.u * w, py = y + f.v * h;
+      const px = x + screenU(f.u) * w, py = y + f.v * h;
       const selected = index === selectedFormation;
       const stroke = f.enemy ? '#ff4c4c' : '#4ade80';
-      if (f.hasOrder) drawOrderLine(px, py, x + f.orderU * w, y + f.orderV * h, selected ? '#ffe69a' : stroke);
+      if (f.hasOrder) drawOrderLine(
+        px,
+        py,
+        x + screenU(f.orderU) * w,
+        y + f.orderV * h,
+        selected ? '#ffe69a' : stroke);
       const size = Math.max(8, Math.min(17, 8 + Math.sqrt(Math.max(1, Number(f.count || 1))) * .45));
       ctx.strokeStyle = selected ? '#ffe69a' : stroke;
       ctx.lineWidth = selected ? 2.4 : 1.5;
@@ -204,27 +218,27 @@
       ctx.fillStyle = selected ? '#ffe69a' : '#f4f6f7';
       ctx.font = selected ? 'bold 10px Segoe UI, Arial' : '10px Segoe UI, Arial';
       if (f.name) ctx.fillText(f.name, px + size + 3, py + 3);
-      drawArrow(px, py, Number(f.facingU || 0), Number(f.facingV || 0), size + 5, selected ? '#ffe69a' : stroke, 1.2);
+      drawArrow(px, py, screenFacingU(f.facingU), Number(f.facingV || 0), size + 5, selected ? '#ffe69a' : stroke, 1.2);
     });
 
     (s.agents || []).forEach(agent => {
-      const px = x + agent.u * w, py = y + agent.v * h;
+      const px = x + screenU(agent.u) * w, py = y + agent.v * h;
       ctx.fillStyle = agent.neutral ? '#b8bec4' : (agent.player ? '#28dbea' : '#ff3030');
       ctx.beginPath(); ctx.arc(px, py, 2.2, 0, Math.PI * 2); ctx.fill();
     });
 
     if (s.cameraTarget) {
-      const px = x + s.cameraTarget.u * w, py = y + s.cameraTarget.v * h;
+      const px = x + screenU(s.cameraTarget.u) * w, py = y + s.cameraTarget.v * h;
       ctx.save(); ctx.translate(px, py); ctx.rotate(Math.PI / 4);
       ctx.fillStyle = '#ff9d32'; ctx.fillRect(-6, -6, 12, 12); ctx.restore();
     }
 
     if (s.player) {
-      const px = x + s.player.u * w, py = y + s.player.v * h;
+      const px = x + screenU(s.player.u) * w, py = y + s.player.v * h;
       ctx.strokeStyle = '#28dbea'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = '#ffd43b'; ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
-      drawArrow(px, py, Number(s.player.facingU || 0), Number(s.player.facingV || 0), 18, '#ffd43b', 1.5);
+      drawArrow(px, py, screenFacingU(s.player.facingU), Number(s.player.facingV || 0), 18, '#ffd43b', 1.5);
     }
   }
 
@@ -247,10 +261,12 @@
   function getUv(event) {
     const rect = canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return { u: 0, v: 0 };
-    return {
+    // Convert from screen/map coordinates back to the game-side UV convention.
+    const screenUv = {
       u: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
       v: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
     };
+    return { u: 1 - screenUv.u, v: screenUv.v };
   }
 
   canvas.addEventListener('contextmenu', event => {
