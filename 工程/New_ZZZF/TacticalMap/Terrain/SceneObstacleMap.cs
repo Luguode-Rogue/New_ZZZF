@@ -10,7 +10,7 @@ namespace New_ZZZF.TacticalMap.Terrain
     /// <summary>
     /// Converts static scene geometry into a tactical obstacle footprint.
     /// This complements the heightmap: buildings, fences, walls, gates and rocks do not
-    /// necessarily change terrain height, but their physics bounds still occupy space.
+    /// necessarily change terrain height, but their scene/entity bounds still occupy space.
     /// </summary>
     public static class SceneObstacleMap
     {
@@ -60,8 +60,10 @@ namespace New_ZZZF.TacticalMap.Terrain
                     Vec3 bbMax;
                     try
                     {
-                        bbMin = entity.GetPhysicsBoundingBoxMin();
-                        bbMax = entity.GetPhysicsBoundingBoxMax();
+                        // Bannerlord exposes these entity bounding-box accessors. Do not use the
+                        // non-existent GetPhysicsBoundingBoxMin/Max methods.
+                        bbMin = entity.GetBoundingBoxMin();
+                        bbMax = entity.GetBoundingBoxMax();
                     }
                     catch
                     {
