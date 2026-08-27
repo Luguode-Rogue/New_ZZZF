@@ -8,9 +8,8 @@ using New_ZZZF.TacticalMap.Diagnostics;
 namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
-    /// Converts static scene geometry into a tactical obstacle footprint.
-    /// This complements the heightmap: buildings, fences, walls, gates and rocks do not
-    /// necessarily change terrain height, but their scene/entity bounds still occupy space.
+    /// Converts actual stationary scene collision geometry into a tactical obstacle footprint.
+    /// Visual-only meshes, agents, dynamic debris and raycast-only helpers are ignored.
     /// </summary>
     public static class SceneObstacleMap
     {
@@ -52,16 +51,22 @@ namespace New_ZZZF.TacticalMap.Terrain
                     GameEntity entity = entities[i];
                     if (entity == null) continue;
 
-                    // Keep authored/static mesh geometry. Dynamic helper entities and agents are
-                    // intentionally left to the formation/agent tracking layer.
-                    if (entity.GetFirstMesh() == null) continue;
+                    BodyFlags flags;
+                    try
+                    {
+                        flags = entity.PhysicsDescBodyFlag;
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    if (!IsUsableObstacleBody(flags)) continue;
 
                     Vec3 bbMin;
                     Vec3 bbMax;
                     try
                     {
-                        // Bannerlord exposes these entity bounding-box accessors. Do not use the
-                        // non-existent GetPhysicsBoundingBoxMin/Max methods.
                         bbMin = entity.GetBoundingBoxMin();
                         bbMax = entity.GetBoundingBoxMax();
                     }
@@ -76,11 +81,21 @@ namespace New_ZZZF.TacticalMap.Terrain
                     float width = bbMax.X - bbMin.X;
                     float depth = bbMax.Y - bbMin.Y;
                     float height = bbMax.Z - bbMin.Z;
+                    if (width < 0.10f || depth < 0.10f || height < 0.15f) continue;
 
-                    // Skip terrain-scale/global meshes and insignificant fragments.
-                    if (width > cache.WorldW * 0.55f || depth > cache.WorldH * 0.55f) continue;
-                    if (width < 0.18f && depth < 0.18f) continue;
-                    if (height < 0.18f) continue;
+                    // Ignore scene-wide collision shells / terrain proxy bodies.
+                    bool hugeX = width > cache.WorldW * 0.75f;
+                    bool hugeY = depth > cache.WorldH * 0.75f;
+                    if (hugeX && hugeY) continue;
+
+                    // A stationary physics object should intersect the local ground surface.
+                    // This rejects roofs, floating decoration and high editor-only collision boxes.
+                    float sampleX = (bbMin.X + bbMax.X) * 0.5f;
+                    float sampleY = (bbMin.Y + bbMax.Y) * 0.5f;
+                    float groundZ = cache.GetHeightAt(new Vec2(sampleX, sampleY));
+                    if (float.IsNaN(groundZ) || float.IsInfinity(groundZ)) continue;
+                    if (bbMin.Z > groundZ + Math.Max(3.0f, cache.CellStep * 0.8f)) continue;
+                    if (bbMax.Z < groundZ - Math.Max(2.0f, cache.CellStep * 0.5f)) continue;
 
                     int minX = WorldToCellX(cache, bbMin.X);
                     int maxX = WorldToCellX(cache, bbMax.X);
@@ -98,16 +113,22 @@ namespace New_ZZZF.TacticalMap.Terrain
                     {
                         for (int y = minY; y <= maxY; y++)
                         {
-                            var cell = cache.Cells[x, y];
+                            Vec2 cellPos = cache.CellCenter(x, y);
+
+                            // Global AABB is only used to find candidates. Reject cells that fall
+                            // outside a narrow footprint for highly elongated barriers, which is
+                            // where the previous implementation produced long false-positive bands.
+                            if (!InsideObstacleFootprint(bbMin, bbMax, cellPos, cache.CellStep))
+                                continue;
+
+                            TerrainCell cell = cache.Cells[x, y];
+                            if (cell.IsWater) continue;
+
                             cell.Kind = TerrainKind.Wall;
                             cell.MovementCost = 1f;
                             cell.Risk = 1f;
-                            cache.SetPixel(cache.TerrainBaseRGBA, x, y, 38, 36, 32, 255);
-
-                            // Keep thin fences/walls readable at low map resolution.
-                            bool edge = x == minX || x == maxX || y == minY || y == maxY;
-                            if (edge)
-                                cache.SetPixel(cache.TerrainBaseRGBA, x, y, 68, 63, 52, 255);
+                            cache.SetPixel(cache.TerrainBaseRGBA, x, y, 44, 40, 34, 255);
+                            cache.SetPixel(cache.TerrainBaseRGBA, x, y, 44, 40, 34, 255);
 
                             obstacleCells++;
                             entityHit = true;
@@ -126,6 +147,56 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 TacticalMapLog.Error("SceneObstacleMap.Rebuild failed.", ex);
             }
+        }
+
+        private static bool IsUsableObstacleBody(BodyFlags flags)
+        {
+            if (flags == BodyFlags.None) return false;
+
+            BodyFlags excluded = BodyFlags.Disabled |
+                                 BodyFlags.Dynamic |
+                                 BodyFlags.Moveable |
+                                 BodyFlags.DynamicConvexHull |
+                                 BodyFlags.Ragdoll |
+                                 BodyFlags.RagdollLimiter |
+                                 BodyFlags.DroppedItem |
+                                 BodyFlags.FloatingDebris |
+                                 BodyFlags.WaterBody |
+                                 BodyFlags.AgentOnly |
+                                 BodyFlags.MissileOnly |
+                                 BodyFlags.OnlyCollideWithRaycast;
+
+            if ((flags & excluded) != 0) return false;
+
+            // DoNotCollideWithRaycast is intentionally not excluded: a wall can block agents
+            // while opting out of generic raycast visibility.
+            return true;
+        }
+
+        private static bool InsideObstacleFootprint(Vec3 min, Vec3 max, Vec2 point, float cellStep)
+        {
+            float width = max.X - min.X;
+            float depth = max.Y - min.Y;
+            float pad = Math.Max(0.12f, cellStep * 0.30f);
+
+            // Thin barriers should remain thin on the tactical map instead of being expanded
+            // into a many-cell-wide band by an axis-aligned bounding box.
+            if (width > depth * 5f)
+            {
+                float centerY = (min.Y + max.Y) * 0.5f;
+                return point.Y >= centerY - Math.Max(pad, depth * 0.65f) &&
+                       point.Y <= centerY + Math.Max(pad, depth * 0.65f);
+            }
+
+            if (depth > width * 5f)
+            {
+                float centerX = (min.X + max.X) * 0.5f;
+                return point.X >= centerX - Math.Max(pad, width * 0.65f) &&
+                       point.X <= centerX + Math.Max(pad, width * 0.65f);
+            }
+
+            return point.X >= min.X - pad && point.X <= max.X + pad &&
+                   point.Y >= min.Y - pad && point.Y <= max.Y + pad;
         }
 
         private static int WorldToCellX(TerrainCache cache, float worldX)
