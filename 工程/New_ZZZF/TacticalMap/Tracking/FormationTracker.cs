@@ -26,7 +26,7 @@ namespace New_ZZZF.TacticalMap.Tracking
     /// <summary>
     /// Refreshes formation-level situational awareness at a throttled rate.
     /// CurrentDirection is authoritative for the actual movement/facing indicator.
-    /// OrderPosition is only exposed as a forward destination when it lies in front of the formation.
+    /// OrderPosition remains visible as the commanded destination, even after the formation passes it.
     /// </summary>
     public sealed class FormationTracker
     {
@@ -69,21 +69,8 @@ namespace New_ZZZF.TacticalMap.Tracking
                     Vec2 orderPosition = hasOrder ? formation.OrderPosition : formation.CachedAveragePosition;
                     Vec2 directionToOrder = hasOrder ? orderPosition - formation.CachedAveragePosition : Vec2.Zero;
 
-                    // OrderPosition can remain behind a moving formation. In that case it is not a useful
-                    // "next destination" for the tactical display, so suppress the destination line.
-                    if (hasOrder && directionToOrder.LengthSquared > 1E-4f)
-                    {
-                        Vec2 orderDirection = directionToOrder.Normalized();
-                        if (currentDirection.LengthSquared > 1E-4f &&
-                            Vec2.DotProduct(currentDirection, orderDirection) <= 0f)
-                        {
-                            hasOrder = false;
-                            orderPosition = formation.CachedAveragePosition;
-                            directionToOrder = Vec2.Zero;
-                        }
-                    }
-
                     // Actual formation direction takes priority over the order point.
+                    // The commanded destination remains visible independently of the current movement direction.
                     Vec2 facing = currentDirection;
                     if (facing.LengthSquared <= 1E-4f && directionToOrder.LengthSquared > 1E-4f)
                         facing = directionToOrder.Normalized();
@@ -118,10 +105,9 @@ namespace New_ZZZF.TacticalMap.Tracking
                             " world=(" + pos.X.ToString("F2") + "," + pos.Y.ToString("F2") + ")" +
                             " order=" + (snap.HasOrder
                                 ? "(" + order.X.ToString("F2") + "," + order.Y.ToString("F2") + ")"
-                                : "suppressed") +
+                                : "none") +
                             " currentDirection=(" + currentDirection.X.ToString("F4") + "," + currentDirection.Y.ToString("F4") + ")" +
                             " facing=(" + snap.Facing.X.ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
-                            " displayFacing=(" + snap.Facing.X.ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
                             " playerWorld=" + (playerWorld.HasValue
                                 ? "(" + playerWorld.Value.X.ToString("F2") + "," + playerWorld.Value.Y.ToString("F2") + ")"
                                 : "none") +
