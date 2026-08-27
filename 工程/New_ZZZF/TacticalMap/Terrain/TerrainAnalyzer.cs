@@ -30,6 +30,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                 for (int y = 0; y < h; y++)
                 {
                     TerrainCell cell = cache.Cells[x, y];
+
                     float slope = 1f - cell.Normal.z;
                     if (slope < 0f) slope = 0f;
                     else if (slope > 1f) slope = 1f;
@@ -38,7 +39,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     float centerHeight = heights[x, y];
                     float neighborSum = 0f;
                     int neighborCount = 0;
-                    float jump = 0f;
+                    float maxJump = 0f;
                     int minX = Math.Max(0, x - 1);
                     int maxX = Math.Min(w - 1, x + 1);
                     int minY = Math.Max(0, y - 1);
@@ -53,7 +54,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                             neighborSum += nh;
                             neighborCount++;
                             float delta = Math.Abs(centerHeight - nh);
-                            if (delta > jump) jump = delta;
+                            if (delta > maxJump) maxJump = delta;
                         }
                     }
 
@@ -62,12 +63,21 @@ namespace New_ZZZF.TacticalMap.Terrain
                     cell.RelativeHeight = Clamp(relativeDelta / Math.Max(0.5f, s.HighGroundReferenceHeight), -1f, 1f);
                     cell.HighGround = Math.Max(0f, cell.RelativeHeight);
                     cell.IsHighGround = cell.HighGround >= 0.25f;
-                    cell.HeightBreak = Clamp(jump / Math.Max(0.5f, s.CliffHeightJump), 0f, 1f);
+
+                    // Height discontinuities are a stronger cliff signal than generic movement
+                    // difficulty. Keep the normalized value for pathing/risk consumers.
+                    float cliffJumpThreshold = Math.Max(1.0f, Math.Min(s.CliffHeightJump, cache.CellStep * 0.45f));
+                    cell.HeightBreak = Clamp(maxJump / cliffJumpThreshold, 0f, 1f);
 
                     float heightFrac = (cell.Height - cache.MinH) / range;
-                    cell.IsWater = heightFrac <= s.WaterHeightFraction && slope < 0.25f;
+                    cell.IsWater = heightFrac <= s.WaterHeightFraction && slope < 0.28f;
+
+                    // The previous threshold required an unusually vertical surface before it
+                    // became a cliff. Use the configured threshold but also recognize a sharp
+                    // height discontinuity. This catches both carved cliffs and abrupt ledges.
+                    float cliffSlopeThreshold = Clamp(Math.Min(s.CliffSlopeThreshold, 0.45f), 0.28f, 0.75f);
                     cell.IsCliff = !cell.IsWater &&
-                                   (slope >= s.CliffSlopeThreshold || jump >= s.CliffHeightJump);
+                                   (slope >= cliffSlopeThreshold || maxJump >= cliffJumpThreshold);
 
                     bool vegetationMaterial = false;
                     short[] layers = cell.MaterialLayers;
@@ -82,7 +92,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                             }
                         }
                     }
-                    cell.IsForest = !cell.IsWater && !cell.IsCliff && vegetationMaterial && slope < 0.28f;
+                    cell.IsForest = !cell.IsWater && !cell.IsCliff && vegetationMaterial && slope < 0.30f;
 
                     if (cell.IsWater)
                         cell.Kind = TerrainKind.Water;
@@ -93,13 +103,12 @@ namespace New_ZZZF.TacticalMap.Terrain
                     else
                         cell.Kind = TerrainKind.Plain;
 
-                    float slopeCost = SmoothStep(0.18f, Math.Max(0.22f, s.CliffSlopeThreshold), slope) * 0.58f;
+                    float slopeCost = SmoothStep(0.18f, Math.Max(0.22f, cliffSlopeThreshold), slope) * 0.58f;
                     float breakCost = cell.HeightBreak * 0.32f;
                     float materialCost = cell.IsForest ? 0.14f : 0f;
                     float blockerCost = cell.IsCliff ? 1f : (cell.IsWater ? 0.92f : 0f);
                     cell.MovementCost = Clamp(Math.Max(blockerCost, slopeCost + breakCost + materialCost), 0f, 1f);
 
-                    // Keep the old field meaningful for consumers that still read RiskRGBA.
                     cell.Risk = cell.MovementCost;
                 }
             });
