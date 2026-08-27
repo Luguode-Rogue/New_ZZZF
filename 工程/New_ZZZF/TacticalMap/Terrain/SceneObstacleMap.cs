@@ -55,6 +55,8 @@ namespace New_ZZZF.TacticalMap.Terrain
                     try
                     {
                         flags = entity.PhysicsDescBodyFlag;
+                        if (flags == BodyFlags.None)
+                            flags = entity.BodyFlag;
                     }
                     catch
                     {
@@ -128,7 +130,6 @@ namespace New_ZZZF.TacticalMap.Terrain
                             cell.MovementCost = 1f;
                             cell.Risk = 1f;
                             cache.SetPixel(cache.TerrainBaseRGBA, x, y, 44, 40, 34, 255);
-                            cache.SetPixel(cache.TerrainBaseRGBA, x, y, 44, 40, 34, 255);
 
                             obstacleCells++;
                             entityHit = true;
@@ -167,9 +168,6 @@ namespace New_ZZZF.TacticalMap.Terrain
                                  BodyFlags.OnlyCollideWithRaycast;
 
             if ((flags & excluded) != 0) return false;
-
-            // DoNotCollideWithRaycast is intentionally not excluded: a wall can block agents
-            // while opting out of generic raycast visibility.
             return true;
         }
 
