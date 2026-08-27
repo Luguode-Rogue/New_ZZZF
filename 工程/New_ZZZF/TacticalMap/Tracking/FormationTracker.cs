@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using New_ZZZF.TacticalMap.Diagnostics;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 
@@ -35,8 +34,6 @@ namespace New_ZZZF.TacticalMap.Tracking
             Snapshots.Clear();
             if (mission == null) return;
 
-            Agent mainAgent = mission.MainAgent;
-            Vec2? playerWorld = mainAgent != null ? (Vec2?)mainAgent.Position.AsVec2 : null;
             var playerTeam = mission.PlayerTeam;
             foreach (var team in mission.Teams)
             {
@@ -76,29 +73,6 @@ namespace New_ZZZF.TacticalMap.Tracking
                     snap.Facing = facing;
 
                     Snapshots.Add(snap);
-
-                    if (isEnemy)
-                    {
-                        Vec2 pos = snap.AveragePosition;
-                        Vec2 order = snap.OrderPosition;
-                        Vec2 deltaFromPlayer = playerWorld.HasValue ? pos - playerWorld.Value : Vec2.Zero;
-                        Vec2 deltaToOrder = snap.HasOrder ? order - pos : Vec2.Zero;
-
-                        TacticalMapDirectionLog.Info(
-                            "ENEMY_MAP_TRACE " +
-                            "formation=" + snap.Name +
-                            " count=" + snap.Count +
-                            " world=(" + pos.X.ToString("F2") + "," + pos.Y.ToString("F2") + ")" +
-                            " order=" + (snap.HasOrder
-                                ? "(" + order.X.ToString("F2") + "," + order.Y.ToString("F2") + ")"
-                                : "none") +
-                            " facing=(" + snap.Facing.X.ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
-                            " playerWorld=" + (playerWorld.HasValue
-                                ? "(" + playerWorld.Value.X.ToString("F2") + "," + playerWorld.Value.Y.ToString("F2") + ")"
-                                : "none") +
-                            " deltaPlayer=(" + deltaFromPlayer.X.ToString("F2") + "," + deltaFromPlayer.Y.ToString("F2") + ")" +
-                            " deltaOrder=(" + deltaToOrder.X.ToString("F2") + "," + deltaToOrder.Y.ToString("F2") + ")");
-                    }
                 }
             }
         }
