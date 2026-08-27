@@ -6,9 +6,6 @@ using TaleWorlds.MountAndBlade;
 
 namespace New_ZZZF.TacticalMap.Tracking
 {
-    /// <summary>
-    /// Compact formation state used by the tactical map.
-    /// </summary>
     public sealed class FormationSnapshot
     {
         public bool IsPlayer;
@@ -23,11 +20,6 @@ namespace New_ZZZF.TacticalMap.Tracking
         public string Name;
     }
 
-    /// <summary>
-    /// Refreshes formation-level situational awareness at a throttled rate.
-    /// CurrentDirection is authoritative for the actual movement/facing indicator.
-    /// OrderPosition remains visible as the commanded destination, even after the formation passes it.
-    /// </summary>
     public sealed class FormationTracker
     {
         public List<FormationSnapshot> Snapshots { get; } = new List<FormationSnapshot>();
@@ -42,8 +34,8 @@ namespace New_ZZZF.TacticalMap.Tracking
             Vec2 playerFacing = Vec2.Zero;
             if (mainAgent != null)
             {
-                float angle = mainAgent.LookDirectionAsAngle;
-                playerFacing = new Vec2((float)Math.Cos(angle), (float)Math.Sin(angle));
+                Vec2 look = mainAgent.LookDirection.AsVec2;
+                playerFacing = look.LengthSquared > 1E-4f ? look.Normalized() : Vec2.Zero;
             }
 
             var playerTeam = mission.PlayerTeam;
@@ -69,8 +61,6 @@ namespace New_ZZZF.TacticalMap.Tracking
                     Vec2 orderPosition = hasOrder ? formation.OrderPosition : formation.CachedAveragePosition;
                     Vec2 directionToOrder = hasOrder ? orderPosition - formation.CachedAveragePosition : Vec2.Zero;
 
-                    // Actual formation direction takes priority over the order point.
-                    // The commanded destination remains visible independently of the current movement direction.
                     Vec2 facing = currentDirection;
                     if (facing.LengthSquared <= 1E-4f && directionToOrder.LengthSquared > 1E-4f)
                         facing = directionToOrder.Normalized();
