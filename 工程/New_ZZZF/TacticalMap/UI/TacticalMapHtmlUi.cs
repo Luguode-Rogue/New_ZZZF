@@ -42,7 +42,6 @@ namespace New_ZZZF.TacticalMap.UI
         public static TacticalMapHtmlUi Instance => _instance.Value;
         public bool IsVisible => _pageOpened && _mode != TacticalMapUiMode.Hidden;
         public TacticalMapUiMode Mode => _mode;
-
         public bool IsInteractive => _mode == TacticalMapUiMode.CompactInteractive || _mode == TacticalMapUiMode.FullInteractive;
 
         private TacticalMapHtmlUi() { }
@@ -116,9 +115,21 @@ namespace New_ZZZF.TacticalMap.UI
                     _controller?.HandleHtmlSelectFormation(name);
                 PublishState(true);
             });
-            _scope.RegisterCommand("move", payload => ExecuteUv("move", payload, _controller?.HandleHtmlMoveClick));
-            _scope.RegisterCommand("face", payload => ExecuteUv("face", payload, _controller?.HandleHtmlFaceClick));
-            _scope.RegisterCommand("camera", payload => ExecuteUv("camera", payload, _controller?.HandleHtmlCameraClick));
+            _scope.RegisterCommand("move", payload =>
+            {
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("move", payload, controller.HandleHtmlMoveClick);
+            });
+            _scope.RegisterCommand("face", payload =>
+            {
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("face", payload, controller.HandleHtmlFaceClick);
+            });
+            _scope.RegisterCommand("camera", payload =>
+            {
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("camera", payload, controller.HandleHtmlCameraClick);
+            });
             _scope.RegisterCommand("refresh", _ => PublishState(true));
             _scope.RegisterRequest("getState", _ => Task.FromResult<object>(BuildRuntimeState()));
         }
@@ -245,7 +256,6 @@ namespace New_ZZZF.TacticalMap.UI
                     _mode = TacticalMapUiMode.CompactPassive;
                     break;
                 default:
-                    // Short N is intentionally scoped to the compact state pair.
                     return;
             }
             TacticalMapLog.Info("ToggleInteractive: " + before + " -> " + _mode);
@@ -348,7 +358,6 @@ namespace New_ZZZF.TacticalMap.UI
                 terrainVersion = terrainSignature,
                 terrainBaseRgba = _terrainBase64,
                 tacticalRgba = _tacticalBase64,
-                // Kept for older UI bundles that still read riskRgba.
                 riskRgba = _tacticalBase64,
                 enableRisk = TacticalSettings.Instance.EnableRiskOverlay
             });
