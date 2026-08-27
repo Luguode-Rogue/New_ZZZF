@@ -61,6 +61,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     float relativeDelta = centerHeight - neighborhoodAverage;
                     cell.RelativeHeight = Clamp(relativeDelta / Math.Max(0.5f, s.HighGroundReferenceHeight), -1f, 1f);
                     cell.HighGround = Math.Max(0f, cell.RelativeHeight);
+                    cell.IsHighGround = cell.HighGround >= 0.25f;
                     cell.HeightBreak = Clamp(jump / Math.Max(0.5f, s.CliffHeightJump), 0f, 1f);
 
                     float heightFrac = (cell.Height - cache.MinH) / range;
