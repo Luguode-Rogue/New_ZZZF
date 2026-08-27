@@ -45,16 +45,17 @@
     } catch (_) { return null; }
   }
 
-  // WorldToUV stores an inverted X axis for the game-side coordinate convention.
-  // The canvas itself uses the baked texture's X order directly, so screenU restores world-X -> screen-X.
+  // Canonical display convention for the current Bannerlord tactical map:
+  // TerrainCache.WorldToUV() intentionally maps world-X+ toward smaller U.
+  // The baked terrain therefore needs one horizontal mirror for display.
+  // All point positions use the same map-space U directly. Facing vectors need X inversion
+  // because they are directions rather than positions.
   function screenU(mapU) {
-    return 1 - Number(mapU || 0);
+    return Number(mapU || 0);
   }
 
-  // Facing is already a world-space direction, and the canvas uses world-X increasing to the right.
-  // Do not invert X a second time here.
   function screenFacingU(mapFacingU) {
-    return Number(mapFacingU || 0);
+    return -Number(mapFacingU || 0);
   }
 
   function scheduleRender() {
@@ -137,13 +138,13 @@
     }
     const f = formations[selectedFormation];
     const orderText = f.hasOrder
-      ? screenU(f.orderU).toFixed(3) + ', ' + Number(f.orderV || 0).toFixed(3)
+      ? Number(f.orderU || 0).toFixed(3) + ', ' + Number(f.orderV || 0).toFixed(3)
       : '无当前目标';
     detailBody.innerHTML =
       '<div class="detail-row"><span>关系</span><span>' + relationText(f) + '</span></div>' +
       '<div class="detail-row"><span>编号</span><span>' + escapeHtml(f.name || '-') + '</span></div>' +
       '<div class="detail-row"><span>人数</span><span>' + Number(f.count || 0) + '</span></div>' +
-      '<div class="detail-row"><span>位置</span><span>' + screenU(f.u).toFixed(3) + ', ' + Number(f.v || 0).toFixed(3) + '</span></div>' +
+      '<div class="detail-row"><span>位置</span><span>' + Number(f.u || 0).toFixed(3) + ', ' + Number(f.v || 0).toFixed(3) + '</span></div>' +
       '<div class="detail-row"><span>指向</span><span>' + screenFacingU(f.facingU).toFixed(2) + ', ' + Number(f.facingV || 0).toFixed(2) + '</span></div>' +
       '<div class="detail-row"><span>当前命令点</span><span>' + orderText + '</span></div>';
   }
@@ -154,13 +155,14 @@
       ctx.fillRect(x, y, w, h);
       return;
     }
-    // Terrain RGBA is baked in world-X order already; do not mirror it here.
     ctx.save();
+    ctx.translate(x + w, y);
+    ctx.scale(-1, 1);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(terrainCanvas, x, y, w, h);
+    ctx.drawImage(terrainCanvas, 0, 0, w, h);
     if (tacticalCanvas && staticState?.enableRisk) {
       ctx.globalAlpha = 0.46;
-      ctx.drawImage(tacticalCanvas, x, y, w, h);
+      ctx.drawImage(tacticalCanvas, 0, 0, w, h);
     }
     ctx.restore();
     ctx.strokeStyle = 'rgba(225,205,140,.70)';
@@ -197,7 +199,7 @@
     ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox, oy); ctx.stroke();
     ctx.restore();
 
-    // Put the arrowhead exactly at the order point, pointing from the formation toward that point.
+    // The line is formation -> order. Arrowhead terminates at the order point.
     const nx = dx / len, ny = dy / len;
     drawArrow(ox - nx * 7, oy - ny * 7, nx, ny, 7, color, 1.1);
     ctx.strokeStyle = color;
@@ -267,12 +269,11 @@
   function getUv(event) {
     const rect = canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return { u: 0, v: 0 };
-    // Convert from screen/map coordinates back to the game-side UV convention.
-    const screenUv = {
+    // The displayed terrain is mirrored, so screen U already matches TerrainCache's map U.
+    return {
       u: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
       v: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
     };
-    return { u: 1 - screenUv.u, v: screenUv.v };
   }
 
   canvas.addEventListener('contextmenu', event => {
