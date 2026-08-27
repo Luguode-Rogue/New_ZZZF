@@ -22,7 +22,6 @@ using StoryMode.GameComponents.CampaignBehaviors;
 using TaleWorlds.Localization;
 using SandBox.GauntletUI.Missions;
 using System.Collections.Generic;
-using New_ZZZF.ActionExplorer;
 using TaleWorlds.Engine.GauntletUI;
 using New_ZZZF.GUI;
 using BannerlordHtmlUI;
@@ -252,14 +251,6 @@ namespace New_ZZZF
                     if (!(ScreenManager.TopScreen is CustomSkillScreen))
                         ScreenManager.PushScreen(new CustomSkillScreen());
                     return;
-                }
-
-                if (Input.IsKeyPressed(InputKey.F11) && Campaign.Current != null
-                    && Mission.Current == null
-                    && !stateManager.ActiveState.IsMenuState
-                    && !(ScreenManager.TopScreen is New_ZZZF.ActionExplorer.ActionExplorerScreen))
-                {
-                    New_ZZZF.ActionExplorer.ActionExplorerLauncher.TryOpen();
                 }
 
                 if (Input.IsKeyDown(InputKey.L))
