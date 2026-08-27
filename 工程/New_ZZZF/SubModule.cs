@@ -22,9 +22,9 @@ using StoryMode.GameComponents.CampaignBehaviors;
 using TaleWorlds.Localization;
 using SandBox.GauntletUI.Missions;
 using System.Collections.Generic;
-using New_ZZZF.ActionExplorer;
 using TaleWorlds.Engine.GauntletUI;
 using New_ZZZF.GUI;
+using BannerlordHtmlUI;
 
 namespace New_ZZZF
 {
@@ -65,6 +65,7 @@ namespace New_ZZZF
 
             CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
             TacticalMapLog.Info("CustomSkillHtmlUi.InitializeOnFrameworkReady registered.");
+            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
 
         public override void OnNewGameCreated(Game game, object initializerObject)
@@ -136,11 +137,13 @@ namespace New_ZZZF
 
         protected override void OnSubModuleUnloaded()
         {
+            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_BEGIN");
             TacticalMapLog.Section("SUBMODULE UNLOAD");
             try { TacticalMapHtmlUi.Instance.Dispose(); }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
             try { CustomSkillHtmlUi.Instance.Dispose(); }
             catch (Exception ex) { TacticalMapLog.Error("CustomSkillHtmlUi.Dispose failed.", ex); }
+            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
             base.OnSubModuleUnloaded();
         }
 
@@ -179,6 +182,7 @@ namespace New_ZZZF
                 campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
                 campaignGameStarter.AddBehavior(new HeroChangeCampaignBehavior());
                 campaignGameStarter.AddBehavior(new AffixCampaignBehavior());
+                campaignGameStarter.AddBehavior(new New_ZZZF.PrisonBreakBribe.PrisonBreakBribeBehavior());
             }
         }
 
@@ -187,63 +191,104 @@ namespace New_ZZZF
             base.OnApplicationTick(dt);
             CustomSkillHtmlUi.Instance.Tick(dt);
 
-            if (Game.Current == null) return;
+            var game = Game.Current;
+            var stateManager = game?.GameStateManager;
+            var activeState = stateManager?.ActiveState;
+            var customVisible = CustomSkillHtmlUi.Instance.IsVisible;
+            var mPressed = Input.IsKeyPressed(InputKey.M);
+            var shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
+            var campaignAvailable = Campaign.Current != null;
+            var missionActive = Mission.Current != null;
+            var isMenuState = activeState?.IsMenuState ?? true;
 
-            bool shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
-            if (shiftDown && Input.IsKeyPressed(InputKey.M)
-                && Campaign.Current != null
-                && Mission.Current == null
-                && !Game.Current.GameStateManager.ActiveState.IsMenuState)
+            if (mPressed || (Input.IsKeyDown(InputKey.M) && shiftDown))
             {
-                TacticalMapLog.Info("CustomSkill Shift+M input detected.");
-                if (CustomSkillHtmlUi.Instance.IsVisible)
-                    CustomSkillHtmlUi.Instance.Close();
-                else
-                    CustomSkillHtmlUi.Instance.TryOpen();
+                HtmlUiInputTraceLogger.Event(
+                    "NEW_ZZZF_M_GATE "
+                    + "mPressed=" + mPressed
+                    + " shiftDown=" + shiftDown
+                    + " customVisible=" + customVisible
+                    + " game=" + (game != null)
+                    + " campaign=" + campaignAvailable
+                    + " mission=" + missionActive
+                    + " activeState=" + (activeState == null ? "<null>" : activeState.GetType().FullName)
+                    + " isMenuState=" + isMenuState);
             }
 
-            if (Input.IsKeyPressed(InputKey.F11) && Campaign.Current != null
-                && Mission.Current == null
-                && !Game.Current.GameStateManager.ActiveState.IsMenuState
-                && !(ScreenManager.TopScreen is New_ZZZF.ActionExplorer.ActionExplorerScreen))
+            // 新 HTML 技能界面拥有全输入时，不处理 New_ZZZF 的其它全局热键。
+            if (customVisible)
             {
-                New_ZZZF.ActionExplorer.ActionExplorerLauncher.TryOpen();
+                if (mPressed || shiftDown)
+                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_BLOCKED_BY_CUSTOM_SKILL_VISIBLE");
+                return;
             }
 
-            if (Input.IsKeyDown(InputKey.L))
+            if (game == null) return;
+            if (stateManager == null || activeState == null) return;
+
+            if (Campaign.Current != null
+                && Mission.Current == null
+                && !stateManager.ActiveState.IsMenuState)
             {
-                SkillFactory.Refresh_skillRegistry();
-                CompositeSpellRegistry.LoadAndRegisterAll();
-                SkillFactory.SkillToItemObject();
-                SkillConfigManager.Instance._troopSkillMap.Clear();
-                if (!(SkillConfigManager.Instance._troopSkillMap != null && SkillConfigManager.Instance._troopSkillMap.Count > 1) && Mission.Current == null)
+                bool shiftMPressed = shiftDown && mPressed;
+                bool normalMPressed = !shiftDown && mPressed;
+
+                // M：新的 HTML 技能界面
+                if (normalMPressed)
                 {
-                    try
-                    {
-                        string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
-                        SkillConfigManager.Instance.LoadFromXml(xmlPath);
-                        InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] 技能配置加载完成！"));
-                    }
-                    catch (Exception ex)
-                    {
-                        InformationManager.DisplayMessage(new InformationMessage($"[New_ZZZF] 配置加载失败: {ex.Message}"));
-                    }
+                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_ACCEPTED_OPEN_HTML");
+                    if (ScreenManager.TopScreen is CustomSkillScreen)
+                        ScreenManager.PopScreen();
+                    CustomSkillHtmlUi.Instance.TryOpen();
+                    return;
                 }
-                Dictionary<string, List<string>> troopSkillMap = new Dictionary<string, List<string>>();
-                foreach (var item in SkillConfigManager.Instance._troopSkillMap)
-                    troopSkillMap[item.Key] = SkillConfigManager.ToStringList(item.Value);
-                foreach (var item in troopSkillMap)
-                    SkillConfigManager.Instance._troopSkillMap[item.Key] = SkillConfigManager.ListToSkillSet(item.Value);
-            }
 
-            if (Campaign.Current != null && Mission.Current == null)
-            {
-                bool ctrlDown = Input.IsKeyDown(InputKey.LeftControl) || Input.IsKeyDown(InputKey.RightControl);
-                if (ctrlDown && Input.IsKeyPressed(InputKey.F5)) AffixDebugHelper.GiveRandomAffixWeapon();
-                if (ctrlDown && Input.IsKeyPressed(InputKey.F6)) AffixDebugHelper.GiveRandomAffixArmor();
-                if (ctrlDown && Input.IsKeyPressed(InputKey.F7)) AffixDebugHelper.ListPlayerAffixItems();
-                if (ctrlDown && Input.IsKeyPressed(InputKey.F8)) AffixDebugHelper.PrintSystemStatus();
-                if (ctrlDown && Input.IsKeyPressed(InputKey.F9)) AffixDebugHelper.RerollRandomItemAffix();
+                // Shift+M：旧的 Gauntlet 技能界面
+                if (shiftMPressed)
+                {
+                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_SHIFT_M_ACCEPTED_OPEN_GAUNTLET");
+                    if (CustomSkillHtmlUi.Instance.IsVisible)
+                        CustomSkillHtmlUi.Instance.Close();
+                    if (!(ScreenManager.TopScreen is CustomSkillScreen))
+                        ScreenManager.PushScreen(new CustomSkillScreen());
+                    return;
+                }
+
+                if (Input.IsKeyDown(InputKey.L))
+                {
+                    SkillFactory.Refresh_skillRegistry();
+                    CompositeSpellRegistry.LoadAndRegisterAll();
+                    SkillFactory.SkillToItemObject();
+                    SkillConfigManager.Instance._troopSkillMap.Clear();
+                    if (!(SkillConfigManager.Instance._troopSkillMap != null && SkillConfigManager.Instance._troopSkillMap.Count > 1) && Mission.Current == null)
+                    {
+                        try
+                        {
+                            string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
+                            SkillConfigManager.Instance.LoadFromXml(xmlPath);
+                            InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] 技能配置加载完成！"));
+                        }
+                        catch (Exception ex)
+                        {
+                            InformationManager.DisplayMessage(new InformationMessage($"[New_ZZZF] 配置加载失败: {ex.Message}"));
+                        }
+                    }
+                    Dictionary<string, List<string>> troopSkillMap = new Dictionary<string, List<string>>();
+                    foreach (var item in SkillConfigManager.Instance._troopSkillMap)
+                        troopSkillMap[item.Key] = SkillConfigManager.ToStringList(item.Value);
+                    foreach (var item in troopSkillMap)
+                        SkillConfigManager.Instance._troopSkillMap[item.Key] = SkillConfigManager.ListToSkillSet(item.Value);
+                }
+
+                if (Campaign.Current != null && Mission.Current == null)
+                {
+                    bool ctrlDown = Input.IsKeyDown(InputKey.LeftControl) || Input.IsKeyDown(InputKey.RightControl);
+                    if (ctrlDown && Input.IsKeyPressed(InputKey.F5)) AffixDebugHelper.GiveRandomAffixWeapon();
+                    if (ctrlDown && Input.IsKeyPressed(InputKey.F6)) AffixDebugHelper.GiveRandomAffixArmor();
+                    if (ctrlDown && Input.IsKeyPressed(InputKey.F7)) AffixDebugHelper.ListPlayerAffixItems();
+                    if (ctrlDown && Input.IsKeyPressed(InputKey.F8)) AffixDebugHelper.PrintSystemStatus();
+                    if (ctrlDown && Input.IsKeyPressed(InputKey.F9)) AffixDebugHelper.RerollRandomItemAffix();
+                }
             }
         }
     }

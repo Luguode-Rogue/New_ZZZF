@@ -9,30 +9,20 @@ namespace New_ZZZF
     /// 词缀系统 Mission 层行为。
     ///
     /// 职责：
-    /// 1. 在 Agent 创建时，将 Campaign 层的"Hero装备槽 → InstanceId"绑定复制到 Mission 层缓存
-    /// 2. 为 NewDamageModel 提供按 Agent+槽位 查询 InstanceId 的接口
+    /// 1. 在 Agent 创建时，将当前 Agent 装备上的 ItemModifier 精确映射到 InstanceId
+    /// 2. 为 NewDamageModel 提供按 Agent+槽位查询 InstanceId 的接口
     /// 3. Agent 移除/战斗结束时清理缓存
     ///
-    /// 设计要点：
-    /// - 缓存是 Mission 层的"快照"，战斗中途换装需后续通过装备变化事件刷新
-    /// - 非 Hero Agent（强盗/NPC等）无绑定，查询返回 null → 走模板回退
-    /// - InstanceId 为 null 时，GetAffixDamageMultiplier 内置模板回退逻辑，不会崩溃
+    /// 关键规则：
+    /// - 战斗实例识别只允许走 ItemModifier → InstanceId 或 Hero BindingMap。
+    /// - 不再使用 BaseItemId 回退，以避免同模板不同实例串词缀。
+    /// - Agent 装备槽重新绑定时会清理已经失效的槽位缓存。
     /// </summary>
     public class AffixMissionBehavior : MissionLogic
     {
-        /// <summary>
-        /// Agent.Index → AgentAffixContext 缓存。
-        /// static 是因为 NewDamageModel 需要通过静态方法访问。
-        /// </summary>
         private static readonly Dictionary<int, AgentAffixContext> _agentAffixCache
             = new Dictionary<int, AgentAffixContext>();
 
-        // ========== 公开查询接口（供 NewDamageModel 使用） ==========
-
-        /// <summary>
-        /// 根据 Agent 和装备槽获取词缀物品的 InstanceId。
-        /// 未绑定时返回 null，调用方应回退到模板查找。
-        /// </summary>
         public static string? GetAgentWeaponInstanceId(Agent? agent, EquipmentIndex slot)
         {
             if (agent == null) return null;
@@ -45,13 +35,6 @@ namespace New_ZZZF
             return null;
         }
 
-        // ========== MissionLogic 生命周期 ==========
-
-        /// <summary>
-        /// OnAgentCreated 在 InitializeSpawnEquipment 之前触发，
-        /// 此时 agent.SpawnEquipment 为 null（详见 Mission.SpawnAgent 时序）。
-        /// 因此只做基础过滤，将装备槽绑定延迟到 OnAgentBuild。
-        /// </summary>
         public override void OnAgentCreated(Agent agent)
         {
             base.OnAgentCreated(agent);
@@ -59,26 +42,18 @@ namespace New_ZZZF
             if (!agent.IsHuman || agent.IsMount)
                 return;
 
-            // SpawnEquipment 此时尚未初始化，仅注册空上下文占位
             if (agent.SpawnEquipment == null)
             {
-                var ctx = new AgentAffixContext();
                 lock (_agentAffixCache)
                 {
-                    _agentAffixCache[agent.Index] = ctx;
+                    _agentAffixCache[agent.Index] = new AgentAffixContext();
                 }
                 return;
             }
 
-            // 如果 SpawnEquipment 已可用（极少情况），走完整绑定
             BindAgentEquipmentSlots(agent);
         }
 
-        /// <summary>
-        /// OnAgentBuild 在 InitializeSpawnEquipment 之后触发，
-        /// 此时 SpawnEquipment 已完整可用。
-        /// 对已在 OnAgentCreated 中注册了空上下文的 agent 进行装备槽绑定。
-        /// </summary>
         public override void OnAgentBuild(Agent agent, Banner banner)
         {
             base.OnAgentBuild(agent, banner);
@@ -89,10 +64,6 @@ namespace New_ZZZF
             BindAgentEquipmentSlots(agent);
         }
 
-        /// <summary>
-        /// 遍历 Agent 的 SpawnEquipment 全部槽位（武器+护甲+马匹），为词缀物品绑定 InstanceId。
-        /// 空上下文或非 Hero 的绑定结果存储在 _agentAffixCache 中。
-        /// </summary>
         private void BindAgentEquipmentSlots(Agent agent)
         {
             var campaignBehavior = AffixCampaignBehavior.Current;
@@ -106,23 +77,25 @@ namespace New_ZZZF
                     ctx = new AgentAffixContext();
             }
 
-            if (hero != null && campaignBehavior != null)
+            for (int i = 0; i <= (int)EquipmentIndex.HorseHarness; i++)
             {
-                // 遍历全部装备槽位：Weapon0~Weapon3 + ExtraWeaponSlot + Head/Body/Leg/Gloves/Cape + Horse/HorseHarness
-                for (int i = 0; i <= (int)EquipmentIndex.HorseHarness; i++)
-                {
-                    var slot = (EquipmentIndex)i;
-                    var element = agent.SpawnEquipment[slot];
+                var slot = (EquipmentIndex)i;
+                var element = agent.SpawnEquipment[slot];
 
-                    if (element.IsEmpty || element.Item == null)
-                        continue;
+                // 每次重新扫描都先清理该槽位，避免换装后继续使用旧 InstanceId。
+                ctx.SlotToInstanceId.Remove(slot);
 
-                    string? instanceId = ResolveInstanceId(campaignBehavior, hero, slot,
-                        element.Item.StringId);
+                if (element.IsEmpty || element.Item == null)
+                    continue;
 
-                    if (!string.IsNullOrEmpty(instanceId))
-                        ctx.SlotToInstanceId[slot] = instanceId;
-                }
+                string? instanceId = ResolveInstanceId(
+                    campaignBehavior,
+                    hero,
+                    slot,
+                    element);
+
+                if (!string.IsNullOrEmpty(instanceId))
+                    ctx.SlotToInstanceId[slot] = instanceId;
             }
 
             lock (_agentAffixCache)
@@ -132,8 +105,10 @@ namespace New_ZZZF
         }
 
         public override void OnAgentRemoved(
-            Agent affectedAgent, Agent affectorAgent,
-            AgentState agentState, KillingBlow blow)
+            Agent affectedAgent,
+            Agent affectorAgent,
+            AgentState agentState,
+            KillingBlow blow)
         {
             base.OnAgentRemoved(affectedAgent, affectorAgent, agentState, blow);
 
@@ -156,30 +131,55 @@ namespace New_ZZZF
             }
         }
 
-        // ========== 内部工具 ==========
-
         /// <summary>
-        /// 为指定装备槽解析 InstanceId。
-        /// 优先级：BindingMap 精确匹配 → ItemRecordMap 模板匹配 → null
+        /// 精确解析当前 Agent 装备槽对应的 InstanceId。
+        /// 优先级：Agent 当前 ItemModifier → Hero BindingMap → null。
+        /// 不再按 BaseItemId 回退。
         /// </summary>
         private static string? ResolveInstanceId(
             AffixCampaignBehavior behavior,
             Hero hero,
             EquipmentIndex slot,
-            string baseItemId)
+            EquipmentElement element)
         {
-            // 1. 优先从 BindingMap 精确查找
-            var instanceId = behavior.GetEquippedInstanceId(hero, slot);
-            if (!string.IsNullOrEmpty(instanceId))
-                return instanceId;
+            if (element.ItemModifier != null)
+            {
+                string modifierId = element.ItemModifier.StringId;
+                if (!string.IsNullOrEmpty(modifierId))
+                {
+                    if (behavior != null &&
+                        behavior.ModifierToInstanceMap.TryGetValue(
+                            modifierId,
+                            out string? modifierInstanceId) &&
+                        !string.IsNullOrEmpty(modifierInstanceId))
+                    {
+                        return modifierInstanceId;
+                    }
 
-            // 2. 过渡方案：从 ItemRecordMap 按模板ID查找首个匹配
-            //    BindingMap 目前无调用者（待后续装备变化事件接线），
-            //    此回退确保 Hero 装备现在就能查到 InstanceId
-#pragma warning disable CS0618 // 过渡回退
-            var affix = behavior.GetAffixByBaseItemId(baseItemId);
-#pragma warning restore CS0618
-            return affix?.InstanceId;
+                    if (modifierId.StartsWith("zzzf_affix_", System.StringComparison.Ordinal))
+                    {
+                        AffixLifecycleDebugLog.Warn(
+                            $"Mission 装备存在词缀 Modifier 但无法找到 InstanceId: " +
+                            $"modifier={modifierId}, agentSlot={slot}");
+                    }
+                }
+            }
+
+            if (hero != null && behavior != null)
+            {
+                string? boundInstanceId = behavior.GetEquippedInstanceId(hero, slot);
+                if (!string.IsNullOrEmpty(boundInstanceId))
+                {
+                    if (behavior.GetAffixByInstanceId(boundInstanceId) != null)
+                        return boundInstanceId;
+
+                    AffixLifecycleDebugLog.Warn(
+                        $"Hero 装备绑定指向不存在的词缀实例: hero={hero.StringId}, " +
+                        $"slot={slot}, instance={boundInstanceId}");
+                }
+            }
+
+            return null;
         }
     }
 }

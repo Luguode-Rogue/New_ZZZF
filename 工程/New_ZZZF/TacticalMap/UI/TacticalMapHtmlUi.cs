@@ -42,7 +42,9 @@ namespace New_ZZZF.TacticalMap.UI
         public static TacticalMapHtmlUi Instance => _instance.Value;
         public bool IsVisible => _pageOpened && _mode != TacticalMapUiMode.Hidden;
         public TacticalMapUiMode Mode => _mode;
-        public bool IsInteractive => _mode == TacticalMapUiMode.CompactInteractive || _mode == TacticalMapUiMode.FullInteractive;
+
+        // Compact mode is deliberately display-only. Only FullInteractive may own WebView input.
+        public bool IsInteractive => _mode == TacticalMapUiMode.FullInteractive;
 
         private TacticalMapHtmlUi() { }
 
@@ -238,7 +240,7 @@ namespace New_ZZZF.TacticalMap.UI
             if (_controller == null) return;
             if (!_pageOpened && _registered && HtmlUiService.IsReady) OpenForMission();
 
-            // MouseCaptured deliberately leaves keyboard focus with Bannerlord, so N is always consumed by the game-side state machine.
+            // The toggle key is consumed by Bannerlord-side state handling, never by the WebView.
             UpdateToggleKey(dt);
 
             if (!_pageOpened) return;
@@ -288,11 +290,22 @@ namespace New_ZZZF.TacticalMap.UI
         private void ToggleInteractive()
         {
             TacticalMapUiMode before = _mode;
-            if (_mode == TacticalMapUiMode.CompactPassive) _mode = TacticalMapUiMode.CompactInteractive;
-            else if (_mode == TacticalMapUiMode.CompactInteractive) _mode = TacticalMapUiMode.CompactPassive;
-            else if (_mode == TacticalMapUiMode.FullPassive) _mode = TacticalMapUiMode.FullInteractive;
-            else if (_mode == TacticalMapUiMode.FullInteractive) _mode = TacticalMapUiMode.FullPassive;
-            else _mode = TacticalMapUiMode.CompactPassive;
+            switch (_mode)
+            {
+                case TacticalMapUiMode.CompactPassive:
+                    _mode = TacticalMapUiMode.FullInteractive;
+                    break;
+                case TacticalMapUiMode.FullInteractive:
+                case TacticalMapUiMode.FullPassive:
+                    _mode = TacticalMapUiMode.CompactPassive;
+                    break;
+                case TacticalMapUiMode.CompactInteractive:
+                    _mode = TacticalMapUiMode.CompactPassive;
+                    break;
+                default:
+                    _mode = TacticalMapUiMode.CompactPassive;
+                    break;
+            }
             TacticalMapLog.Info("ToggleInteractive: " + before + " -> " + _mode);
             ApplyInputMode();
             PublishState(true);
@@ -303,11 +316,16 @@ namespace New_ZZZF.TacticalMap.UI
             TacticalMapUiMode before = _mode;
             switch (_mode)
             {
-                case TacticalMapUiMode.CompactPassive: _mode = TacticalMapUiMode.FullPassive; break;
-                case TacticalMapUiMode.CompactInteractive: _mode = TacticalMapUiMode.FullInteractive; break;
+                case TacticalMapUiMode.CompactPassive:
+                    _mode = TacticalMapUiMode.FullInteractive;
+                    break;
+                case TacticalMapUiMode.FullInteractive:
                 case TacticalMapUiMode.FullPassive:
-                case TacticalMapUiMode.FullInteractive: _mode = TacticalMapUiMode.Hidden; break;
-                default: _mode = TacticalMapUiMode.CompactPassive; break;
+                    _mode = TacticalMapUiMode.Hidden;
+                    break;
+                default:
+                    _mode = TacticalMapUiMode.CompactPassive;
+                    break;
             }
             TacticalMapLog.Info("AdvanceLongPress: " + before + " -> " + _mode);
             ApplyInputMode();
@@ -317,18 +335,13 @@ namespace New_ZZZF.TacticalMap.UI
         private void SetInteractive(bool interactive)
         {
             TacticalMapUiMode before = _mode;
-            switch (_mode)
+            if (interactive)
             {
-                case TacticalMapUiMode.FullPassive:
-                case TacticalMapUiMode.FullInteractive:
-                    _mode = interactive ? TacticalMapUiMode.FullInteractive : TacticalMapUiMode.FullPassive;
-                    break;
-                case TacticalMapUiMode.Hidden:
-                    _mode = interactive ? TacticalMapUiMode.CompactInteractive : TacticalMapUiMode.CompactPassive;
-                    break;
-                default:
-                    _mode = interactive ? TacticalMapUiMode.CompactInteractive : TacticalMapUiMode.CompactPassive;
-                    break;
+                _mode = TacticalMapUiMode.FullInteractive;
+            }
+            else
+            {
+                _mode = TacticalMapUiMode.CompactPassive;
             }
             TacticalMapLog.Info("SetInteractive(" + interactive + "): " + before + " -> " + _mode);
             ApplyInputMode();
@@ -344,15 +357,15 @@ namespace New_ZZZF.TacticalMap.UI
                     HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden);
                     TacticalMapLog.Info("InputMode=Hidden, Mode=" + _mode);
                 }
-                else if (IsInteractive)
+                else if (_mode == TacticalMapUiMode.FullInteractive)
                 {
-                    HtmlUiMouseCapture.Capture();
-                    TacticalMapLog.Info("InputMode=MouseCaptured, Mode=" + _mode);
+                    HtmlUiService.SetInputMode(HtmlUiInputMode.MouseCaptured);
+                    TacticalMapLog.Info("InputMode=MouseCaptured, Mode=FullInteractive");
                 }
                 else
                 {
                     HtmlUiService.SetInputMode(HtmlUiInputMode.Passive);
-                    TacticalMapLog.Info("InputMode=Passive, Mode=" + _mode);
+                    TacticalMapLog.Info("InputMode=Passive, Mode=" + _mode + ". Compact map is display-only.");
                 }
             }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMap HtmlUI input mode change failed.", ex); }
