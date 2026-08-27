@@ -34,8 +34,9 @@ namespace New_ZZZF.TacticalMap.Tracking
             Vec2 playerFacing = Vec2.Zero;
             if (mainAgent != null)
             {
-                float angle = mainAgent.LookDirectionAsAngle;
-                playerFacing = new Vec2((float)Math.Cos(angle), (float)Math.Sin(angle));
+                playerFacing = mainAgent.LookDirection.AsVec2;
+                if (playerFacing.LengthSquared > 1E-4f)
+                    playerFacing = playerFacing.Normalized();
             }
 
             var playerTeam = mission.PlayerTeam;
@@ -87,6 +88,8 @@ namespace New_ZZZF.TacticalMap.Tracking
                         Vec2 order = snap.OrderPosition;
                         Vec2 deltaFromPlayer = playerWorld.HasValue ? pos - playerWorld.Value : Vec2.Zero;
                         Vec2 deltaToOrder = snap.HasOrder ? order - pos : Vec2.Zero;
+                        Vec2 displayFacing = new Vec2(-snap.Facing.X, snap.Facing.Y);
+                        Vec2 playerDisplayFacing = new Vec2(-playerFacing.X, playerFacing.Y);
 
                         TacticalMapDirectionLog.Info(
                             "ENEMY_MAP_TRACE " +
@@ -98,11 +101,12 @@ namespace New_ZZZF.TacticalMap.Tracking
                                 : "none") +
                             " currentDirection=(" + currentDirection.X.ToString("F4") + "," + currentDirection.Y.ToString("F4") + ")" +
                             " facing=(" + snap.Facing.X.ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
-                            " displayFacing=(" + (-snap.Facing.X).ToString("F4") + "," + snap.Facing.Y.ToString("F4") + ")" +
+                            " displayFacing=(" + displayFacing.X.ToString("F4") + "," + displayFacing.Y.ToString("F4") + ")" +
                             " playerWorld=" + (playerWorld.HasValue
                                 ? "(" + playerWorld.Value.X.ToString("F2") + "," + playerWorld.Value.Y.ToString("F2") + ")"
                                 : "none") +
-                            " playerFacing=(" + playerFacing.X.ToString("F4") + "," + playerFacing.Y.ToString("F4") + ")" +
+                            " playerFacingRaw=(" + playerFacing.X.ToString("F4") + "," + playerFacing.Y.ToString("F4") + ")" +
+                            " playerFacingDisplay=(" + playerDisplayFacing.X.ToString("F4") + "," + playerDisplayFacing.Y.ToString("F4") + ")" +
                             " deltaPlayer=(" + deltaFromPlayer.X.ToString("F2") + "," + deltaFromPlayer.Y.ToString("F2") + ")" +
                             " deltaOrder=(" + deltaToOrder.X.ToString("F2") + "," + deltaToOrder.Y.ToString("F2") + ")");
                     }
