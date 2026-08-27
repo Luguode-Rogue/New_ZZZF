@@ -158,6 +158,8 @@ namespace New_ZZZF.TacticalMap.Terrain
                                  BodyFlags.Dynamic |
                                  BodyFlags.Moveable |
                                  BodyFlags.DynamicConvexHull |
+                                 BodyFlags.Ladder |
+                                 BodyFlags.HasSteps |
                                  BodyFlags.Ragdoll |
                                  BodyFlags.RagdollLimiter |
                                  BodyFlags.DroppedItem |
