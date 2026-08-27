@@ -13,9 +13,9 @@ using New_ZZZF.TacticalMap.Diagnostics;
 namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
-    /// 在战斗开局把 Scene 地形烘焙成一张低分辨率战术栅格。
-    /// Scene 级缓存会复用已经采样/分类完成的数据，避免同一 Scene 重复调用引擎地形 API。
-    /// 所有坐标约定：uv(0..1) -> 世界 (OriginX + uv.X*WorldW, OriginY + uv.Y*WorldH)。
+    /// Bakes the battlefield terrain into a compact tactical grid.
+    /// The baked data is deliberately centered on gameplay geometry: elevation, relief, slope,
+    /// movement difficulty and terrain breaks.
     /// </summary>
     public sealed class TerrainCache
     {
@@ -33,7 +33,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             public float MaxH;
             public CellSnapshot[] Cells;
             public byte[] TerrainBaseRGBA;
-            public byte[] RiskRGBA;
+            public byte[] TacticalRGBA;
         }
 
         private struct CellSnapshot
@@ -42,7 +42,10 @@ namespace New_ZZZF.TacticalMap.Terrain
             public Vec3 Normal;
             public float Slope;
             public TerrainKind Kind;
-            public float Risk;
+            public float MovementCost;
+            public float RelativeHeight;
+            public float HighGround;
+            public float HeightBreak;
             public bool IsForest;
             public bool IsCliff;
             public bool IsWater;
@@ -63,7 +66,12 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         public TerrainCell[,] Cells { get; private set; }
         public byte[] TerrainBaseRGBA { get; private set; }
-        public byte[] RiskRGBA { get; private set; }
+        public byte[] TacticalRGBA { get; private set; }
+
+        // Compatibility surface for old HTML state consumers.
+        public byte[] RiskRGBA => TacticalRGBA;
+
+        // Kept for legacy code paths; HTMLUI now derives agent points from AgentSnapshots.
         public byte[] AgentRGBA { get; private set; }
 
         private readonly TacticalMap.Config.TacticalSettings _settings;
@@ -194,9 +202,9 @@ namespace New_ZZZF.TacticalMap.Terrain
 
                 var rgbaWatch = Stopwatch.StartNew();
                 BuildBaseRGBA();
-                BuildRiskRGBA();
+                BuildTacticalRGBA();
                 rgbaWatch.Stop();
-                TacticalMapLog.Info("Terrain RGBA build completed in " + rgbaWatch.ElapsedMilliseconds + " ms. TerrainBytes=" + (TerrainBaseRGBA == null ? 0 : TerrainBaseRGBA.Length) + ", RiskBytes=" + (RiskRGBA == null ? 0 : RiskRGBA.Length));
+                TacticalMapLog.Info("Tactical terrain RGBA build completed in " + rgbaWatch.ElapsedMilliseconds + " ms. TerrainBytes=" + (TerrainBaseRGBA == null ? 0 : TerrainBaseRGBA.Length) + ", TacticalBytes=" + (TacticalRGBA == null ? 0 : TacticalRGBA.Length));
 
                 AgentRGBA = new byte[Width * Height * 4];
                 _baked = true;
@@ -237,6 +245,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                 hash = hash * 31 + _settings.CliffSlopeThreshold.GetHashCode();
                 hash = hash * 31 + _settings.CliffHeightJump.GetHashCode();
                 hash = hash * 31 + _settings.WaterHeightFraction.GetHashCode();
+                hash = hash * 31 + _settings.HighGroundReferenceHeight.GetHashCode();
                 var forestMaterials = _settings.ForestMaterialIndices;
                 if (forestMaterials != null)
                 {
@@ -264,7 +273,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                 MaxH = MaxH,
                 Cells = new CellSnapshot[Width * Height],
                 TerrainBaseRGBA = TerrainBaseRGBA == null ? null : (byte[])TerrainBaseRGBA.Clone(),
-                RiskRGBA = RiskRGBA == null ? null : (byte[])RiskRGBA.Clone()
+                TacticalRGBA = TacticalRGBA == null ? null : (byte[])TacticalRGBA.Clone()
             };
 
             int index = 0;
@@ -272,14 +281,17 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    var c = Cells[x, y];
+                    TerrainCell c = Cells[x, y];
                     snapshot.Cells[index++] = new CellSnapshot
                     {
                         Height = c.Height,
                         Normal = c.Normal,
                         Slope = c.Slope,
                         Kind = c.Kind,
-                        Risk = c.Risk,
+                        MovementCost = c.MovementCost,
+                        RelativeHeight = c.RelativeHeight,
+                        HighGround = c.HighGround,
+                        HeightBreak = c.HeightBreak,
                         IsForest = c.IsForest,
                         IsCliff = c.IsCliff,
                         IsWater = c.IsWater
@@ -311,14 +323,18 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    var c = cached.Cells[index++];
+                    CellSnapshot c = cached.Cells[index++];
                     Cells[x, y] = new TerrainCell
                     {
                         Height = c.Height,
                         Normal = c.Normal,
                         Slope = c.Slope,
                         Kind = c.Kind,
-                        Risk = c.Risk,
+                        MovementCost = c.MovementCost,
+                        RelativeHeight = c.RelativeHeight,
+                        HighGround = c.HighGround,
+                        HeightBreak = c.HeightBreak,
+                        Risk = c.MovementCost,
                         IsForest = c.IsForest,
                         IsCliff = c.IsCliff,
                         IsWater = c.IsWater,
@@ -329,7 +345,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             }
 
             TerrainBaseRGBA = cached.TerrainBaseRGBA == null ? null : (byte[])cached.TerrainBaseRGBA.Clone();
-            RiskRGBA = cached.RiskRGBA == null ? null : (byte[])cached.RiskRGBA.Clone();
+            TacticalRGBA = cached.TacticalRGBA == null ? null : (byte[])cached.TacticalRGBA.Clone();
             AgentRGBA = new byte[Width * Height * 4];
             _baked = true;
             LastError = null;
@@ -406,43 +422,103 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    var c = Cells[x, y];
-                    float t = (c.Height - MinH) / range;
-                    byte r, g, b;
-                    if (t < 0.5f)
+                    TerrainCell c = Cells[x, y];
+                    float elevation = Clamp01((c.Height - MinH) / range);
+                    float elevationBand = elevation < 0.5f
+                        ? elevation / 0.5f
+                        : 0.5f + (elevation - 0.5f) / 0.5f;
+
+                    byte r = (byte)(52 + elevationBand * 140f);
+                    byte g = (byte)(82 + elevationBand * 118f);
+                    byte b = (byte)(54 + elevationBand * 125f);
+
+                    float light = Clamp(c.Normal.x * -0.45f + c.Normal.y * -0.15f + c.Normal.z * 0.92f, 0f, 1f);
+                    float shade = 0.72f + light * 0.42f;
+                    r = ScaleByte(r, shade);
+                    g = ScaleByte(g, shade);
+                    b = ScaleByte(b, shade);
+
+                    if (c.IsWater)
                     {
-                        float k = t / 0.5f;
-                        r = (byte)(60 + k * 60); g = (byte)(120 + k * (-10)); b = (byte)(40 + k * 30);
+                        r = ScaleByte(r, 0.45f);
+                        g = ScaleByte(g, 0.65f);
+                        b = ScaleByte((byte)Math.Max(90, b), 1.25f);
                     }
-                    else
+                    else if (c.IsForest)
                     {
-                        float k = (t - 0.5f) / 0.5f;
-                        r = (byte)(120 + k * 115); g = (byte)(110 + k * 125); b = (byte)(70 + k * 165);
+                        r = ScaleByte(r, 0.55f);
+                        g = ScaleByte(g, 0.82f);
+                        b = ScaleByte(b, 0.55f);
+                    }
+                    else if (c.IsCliff)
+                    {
+                        r = ScaleByte((byte)Math.Min(255, r + 26), 0.9f);
+                        g = ScaleByte(g, 0.55f);
+                        b = ScaleByte(b, 0.55f);
                     }
 
-                    if (c.IsWater) { r = 40; g = 90; b = 200; }
-                    else if (c.IsForest) { r = (byte)(r * 0.6f); g = (byte)(g * 0.85f); b = (byte)(b * 0.6f); }
-                    else if (c.IsCliff) { r = (byte)(r * 0.9f + 40); g = (byte)(g * 0.5f); b = (byte)(b * 0.5f); }
+                    // Rough contour lines make elevation changes readable without depending on color alone.
+                    float contourInterval = Math.Max(0.5f, range / 12f);
+                    float phase = Math.Abs((c.Height / contourInterval) - (float)Math.Round(c.Height / contourInterval));
+                    if (phase < 0.045f)
+                    {
+                        r = ScaleByte(r, 0.68f);
+                        g = ScaleByte(g, 0.68f);
+                        b = ScaleByte(b, 0.68f);
+                    }
 
                     SetPixel(TerrainBaseRGBA, x, y, r, g, b, 255);
                 }
             }
         }
 
-        private void BuildRiskRGBA()
+        private void BuildTacticalRGBA()
         {
-            RiskRGBA = new byte[Width * Height * 4];
+            TacticalRGBA = new byte[Width * Height * 4];
             for (int x = 0; x < Width; x++)
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    var c = Cells[x, y];
-                    if (c.IsCliff) SetPixel(RiskRGBA, x, y, 210, 50, 50, 150);
-                    else if (c.IsWater) SetPixel(RiskRGBA, x, y, 50, 110, 220, 140);
-                    else if (c.IsForest) SetPixel(RiskRGBA, x, y, 50, 180, 70, 100);
-                    else SetPixel(RiskRGBA, x, y, 0, 0, 0, 0);
+                    TerrainCell c = Cells[x, y];
+                    if (c.IsCliff)
+                    {
+                        SetPixel(TacticalRGBA, x, y, 235, 70, 55, 205);
+                    }
+                    else if (c.IsWater)
+                    {
+                        SetPixel(TacticalRGBA, x, y, 40, 110, 230, 185);
+                    }
+                    else
+                    {
+                        // Red: movement difficulty. Cyan: locally advantageous high ground.
+                        float difficulty = c.MovementCost;
+                        float high = c.HighGround;
+                        byte r = (byte)(210f * difficulty);
+                        byte g = (byte)(110f * (1f - difficulty) + 80f * high);
+                        byte b = (byte)(105f + 125f * high);
+                        byte a = (byte)(Math.Max(0f, difficulty * 155f + high * 70f));
+                        if (a < 12) a = 0;
+                        SetPixel(TacticalRGBA, x, y, r, g, b, a);
+                    }
                 }
             }
+        }
+
+        private static byte ScaleByte(byte value, float factor)
+        {
+            return (byte)Clamp(value * factor, 0f, 255f);
+        }
+
+        private static float Clamp01(float value)
+        {
+            return Clamp(value, 0f, 1f);
+        }
+
+        private static float Clamp(float value, float min, float max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
         }
 
         public void SetPixel(byte[] buf, int x, int y, byte r, byte g, byte b, byte a)
