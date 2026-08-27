@@ -17,7 +17,6 @@
   let tacticalCanvas = null;
   let selectedFormation = -1;
   let rafPending = false;
-  let lastRuntimeLogSignature = null;
 
   function clientLog(message) {
     try { app.call('clientLog', { message }); } catch (_) {}
@@ -35,10 +34,7 @@
     try {
       const binary = atob(base64);
       const expected = width * height * 4;
-      if (binary.length !== expected) {
-        clientLog('decodeImage length mismatch got=' + binary.length + ' expected=' + expected);
-        return null;
-      }
+      if (binary.length !== expected) return null;
       const bytes = new Uint8ClampedArray(expected);
       for (let i = 0; i < expected; i++) bytes[i] = binary.charCodeAt(i);
       const source = document.createElement('canvas');
@@ -46,10 +42,7 @@
       source.height = height;
       source.getContext('2d').putImageData(new ImageData(bytes, width, height), 0, 0);
       return source;
-    } catch (error) {
-      clientLog('decodeImage exception ' + (error?.message || error));
-      return null;
-    }
+    } catch (_) { return null; }
   }
 
   function scheduleRender() {
@@ -69,15 +62,10 @@
 
   function applyRuntime(state) {
     runtimeState = state || null;
-    const signature = [state?.mode || '<null>', !!state?.interactive, !!state?.visible].join('|');
-    if (signature !== lastRuntimeLogSignature) {
-      lastRuntimeLogSignature = signature;
-      clientLog('state.runtime changed mode=' + (state?.mode || '<null>') + ' interactive=' + !!state?.interactive + ' visible=' + !!state?.visible);
-    }
-
+    const formations = state?.formations || [];
     if (state?.selectedFormation) {
-      selectedFormation = (state.formations || []).findIndex(f => f.player && f.name === state.selectedFormation);
-    } else if (selectedFormation >= (state?.formations || []).length) {
+      selectedFormation = formations.findIndex(f => f.player && f.name === state.selectedFormation);
+    } else if (selectedFormation >= formations.length) {
       selectedFormation = -1;
     }
     updateChrome();
@@ -90,19 +78,14 @@
     const mode = runtimeState?.mode || 'CompactPassive';
     const className = 'map-shell mode-' + mode.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
     if (root.className !== className) root.className = className;
-    const visible = !!runtimeState?.visible;
-    root.setAttribute('aria-hidden', visible ? 'false' : 'true');
-    modeLabel.textContent = ({
-      CompactPassive:'观察', CompactInteractive:'操作',
-      FullPassive:'观察', FullInteractive:'战术操作', Hidden:'隐藏'
-    })[mode] || mode;
-    if (!visible) statusText.textContent = 'TacticalMap · 隐藏';
-    else if (!staticState?.baked) statusText.textContent = 'TacticalMap · 地形不可用：' + (staticState?.error || 'unknown');
-    else if (!terrainCanvas) statusText.textContent = 'TacticalMap · 地形底图解码失败';
-    else statusText.textContent = 'TacticalMap · ' + (modeLabel.textContent || mode);
+    root.setAttribute('aria-hidden', 'false');
+    modeLabel.textContent = mode === 'FullInteractive' ? '战术操作' : '观察';
+    statusText.textContent = staticState?.baked
+      ? 'TacticalMap · ' + (modeLabel.textContent || mode)
+      : 'TacticalMap · 地形不可用：' + (staticState?.error || 'unknown');
     hint.textContent = runtimeState?.interactive
-      ? '左键：移动　中键：镜头　右键：朝向　ESC：退出操作　N：切换操作　N 长按：全屏 / 隐藏'
-      : 'N 短按：操作　N 长按：全屏 / 隐藏';
+      ? '左键：移动　中键：镜头　右键：朝向　ESC：退出大图操作'
+      : '被动小图　进入操作大图后可下达移动、镜头与朝向命令';
   }
 
   function escapeHtml(value) {
@@ -199,29 +182,21 @@
     ctx.strokeStyle = color;
     ctx.globalAlpha = .72;
     ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    ctx.moveTo(px, py);
-    ctx.lineTo(ox, oy);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox, oy); ctx.stroke();
     ctx.restore();
     drawArrow(ox - dx * .04, oy - dy * .04, dx, dy, 7, color, 1.1);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
     ctx.strokeRect(ox - 3, oy - 3, 6, 6);
   }
 
   function drawMarkers(x, y, w, h) {
     const s = runtimeState;
     if (!s) return;
-
     (s.formations || []).forEach((f, index) => {
       const px = x + f.u * w, py = y + f.v * h;
       const selected = index === selectedFormation;
       const stroke = f.enemy ? '#ff4c4c' : '#4ade80';
-      if (f.hasOrder) {
-        const ox = x + f.orderU * w, oy = y + f.orderV * h;
-        drawOrderLine(px, py, ox, oy, selected ? '#ffe69a' : stroke);
-      }
+      if (f.hasOrder) drawOrderLine(px, py, x + f.orderU * w, y + f.orderV * h, selected ? '#ffe69a' : stroke);
       const size = Math.max(8, Math.min(17, 8 + Math.sqrt(Math.max(1, Number(f.count || 1))) * .45));
       ctx.strokeStyle = selected ? '#ffe69a' : stroke;
       ctx.lineWidth = selected ? 2.4 : 1.5;
@@ -232,36 +207,23 @@
       drawArrow(px, py, Number(f.facingU || 0), Number(f.facingV || 0), size + 5, selected ? '#ffe69a' : stroke, 1.2);
     });
 
-    // Individual agents are only sent by the game side inside AgentDetailDistance.
     (s.agents || []).forEach(agent => {
       const px = x + agent.u * w, py = y + agent.v * h;
       ctx.fillStyle = agent.neutral ? '#b8bec4' : (agent.player ? '#28dbea' : '#ff3030');
-      ctx.beginPath();
-      ctx.arc(px, py, 2.2, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(px, py, 2.2, 0, Math.PI * 2); ctx.fill();
     });
 
     if (s.cameraTarget) {
       const px = x + s.cameraTarget.u * w, py = y + s.cameraTarget.v * h;
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.rotate(Math.PI / 4);
-      ctx.fillStyle = '#ff9d32';
-      ctx.fillRect(-6, -6, 12, 12);
-      ctx.restore();
+      ctx.save(); ctx.translate(px, py); ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = '#ff9d32'; ctx.fillRect(-6, -6, 12, 12); ctx.restore();
     }
 
     if (s.player) {
       const px = x + s.player.u * w, py = y + s.player.v * h;
-      ctx.strokeStyle = '#28dbea';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(px, py, 8, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = '#ffd43b';
-      ctx.beginPath();
-      ctx.arc(px, py, 4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.strokeStyle = '#28dbea'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#ffd43b'; ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
       drawArrow(px, py, Number(s.player.facingU || 0), Number(s.player.facingV || 0), 18, '#ffd43b', 1.5);
     }
   }
