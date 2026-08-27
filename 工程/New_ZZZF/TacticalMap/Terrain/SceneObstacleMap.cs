@@ -42,7 +42,6 @@ namespace New_ZZZF.TacticalMap.Terrain
                     Buffer.BlockCopy(baseline.TerrainBase, 0, cache.TerrainBaseRGBA, 0, baseline.TerrainBase.Length);
                 }
 
-                // Restore the semantic terrain first. Obstacle classification is applied on top.
                 int obstacleCells = 0;
                 int obstacleEntities = 0;
                 List<GameEntity> entities = new List<GameEntity>();
@@ -53,9 +52,8 @@ namespace New_ZZZF.TacticalMap.Terrain
                     GameEntity entity = entities[i];
                     if (entity == null) continue;
 
-                    // Only mesh-bearing entities are useful as visual/physical obstacles.
-                    // This excludes most helper/path entities while retaining village buildings,
-                    // fences, walls, gates, rocks and other authored geometry.
+                    // Keep authored/static mesh geometry. Dynamic helper entities and agents are
+                    // intentionally left to the formation/agent tracking layer.
                     if (entity.GetFirstMesh() == null) continue;
 
                     Vec3 bbMin;
@@ -67,13 +65,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     }
                     catch
                     {
-                        try
-                        {
-                            var bb = entity.GetGlobalBoundingBox();
-                            bbMin = bb.min;
-                            bbMax = bb.max;
-                        }
-                        catch { continue; }
+                        continue;
                     }
 
                     if (!bbMin.IsValid || !bbMax.IsValid) continue;
@@ -83,8 +75,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     float depth = bbMax.Y - bbMin.Y;
                     float height = bbMax.Z - bbMin.Z;
 
-                    // Ignore terrain-scale/global helper meshes. Ordinary village structures,
-                    // fences, walls, props and rocks stay well below these limits.
+                    // Skip terrain-scale/global meshes and insignificant fragments.
                     if (width > cache.WorldW * 0.55f || depth > cache.WorldH * 0.55f) continue;
                     if (width < 0.18f && depth < 0.18f) continue;
                     if (height < 0.18f) continue;
@@ -106,15 +97,12 @@ namespace New_ZZZF.TacticalMap.Terrain
                         for (int y = minY; y <= maxY; y++)
                         {
                             var cell = cache.Cells[x, y];
-
-                            // Do not paint terrain outside the authored obstacle footprint just because
-                            // a very tall object has a large Z range; only XY footprint is relevant here.
                             cell.Kind = TerrainKind.Wall;
                             cell.MovementCost = 1f;
                             cell.Risk = 1f;
                             cache.SetPixel(cache.TerrainBaseRGBA, x, y, 38, 36, 32, 255);
 
-                            // A one-cell edge highlight makes thin fences/walls survive the low-resolution map.
+                            // Keep thin fences/walls readable at low map resolution.
                             bool edge = x == minX || x == maxX || y == minY || y == maxY;
                             if (edge)
                                 cache.SetPixel(cache.TerrainBaseRGBA, x, y, 68, 63, 52, 255);
