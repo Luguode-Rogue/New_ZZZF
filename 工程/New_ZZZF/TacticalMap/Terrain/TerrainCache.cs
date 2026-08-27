@@ -12,11 +12,6 @@ using New_ZZZF.TacticalMap.Diagnostics;
 
 namespace New_ZZZF.TacticalMap.Terrain
 {
-    /// <summary>
-    /// Bakes the battlefield terrain into a compact tactical grid.
-    /// The baked data is deliberately centered on gameplay geometry: elevation, relief, slope,
-    /// movement difficulty and terrain breaks.
-    /// </summary>
     public sealed class TerrainCache
     {
         private sealed class CachedBake
@@ -41,14 +36,15 @@ namespace New_ZZZF.TacticalMap.Terrain
             public float Height;
             public Vec3 Normal;
             public float Slope;
-            public TerrainKind Kind;
-            public float MovementCost;
             public float RelativeHeight;
-            public float HighGround;
+            public float MovementCost;
             public float HeightBreak;
+            public TerrainKind Kind;
+            public float Risk;
             public bool IsForest;
             public bool IsCliff;
             public bool IsWater;
+            public bool IsHighGround;
         }
 
         private static readonly ConditionalWeakTable<Scene, CachedBake> SceneBakeCache =
@@ -67,11 +63,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         public TerrainCell[,] Cells { get; private set; }
         public byte[] TerrainBaseRGBA { get; private set; }
         public byte[] TacticalRGBA { get; private set; }
-
-        // Compatibility surface for old HTML state consumers.
         public byte[] RiskRGBA => TacticalRGBA;
-
-        // Kept for legacy code paths; HTMLUI now derives agent points from AgentSnapshots.
         public byte[] AgentRGBA { get; private set; }
 
         private readonly TacticalMap.Config.TacticalSettings _settings;
@@ -88,17 +80,10 @@ namespace New_ZZZF.TacticalMap.Terrain
         public bool TryBake(Scene scene)
         {
             var watch = Stopwatch.StartNew();
-            TacticalMapLog.Section("TERRAIN BAKE");
-            string assemblyPath = typeof(TerrainCache).Assembly.Location;
-            TacticalMapLog.Info(
-                "BuildFingerprint: Assembly=" + typeof(TerrainCache).Assembly.FullName
-                + ", LastWriteUtc=" + (string.IsNullOrWhiteSpace(assemblyPath) ? "<unknown>" : File.GetLastWriteTimeUtc(assemblyPath).ToString("O")));
-            TacticalMapLog.Info("TryBake entered. Scene=" + (scene == null ? "null" : scene.GetType().FullName));
             _scene = scene;
             if (scene == null)
             {
                 LastError = "scene 为 null";
-                TacticalMapLog.Warn("Terrain bake aborted: scene is null.");
                 return false;
             }
 
@@ -106,30 +91,25 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 LastError = "当前场景无地形数据（酒馆/城镇等室内场景）";
                 _baked = false;
-                TacticalMapLog.Warn("Terrain bake aborted: scene terrain is not ready.");
                 return false;
             }
 
             try
             {
                 scene.GetTerrainData(out Vec2i nodeDim, out float nodeSize, out _, out _);
-                TacticalMapLog.Info("TerrainData: nodeDim=" + nodeDim.X + "x" + nodeDim.Y + ", nodeSize=" + nodeSize);
                 if (nodeDim.X <= 0 || nodeDim.Y <= 0 || nodeSize <= 0f)
                 {
                     LastError = "地形数据无效(nodeDim/nodeSize)";
-                    TacticalMapLog.Warn("Terrain data invalid.");
                     return false;
                 }
 
                 if (!scene.GetTerrainMinMaxHeight(out float minH, out float maxH))
                 {
                     LastError = "GetTerrainMinMaxHeight 失败";
-                    TacticalMapLog.Warn("GetTerrainMinMaxHeight failed.");
                     return false;
                 }
                 MinH = minH;
                 MaxH = maxH;
-                TacticalMapLog.Info("Terrain height range: min=" + minH + ", max=" + maxH);
 
                 float fullWorldW = nodeDim.X * nodeSize;
                 float fullWorldH = nodeDim.Y * nodeSize;
@@ -137,11 +117,6 @@ namespace New_ZZZF.TacticalMap.Terrain
                 {
                     battleMin = Vec2.Zero;
                     battleMax = new Vec2(fullWorldW, fullWorldH);
-                    TacticalMapLog.Warn("Battle bounds fallback to full terrain bounds.");
-                }
-                else
-                {
-                    TacticalMapLog.Info("Battle bounds: min=(" + battleMin.X + "," + battleMin.Y + ") max=(" + battleMax.X + "," + battleMax.Y + ")");
                 }
 
                 int res = Math.Max(1, _settings.BakeResolution);
@@ -162,12 +137,8 @@ namespace New_ZZZF.TacticalMap.Terrain
                     return true;
                 }
 
-                TacticalMapLog.Info("Bake resolution=" + Width + "x" + Height + ", world=" + WorldW + "x" + WorldH + ", cellStep=" + CellStep);
-
                 Cells = new TerrainCell[Width, Height];
                 float[,] heights = new float[Width, Height];
-                var sampleWatch = Stopwatch.StartNew();
-
                 for (int x = 0; x < Width; x++)
                 {
                     for (int y = 0; y < Height; y++)
@@ -192,26 +163,14 @@ namespace New_ZZZF.TacticalMap.Terrain
                     }
                 }
 
-                sampleWatch.Stop();
-                TacticalMapLog.Info("Terrain samples completed in " + sampleWatch.ElapsedMilliseconds + " ms.");
-
-                var classifyWatch = Stopwatch.StartNew();
                 TerrainAnalyzer.ClassifyAll(this, heights, _settings);
-                classifyWatch.Stop();
-                TacticalMapLog.Info("TerrainAnalyzer.ClassifyAll completed in " + classifyWatch.ElapsedMilliseconds + " ms. Cells=" + (Width * Height));
-
-                var rgbaWatch = Stopwatch.StartNew();
                 BuildBaseRGBA();
                 BuildTacticalRGBA();
-                rgbaWatch.Stop();
-                TacticalMapLog.Info("Tactical terrain RGBA build completed in " + rgbaWatch.ElapsedMilliseconds + " ms. TerrainBytes=" + (TerrainBaseRGBA == null ? 0 : TerrainBaseRGBA.Length) + ", TacticalBytes=" + (TacticalRGBA == null ? 0 : TacticalRGBA.Length));
 
                 AgentRGBA = new byte[Width * Height * 4];
                 _baked = true;
                 LastError = null;
-
                 StoreCachedBake(scene, cacheSignature);
-
                 watch.Stop();
                 TacticalMapLog.Info("Terrain bake SUCCESS. Total=" + watch.ElapsedMilliseconds + " ms.");
                 return true;
@@ -281,27 +240,27 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    TerrainCell c = Cells[x, y];
+                    var c = Cells[x, y];
                     snapshot.Cells[index++] = new CellSnapshot
                     {
                         Height = c.Height,
                         Normal = c.Normal,
                         Slope = c.Slope,
-                        Kind = c.Kind,
-                        MovementCost = c.MovementCost,
                         RelativeHeight = c.RelativeHeight,
-                        HighGround = c.HighGround,
+                        MovementCost = c.MovementCost,
                         HeightBreak = c.HeightBreak,
+                        Kind = c.Kind,
+                        Risk = c.Risk,
                         IsForest = c.IsForest,
                         IsCliff = c.IsCliff,
-                        IsWater = c.IsWater
+                        IsWater = c.IsWater,
+                        IsHighGround = c.IsHighGround
                     };
                 }
             }
 
             SceneBakeCache.Remove(scene);
             SceneBakeCache.Add(scene, snapshot);
-            TacticalMapLog.Info("Scene terrain cache stored. Signature=" + signature);
         }
 
         private void ApplyCachedBake(CachedBake cached, Scene scene)
@@ -323,21 +282,21 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    CellSnapshot c = cached.Cells[index++];
+                    var c = cached.Cells[index++];
                     Cells[x, y] = new TerrainCell
                     {
                         Height = c.Height,
                         Normal = c.Normal,
                         Slope = c.Slope,
-                        Kind = c.Kind,
-                        MovementCost = c.MovementCost,
                         RelativeHeight = c.RelativeHeight,
-                        HighGround = c.HighGround,
+                        MovementCost = c.MovementCost,
                         HeightBreak = c.HeightBreak,
-                        Risk = c.MovementCost,
+                        Kind = c.Kind,
+                        Risk = c.Risk,
                         IsForest = c.IsForest,
                         IsCliff = c.IsCliff,
                         IsWater = c.IsWater,
+                        IsHighGround = c.IsHighGround,
                         MaterialLayers = new short[0],
                         DensityAgentCount = 0
                     };
@@ -395,7 +354,6 @@ namespace New_ZZZF.TacticalMap.Terrain
                 float my = (maxY - minY) * 0.1f;
                 min = new Vec2(minX - mx, minY - my);
                 max = new Vec2(maxX + mx, maxY + my);
-                TacticalMapLog.Info("ComputeBattleBounds: using soft boundary vertices=" + softCount);
                 return true;
             }
 
@@ -404,13 +362,11 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 min = bbMin.AsVec2;
                 max = bbMax.AsVec2;
-                TacticalMapLog.Info("ComputeBattleBounds: using scene bounding box.");
                 return true;
             }
 
             min = Vec2.Zero;
             max = Vec2.Zero;
-            TacticalMapLog.Warn("ComputeBattleBounds: no usable bounds.");
             return false;
         }
 
@@ -422,12 +378,9 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    TerrainCell c = Cells[x, y];
-                    float elevation = Clamp01((c.Height - MinH) / range);
-                    float elevationBand = elevation < 0.5f
-                        ? elevation / 0.5f
-                        : 0.5f + (elevation - 0.5f) / 0.5f;
-
+                    var c = Cells[x, y];
+                    float elevationBand = (c.Height - MinH) / range;
+                    elevationBand = Clamp(elevationBand, 0f, 1f);
                     byte r = (byte)(52 + elevationBand * 140f);
                     byte g = (byte)(82 + elevationBand * 118f);
                     byte b = (byte)(54 + elevationBand * 125f);
@@ -442,7 +395,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     {
                         r = ScaleByte(r, 0.45f);
                         g = ScaleByte(g, 0.65f);
-                        b = ScaleByte((byte)Math.Max(90, b), 1.25f);
+                        b = ScaleByte((byte)Math.Max(90, (int)b), 1.25f);
                     }
                     else if (c.IsForest)
                     {
@@ -452,19 +405,16 @@ namespace New_ZZZF.TacticalMap.Terrain
                     }
                     else if (c.IsCliff)
                     {
-                        r = ScaleByte((byte)Math.Min(255, r + 26), 0.9f);
+                        r = ScaleByte((byte)Math.Min(255, (int)r + 26), 0.9f);
                         g = ScaleByte(g, 0.55f);
                         b = ScaleByte(b, 0.55f);
                     }
 
-                    // Rough contour lines make elevation changes readable without depending on color alone.
-                    float contourInterval = Math.Max(0.5f, range / 12f);
-                    float phase = Math.Abs((c.Height / contourInterval) - (float)Math.Round(c.Height / contourInterval));
-                    if (phase < 0.045f)
+                    if (c.IsHighGround)
                     {
-                        r = ScaleByte(r, 0.68f);
-                        g = ScaleByte(g, 0.68f);
-                        b = ScaleByte(b, 0.68f);
+                        r = ScaleByte(r, 1.08f);
+                        g = ScaleByte(g, 1.08f);
+                        b = ScaleByte(b, 1.08f);
                     }
 
                     SetPixel(TerrainBaseRGBA, x, y, r, g, b, 255);
@@ -479,39 +429,31 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    TerrainCell c = Cells[x, y];
-                    if (c.IsCliff)
+                    var c = Cells[x, y];
+                    byte alpha = (byte)Math.Min(190, Math.Max(0, (int)(c.MovementCost * 110f)));
+                    byte r = 212, g = 72, b = 52;
+                    if (c.IsHighGround)
                     {
-                        SetPixel(TacticalRGBA, x, y, 235, 70, 55, 205);
+                        r = 255; g = 206; b = 72;
+                        alpha = (byte)Math.Max((int)alpha, 85);
                     }
-                    else if (c.IsWater)
+                    if (c.IsWater)
                     {
-                        SetPixel(TacticalRGBA, x, y, 40, 110, 230, 185);
+                        r = 55; g = 115; b = 220;
+                        alpha = 145;
                     }
-                    else
+                    else if (c.IsForest)
                     {
-                        // Red: movement difficulty. Cyan: locally advantageous high ground.
-                        float difficulty = c.MovementCost;
-                        float high = c.HighGround;
-                        byte r = (byte)(210f * difficulty);
-                        byte g = (byte)(110f * (1f - difficulty) + 80f * high);
-                        byte b = (byte)(105f + 125f * high);
-                        byte a = (byte)(Math.Max(0f, difficulty * 155f + high * 70f));
-                        if (a < 12) a = 0;
-                        SetPixel(TacticalRGBA, x, y, r, g, b, a);
+                        r = 65; g = 190; b = 95;
+                        alpha = (byte)Math.Min(150, Math.Max(60, (int)alpha));
                     }
+                    else if (!c.IsCliff && !c.IsHighGround && c.MovementCost < 0.18f)
+                    {
+                        alpha = 0;
+                    }
+                    SetPixel(TacticalRGBA, x, y, r, g, b, alpha);
                 }
             }
-        }
-
-        private static byte ScaleByte(byte value, float factor)
-        {
-            return (byte)Clamp(value * factor, 0f, 255f);
-        }
-
-        private static float Clamp01(float value)
-        {
-            return Clamp(value, 0f, 1f);
         }
 
         private static float Clamp(float value, float min, float max)
@@ -521,16 +463,15 @@ namespace New_ZZZF.TacticalMap.Terrain
             return value;
         }
 
+        private static byte ScaleByte(byte value, float scale)
+        {
+            return (byte)Math.Max(0, Math.Min(255, (int)(value * scale)));
+        }
+
         public void SetPixel(byte[] buf, int x, int y, byte r, byte g, byte b, byte a)
         {
             int i = (y * Width + x) * 4;
             buf[i] = r; buf[i + 1] = g; buf[i + 2] = b; buf[i + 3] = a;
-        }
-
-        public void GetPixel(byte[] buf, int x, int y, out byte r, out byte g, out byte b, out byte a)
-        {
-            int i = (y * Width + x) * 4;
-            r = buf[i]; g = buf[i + 1]; b = buf[i + 2]; a = buf[i + 3];
         }
 
         public void ClearAgents()
