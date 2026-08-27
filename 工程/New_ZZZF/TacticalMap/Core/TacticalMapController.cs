@@ -70,8 +70,11 @@ namespace New_ZZZF.TacticalMap.Core
             _playerPos = (_mission.MainAgent != null) ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
             if (_mission.MainAgent != null)
             {
-                float angle = _mission.MainAgent.LookDirectionAsAngle;
-                _playerFacing = new Vec2((float)Math.Cos(angle), (float)Math.Sin(angle));
+                // Use the actual engine forward vector. Do not reconstruct it from LookDirectionAsAngle;
+                // the angle's basis is not guaranteed to match the tactical map's XY basis.
+                _playerFacing = _mission.MainAgent.LookDirection.AsVec2;
+                if (_playerFacing.LengthSquared > 1E-4f)
+                    _playerFacing = _playerFacing.Normalized();
             }
 
             _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
