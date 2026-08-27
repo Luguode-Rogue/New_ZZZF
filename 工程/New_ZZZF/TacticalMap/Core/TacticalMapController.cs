@@ -11,15 +11,14 @@ using New_ZZZF.TacticalMap.Tracking;
 namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
-    /// TacticalMap 总控制器：提供地图数据、编队/单位追踪、订单与镜头操作。
-    /// HTMLUI Consumer 负责表现和输入，Controller 不创建任何 WebView2/Gauntlet UI。
+    /// TacticalMap game-side controller. It exposes terrain, formations, agents, orders and camera state.
+    /// HTMLUI owns presentation and input routing; this class never creates UI objects.
     /// </summary>
     public sealed class TacticalMapController
     {
         private readonly Mission _mission;
         private readonly TerrainCache _cache;
         private readonly FormationTracker _formationTracker;
-        private readonly AgentTracker _agentTracker;
         private readonly OrderSystem _orderSystem;
         private bool _visible;
         private float _accum;
@@ -47,7 +46,6 @@ namespace New_ZZZF.TacticalMap.Core
             var settings = TacticalSettings.Instance;
             _cache = new TerrainCache(settings);
             _formationTracker = new FormationTracker();
-            _agentTracker = new AgentTracker(_cache);
             _orderSystem = new OrderSystem(_cache);
             CameraController.Instance = new CameraController();
         }
@@ -72,8 +70,8 @@ namespace New_ZZZF.TacticalMap.Core
             _playerPos = (_mission.MainAgent != null) ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
             if (_mission.MainAgent != null)
             {
-                float af = _mission.MainAgent.LookDirectionAsAngle;
-                _playerFacing = new Vec2((float)Math.Cos(af), (float)Math.Sin(af));
+                float angle = _mission.MainAgent.LookDirectionAsAngle;
+                _playerFacing = new Vec2((float)Math.Cos(angle), (float)Math.Sin(angle));
             }
 
             _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
@@ -93,16 +91,15 @@ namespace New_ZZZF.TacticalMap.Core
 
             _accum = 0f;
             _formationTracker.Update(mission);
-            _agentTracker.Update(mission);
             RebuildAgentSnapshots(mission);
             _agentVersion++;
 
             if (!string.IsNullOrWhiteSpace(_selectedFormationName))
             {
                 bool stillExists = false;
-                foreach (var f in _formationTracker.Snapshots)
+                foreach (var formation in _formationTracker.Snapshots)
                 {
-                    if (f.IsPlayer && string.Equals(f.Name, _selectedFormationName, StringComparison.OrdinalIgnoreCase))
+                    if (formation.IsPlayer && string.Equals(formation.Name, _selectedFormationName, StringComparison.OrdinalIgnoreCase))
                     {
                         stillExists = true;
                         break;

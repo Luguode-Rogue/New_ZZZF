@@ -5,22 +5,25 @@ using TaleWorlds.MountAndBlade;
 namespace New_ZZZF.TacticalMap.Tracking
 {
     /// <summary>
-    /// 单个编队的轻量快照（用于绘制小地图标记）。
+    /// Compact formation state used by the tactical map.
     /// </summary>
     public sealed class FormationSnapshot
     {
         public bool IsPlayer;
-        public bool IsEnemy;        // 相对玩家是否为敌方队伍（用于红/绿框区分）
-        public Vec2 AveragePosition;  // 世界坐标
-        public Vec2 Facing;           // 归一化朝向（无有效朝向时为 0）
+        public bool IsEnemy;
+        public bool IsNeutral;
+        public Vec2 AveragePosition;
+        public Vec2 Facing;
+        public bool HasOrder;
+        public Vec2 OrderPosition;
         public uint Color;
         public int Count;
         public string Name;
     }
 
     /// <summary>
-    /// 每帧（节流）扫描所有队伍的非空编队，生成快照。
-    /// 编队数量通常 ≤ 数十，远小于单位数，因此标记层与单位数无关、对 500v500 零压力。
+    /// Refreshes formation-level situational awareness at a throttled rate.
+    /// The map uses the current order position when available, so the display communicates intent as well as location.
     /// </summary>
     public sealed class FormationTracker
     {
@@ -37,6 +40,7 @@ namespace New_ZZZF.TacticalMap.Tracking
                 if (team == null) continue;
                 bool isPlayer = team.IsPlayerTeam;
                 bool isEnemy = !isPlayer && playerTeam != null && playerTeam.IsEnemyOf(team);
+                bool isNeutral = !isPlayer && !isEnemy;
                 var formations = team.FormationsIncludingEmpty;
                 if (formations == null) continue;
 
@@ -48,24 +52,24 @@ namespace New_ZZZF.TacticalMap.Tracking
                     {
                         IsPlayer = isPlayer,
                         IsEnemy = isEnemy,
+                        IsNeutral = isNeutral,
                         AveragePosition = formation.CachedAveragePosition,
                         Color = team.Color,
                         Count = formation.CountOfUnits,
-                        Name = formation.FormationIndex.ToString()
+                        Name = formation.FormationIndex.ToString(),
+                        HasOrder = formation.OrderPositionIsValid,
+                        OrderPosition = formation.OrderPositionIsValid ? formation.OrderPosition : formation.CachedAveragePosition
                     };
 
-                    // 朝向：优先用当前指令目标方向，否则用编队当前方向
-                    // 注意：Formation.CurrentDirection 本身就是 Vec2（forward），不是 Mat3
                     Vec2 facing = Vec2.Zero;
                     if (formation.OrderPositionIsValid)
                     {
-                        Vec2 d = formation.OrderPosition - formation.CachedAveragePosition;
-                        if (d.LengthSquared > 1E-4f) facing = d.Normalized();
+                        Vec2 directionToOrder = formation.OrderPosition - formation.CachedAveragePosition;
+                        if (directionToOrder.LengthSquared > 1E-4f)
+                            facing = directionToOrder.Normalized();
                     }
                     if (facing.LengthSquared <= 1E-4f && formation.CurrentDirection.LengthSquared > 1E-4f)
-                    {
                         facing = formation.CurrentDirection.Normalized();
-                    }
                     snap.Facing = facing;
 
                     Snapshots.Add(snap);

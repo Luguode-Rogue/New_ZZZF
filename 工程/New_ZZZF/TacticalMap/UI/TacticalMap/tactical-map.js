@@ -14,7 +14,7 @@
   let staticState = null;
   let runtimeState = null;
   let terrainCanvas = null;
-  let riskCanvas = null;
+  let tacticalCanvas = null;
   let selectedFormation = -1;
   let rafPending = false;
   let lastRuntimeLogSignature = null;
@@ -29,8 +29,6 @@
       throw error;
     });
   }
-
-  clientLog('JS boot. document=' + document.readyState + ', url=' + location.href);
 
   function decodeImage(base64, width, height) {
     if (!base64 || width <= 0 || height <= 0) return null;
@@ -47,7 +45,6 @@
       source.width = width;
       source.height = height;
       source.getContext('2d').putImageData(new ImageData(bytes, width, height), 0, 0);
-      clientLog('decodeImage success ' + width + 'x' + height);
       return source;
     } catch (error) {
       clientLog('decodeImage exception ' + (error?.message || error));
@@ -63,9 +60,10 @@
 
   function applyStatic(state) {
     staticState = state || null;
-    clientLog('state.static received baked=' + !!state?.baked + ' size=' + Number(state?.width || 0) + 'x' + Number(state?.height || 0));
-    terrainCanvas = state ? decodeImage(state.terrainBaseRgba, Number(state.width), Number(state.height)) : null;
-    riskCanvas = state ? decodeImage(state.riskRgba, Number(state.width), Number(state.height)) : null;
+    const width = Number(state?.width || 0);
+    const height = Number(state?.height || 0);
+    terrainCanvas = state ? decodeImage(state.terrainBaseRgba, width, height) : null;
+    tacticalCanvas = state ? decodeImage(state.tacticalRgba || state.riskRgba, width, height) : null;
     scheduleRender();
   }
 
@@ -94,10 +92,13 @@
     if (root.className !== className) root.className = className;
     const visible = !!runtimeState?.visible;
     root.setAttribute('aria-hidden', visible ? 'false' : 'true');
-    modeLabel.textContent = ({ CompactPassive:'观察', CompactInteractive:'操作', FullPassive:'观察', FullInteractive:'战术操作', Hidden:'隐藏' })[mode] || mode;
+    modeLabel.textContent = ({
+      CompactPassive:'观察', CompactInteractive:'操作',
+      FullPassive:'观察', FullInteractive:'战术操作', Hidden:'隐藏'
+    })[mode] || mode;
     if (!visible) statusText.textContent = 'TacticalMap · 隐藏';
     else if (!staticState?.baked) statusText.textContent = 'TacticalMap · 地形不可用：' + (staticState?.error || 'unknown');
-    else if (!terrainCanvas) statusText.textContent = 'TacticalMap · 地形数据已到达但解码失败';
+    else if (!terrainCanvas) statusText.textContent = 'TacticalMap · 地形底图解码失败';
     else statusText.textContent = 'TacticalMap · ' + (modeLabel.textContent || mode);
     hint.textContent = runtimeState?.interactive
       ? '左键：移动　中键：镜头　右键：朝向　ESC：退出操作　N：切换操作　N 长按：全屏 / 隐藏'
@@ -108,17 +109,22 @@
     return String(value).replace(/[&<>'\"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '\"':'&quot;' })[ch]);
   }
 
+  function relationText(f) {
+    if (f.player) return '我军';
+    if (f.enemy) return '敌军';
+    return '友军';
+  }
+
   function updateFormationList() {
     formationList.replaceChildren();
     (runtimeState?.formations || []).forEach((f, index) => {
       const item = document.createElement('div');
       item.className = 'formation-item ' + (f.enemy ? 'enemy' : 'friendly') + (index === selectedFormation ? ' selected' : '');
       item.innerHTML = '<span class="index">' + escapeHtml(f.name || index + 1) + '</span>' +
-        '<span><span class="name">' + (f.enemy ? '敌军' : (f.player ? '我军' : '友军')) + '</span><br><span class="meta">编队 ' + escapeHtml(f.name || index + 1) + '</span></span>' +
+        '<span><span class="name">' + relationText(f) + '</span><br><span class="meta">编队 ' + escapeHtml(f.name || index + 1) + '</span></span>' +
         '<span class="meta">' + Number(f.count || 0) + '</span>';
       item.addEventListener('click', () => {
         selectedFormation = index;
-        clientLog('formation item click index=' + index + ' player=' + !!f.player);
         if (f.player) command('selectFormation', { name: f.name }).catch(() => {});
         updateFormationList();
         updateDetails();
@@ -135,17 +141,22 @@
       return;
     }
     const f = formations[selectedFormation];
+    const orderText = f.hasOrder
+      ? Number(f.orderU || 0).toFixed(3) + ', ' + Number(f.orderV || 0).toFixed(3)
+      : '无当前目标';
     detailBody.innerHTML =
-      '<div class="detail-row"><span>关系</span><span>' + (f.player ? '玩家编队' : (f.enemy ? '敌军' : '友军')) + '</span></div>' +
+      '<div class="detail-row"><span>关系</span><span>' + relationText(f) + '</span></div>' +
       '<div class="detail-row"><span>编号</span><span>' + escapeHtml(f.name || '-') + '</span></div>' +
       '<div class="detail-row"><span>人数</span><span>' + Number(f.count || 0) + '</span></div>' +
-      '<div class="detail-row"><span>地图 U</span><span>' + Number(f.u || 0).toFixed(3) + '</span></div>' +
-      '<div class="detail-row"><span>地图 V</span><span>' + Number(f.v || 0).toFixed(3) + '</span></div>';
+      '<div class="detail-row"><span>位置</span><span>' + Number(f.u || 0).toFixed(3) + ', ' + Number(f.v || 0).toFixed(3) + '</span></div>' +
+      '<div class="detail-row"><span>指向</span><span>' + Number(f.facingU || 0).toFixed(2) + ', ' + Number(f.facingV || 0).toFixed(2) + '</span></div>' +
+      '<div class="detail-row"><span>当前命令点</span><span>' + orderText + '</span></div>';
   }
 
   function drawStaticMap(x, y, w, h) {
     if (!terrainCanvas) {
-      ctx.fillStyle = '#0d1519'; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#0d1519';
+      ctx.fillRect(x, y, w, h);
       return;
     }
     ctx.save();
@@ -153,7 +164,10 @@
     ctx.scale(-1, 1);
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(terrainCanvas, 0, 0, w, h);
-    if (riskCanvas && staticState?.enableRisk) { ctx.globalAlpha = .42; ctx.drawImage(riskCanvas, 0, 0, w, h); }
+    if (tacticalCanvas && staticState?.enableRisk) {
+      ctx.globalAlpha = 0.46;
+      ctx.drawImage(tacticalCanvas, 0, 0, w, h);
+    }
     ctx.restore();
     ctx.strokeStyle = 'rgba(225,205,140,.70)';
     ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
@@ -162,36 +176,92 @@
   function drawArrow(x, y, dx, dy, scale, color, width) {
     const len = Math.hypot(dx, dy);
     if (len < .001) return;
-    const nx = dx / len, ny = dy / len, ex = x + nx * scale, ey = y + ny * scale, px = -ny, py = nx;
-    ctx.strokeStyle = color; ctx.lineWidth = width;
+    const nx = dx / len, ny = dy / len;
+    const ex = x + nx * scale, ey = y + ny * scale;
+    const px = -ny, py = nx;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex - nx * 7 + px * 4, ey - ny * 7 + py * 4); ctx.lineTo(ex - nx * 7 - px * 4, ey - ny * 7 - py * 4); ctx.closePath();
-    ctx.fillStyle = color; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - nx * 7 + px * 4, ey - ny * 7 + py * 4);
+    ctx.lineTo(ex - nx * 7 - px * 4, ey - ny * 7 - py * 4);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function drawOrderLine(px, py, ox, oy, color) {
+    const dx = ox - px, dy = oy - py;
+    if (Math.hypot(dx, dy) < 3) return;
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = .72;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(ox, oy);
+    ctx.stroke();
+    ctx.restore();
+    drawArrow(ox - dx * .04, oy - dy * .04, dx, dy, 7, color, 1.1);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(ox - 3, oy - 3, 6, 6);
   }
 
   function drawMarkers(x, y, w, h) {
     const s = runtimeState;
     if (!s) return;
+
     (s.formations || []).forEach((f, index) => {
-      const px = x + f.u * w, py = y + f.v * h, selected = index === selectedFormation;
+      const px = x + f.u * w, py = y + f.v * h;
+      const selected = index === selectedFormation;
       const stroke = f.enemy ? '#ff4c4c' : '#4ade80';
-      ctx.strokeStyle = selected ? '#ffe69a' : stroke; ctx.lineWidth = selected ? 2.4 : 1.5; ctx.strokeRect(px - 8, py - 6, 16, 12);
-      if (f.name) { ctx.fillStyle = selected ? '#ffe69a' : '#f4f6f7'; ctx.font = '10px Segoe UI, Arial'; ctx.fillText(f.name, px + 10, py + 3); }
-      drawArrow(px, py, Number(f.facingU || 0), Number(f.facingV || 0), 11, stroke, 1.2);
+      if (f.hasOrder) {
+        const ox = x + f.orderU * w, oy = y + f.orderV * h;
+        drawOrderLine(px, py, ox, oy, selected ? '#ffe69a' : stroke);
+      }
+      const size = Math.max(8, Math.min(17, 8 + Math.sqrt(Math.max(1, Number(f.count || 1))) * .45));
+      ctx.strokeStyle = selected ? '#ffe69a' : stroke;
+      ctx.lineWidth = selected ? 2.4 : 1.5;
+      ctx.strokeRect(px - size, py - size * .62, size * 2, size * 1.24);
+      ctx.fillStyle = selected ? '#ffe69a' : '#f4f6f7';
+      ctx.font = selected ? 'bold 10px Segoe UI, Arial' : '10px Segoe UI, Arial';
+      if (f.name) ctx.fillText(f.name, px + size + 3, py + 3);
+      drawArrow(px, py, Number(f.facingU || 0), Number(f.facingV || 0), size + 5, selected ? '#ffe69a' : stroke, 1.2);
     });
+
+    // Individual agents are only sent by the game side inside AgentDetailDistance.
     (s.agents || []).forEach(agent => {
       const px = x + agent.u * w, py = y + agent.v * h;
       ctx.fillStyle = agent.neutral ? '#b8bec4' : (agent.player ? '#28dbea' : '#ff3030');
-      ctx.beginPath(); ctx.arc(px, py, 2.3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(px, py, 2.2, 0, Math.PI * 2);
+      ctx.fill();
     });
+
     if (s.cameraTarget) {
       const px = x + s.cameraTarget.u * w, py = y + s.cameraTarget.v * h;
-      ctx.save(); ctx.translate(px, py); ctx.rotate(Math.PI / 4); ctx.fillStyle = '#ff9d32'; ctx.fillRect(-6, -6, 12, 12); ctx.restore();
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = '#ff9d32';
+      ctx.fillRect(-6, -6, 12, 12);
+      ctx.restore();
     }
+
     if (s.player) {
       const px = x + s.player.u * w, py = y + s.player.v * h;
-      ctx.strokeStyle = '#28dbea'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = '#ffd43b'; ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#28dbea';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#ffd43b';
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.fill();
       drawArrow(px, py, Number(s.player.facingU || 0), Number(s.player.facingV || 0), 18, '#ffd43b', 1.5);
     }
   }
@@ -202,7 +272,10 @@
     const dpr = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.floor(rect.width * dpr));
     const height = Math.max(1, Math.floor(rect.height * dpr));
-    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, rect.width, rect.height);
     drawStaticMap(0, 0, rect.width, rect.height);
@@ -221,11 +294,9 @@
   canvas.addEventListener('contextmenu', event => {
     event.preventDefault();
     event.stopPropagation();
-    clientLog('contextmenu button=' + event.button + ' interactive=' + !!runtimeState?.interactive);
   });
 
   canvas.addEventListener('pointerdown', async event => {
-    clientLog('pointerdown button=' + event.button + ' pointerType=' + event.pointerType + ' interactive=' + !!runtimeState?.interactive);
     if (!runtimeState?.interactive) return;
     event.preventDefault();
     event.stopPropagation();
@@ -247,5 +318,4 @@
   const initialRuntime = app.state.get('tacticalMap.runtime');
   if (initialStatic) applyStatic(initialStatic);
   if (initialRuntime) applyRuntime(initialRuntime);
-  clientLog('JS event handlers installed. Keyboard remains with Bannerlord; mouse is consumed only in interactive mode.');
 })();
