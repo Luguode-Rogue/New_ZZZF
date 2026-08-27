@@ -45,14 +45,16 @@
     } catch (_) { return null; }
   }
 
-  // The game-side UV currently uses an inverted X axis. The HTML canvas does not.
-  // Keep the conversion at the UI boundary so terrain, markers, paths and arrows share one screen coordinate system.
+  // WorldToUV stores an inverted X axis for the game-side coordinate convention.
+  // The canvas itself uses the baked texture's X order directly, so screenU restores world-X -> screen-X.
   function screenU(mapU) {
     return 1 - Number(mapU || 0);
   }
 
+  // Facing is already a world-space direction, and the canvas uses world-X increasing to the right.
+  // Do not invert X a second time here.
   function screenFacingU(mapFacingU) {
-    return -Number(mapFacingU || 0);
+    return Number(mapFacingU || 0);
   }
 
   function scheduleRender() {
@@ -152,7 +154,7 @@
       ctx.fillRect(x, y, w, h);
       return;
     }
-    // Terrain RGBA is baked in world-X order already; do not mirror it a second time here.
+    // Terrain RGBA is baked in world-X order already; do not mirror it here.
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(terrainCanvas, x, y, w, h);
@@ -185,7 +187,8 @@
 
   function drawOrderLine(px, py, ox, oy, color) {
     const dx = ox - px, dy = oy - py;
-    if (Math.hypot(dx, dy) < 3) return;
+    const len = Math.hypot(dx, dy);
+    if (len < 3) return;
     ctx.save();
     ctx.setLineDash([5, 4]);
     ctx.strokeStyle = color;
@@ -193,7 +196,10 @@
     ctx.lineWidth = 1.1;
     ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox, oy); ctx.stroke();
     ctx.restore();
-    drawArrow(ox - dx * .04, oy - dy * .04, dx, dy, 7, color, 1.1);
+
+    // Put the arrowhead exactly at the order point, pointing from the formation toward that point.
+    const nx = dx / len, ny = dy / len;
+    drawArrow(ox - nx * 7, oy - ny * 7, nx, ny, 7, color, 1.1);
     ctx.strokeStyle = color;
     ctx.strokeRect(ox - 3, oy - 3, 6, 6);
   }
