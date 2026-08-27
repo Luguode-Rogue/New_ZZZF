@@ -84,7 +84,7 @@ namespace New_ZZZF.TacticalMap.Tracking
                         Vec2 deltaFromPlayer = playerWorld.HasValue ? pos - playerWorld.Value : Vec2.Zero;
                         Vec2 deltaToOrder = snap.HasOrder ? order - pos : Vec2.Zero;
 
-                        TacticalMapLog.Info(
+                        TacticalMapDirectionLog.Info(
                             "ENEMY_MAP_TRACE " +
                             "formation=" + snap.Name +
                             " count=" + snap.Count +
