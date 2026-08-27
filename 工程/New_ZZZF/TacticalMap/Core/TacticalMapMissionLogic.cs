@@ -4,21 +4,17 @@ using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
 using New_ZZZF.TacticalMap.UI;
 using New_ZZZF.TacticalMap.Diagnostics;
+using New_ZZZF.TacticalMap.Config;
 
 namespace New_ZZZF.TacticalMap.Core
 {
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
-        private const int CompactOverlayWidth = 400;
-        private const int CompactOverlayHeight = 400;
-        private const int CompactOverlayMargin = 16;
-
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
         private bool _initialized;
         private bool _ready;
         private float _heartbeatAccum;
-        private TacticalMapUiMode _lastLayoutMode = (TacticalMapUiMode)(-1);
 
         public override void OnAfterMissionCreated()
         {
@@ -48,8 +44,6 @@ namespace New_ZZZF.TacticalMap.Core
                 TacticalMapHtmlUi.Instance.DetachController();
                 _controller = null;
                 _ready = false;
-                HtmlUiOverlayLayout.UseFullWindow();
-                _lastLayoutMode = (TacticalMapUiMode)(-1);
                 return;
             }
 
@@ -64,7 +58,6 @@ namespace New_ZZZF.TacticalMap.Core
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
             TacticalMapHtmlUi.Instance.Tick(dt);
-            ApplyOverlayLayoutIfChanged();
 
             _heartbeatAccum += Math.Max(0f, dt);
             if (_heartbeatAccum >= 5f)
@@ -74,18 +67,6 @@ namespace New_ZZZF.TacticalMap.Core
                                     " Mode=" + TacticalMapHtmlUi.Instance.Mode +
                                     " Baked=" + _controller.Cache.IsBaked);
             }
-        }
-
-        private void ApplyOverlayLayoutIfChanged()
-        {
-            TacticalMapUiMode mode = TacticalMapHtmlUi.Instance.Mode;
-            if (mode == _lastLayoutMode) return;
-            _lastLayoutMode = mode;
-
-            if (mode == TacticalMapUiMode.FullInteractive)
-                HtmlUiOverlayLayout.UseFullWindow();
-            else
-                HtmlUiOverlayLayout.UseTopRight(CompactOverlayWidth, CompactOverlayHeight, CompactOverlayMargin);
         }
 
         private void InitializeController()
@@ -105,10 +86,7 @@ namespace New_ZZZF.TacticalMap.Core
                 _controller = new TacticalMapController(Mission);
                 _ready = _controller.Initialize(Mission);
                 if (_ready)
-                {
                     TacticalMapHtmlUi.Instance.AttachController(_controller);
-                    ApplyOverlayLayoutIfChanged();
-                }
             }
             catch (Exception ex)
             {
@@ -121,9 +99,6 @@ namespace New_ZZZF.TacticalMap.Core
         {
             try { TacticalMapHtmlUi.Instance.DetachController(); }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.DetachController failed during mission end.", ex); }
-
-            try { HtmlUiOverlayLayout.UseFullWindow(); }
-            catch (Exception ex) { TacticalMapLog.Debug("Failed to restore full-window overlay layout: " + ex.GetBaseException().Message); }
 
             try
             {
@@ -141,7 +116,6 @@ namespace New_ZZZF.TacticalMap.Core
             _ready = false;
             _initialized = false;
             _heartbeatAccum = 0f;
-            _lastLayoutMode = (TacticalMapUiMode)(-1);
             base.OnEndMission();
         }
     }
