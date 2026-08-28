@@ -11,17 +11,20 @@ using New_ZZZF.TacticalMap.Tracking;
 namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
-    /// TacticalMap game-side controller. It exposes terrain, formations, agents, orders and camera state.
-    /// HTMLUI owns presentation and input routing; this class never creates UI objects.
+    /// TacticalMap game-side controller. It exposes terrain, navigation, formations, agents,
+    /// orders and camera state. HTMLUI owns presentation and input routing.
     /// </summary>
     public sealed class TacticalMapController
     {
         private readonly Mission _mission;
         private readonly TerrainCache _cache;
+        private readonly NavMeshMap _navigationMap;
+        private readonly NavigationPathService _navigationPathService;
         private readonly FormationTracker _formationTracker;
         private readonly OrderSystem _orderSystem;
         private bool _visible;
         private float _accum;
+        private float _pathAccum;
         private Vec2? _playerPos;
         private Vec2? _camTarget;
         private Vec2 _playerFacing = Vec2.Zero;
@@ -30,6 +33,7 @@ namespace New_ZZZF.TacticalMap.Core
         private string _selectedFormationName;
 
         public TerrainCache Cache => _cache;
+        public NavMeshMap NavigationMap => _navigationMap;
         public bool IsVisible => _visible;
         public List<FormationSnapshot> FormationSnapshots => _formationTracker.Snapshots;
         public IReadOnlyList<AgentMapSnapshot> AgentSnapshots => _agentSnapshots;
@@ -45,6 +49,8 @@ namespace New_ZZZF.TacticalMap.Core
             _mission = mission;
             var settings = TacticalSettings.Instance;
             _cache = new TerrainCache(settings);
+            _navigationMap = new NavMeshMap(_cache);
+            _navigationPathService = new NavigationPathService(mission?.Scene);
             _formationTracker = new FormationTracker();
             _orderSystem = new OrderSystem(_cache);
             CameraController.Instance = new CameraController();
@@ -53,7 +59,11 @@ namespace New_ZZZF.TacticalMap.Core
         public bool Initialize(Mission mission)
         {
             if (mission == null || mission.Scene == null) return false;
-            return _cache.TryBake(mission.Scene);
+            if (!_cache.TryBake(mission.Scene)) return false;
+
+            // Use the game's actual AI navigation surface as the authoritative walkability layer.
+            _navigationMap.Build(mission.Scene);
+            return true;
         }
 
         public void SetVisible(MissionScreen ms, bool visible)
@@ -70,8 +80,6 @@ namespace New_ZZZF.TacticalMap.Core
             _playerPos = (_mission.MainAgent != null) ? _mission.MainAgent.Position.AsVec2 : (Vec2?)null;
             if (_mission.MainAgent != null)
             {
-                // Use the actual engine forward vector. Do not reconstruct it from LookDirectionAsAngle;
-                // the angle's basis is not guaranteed to match the tactical map's XY basis.
                 _playerFacing = _mission.MainAgent.LookDirection.AsVec2;
                 if (_playerFacing.LengthSquared > 1E-4f)
                     _playerFacing = _playerFacing.Normalized();
@@ -90,10 +98,17 @@ namespace New_ZZZF.TacticalMap.Core
             }
 
             _accum += dt;
+            _pathAccum += dt;
             if (_accum < TacticalSettings.Instance.UpdateInterval) return;
 
             _accum = 0f;
             _formationTracker.Update(mission);
+            if (_pathAccum >= 0.45f)
+            {
+                _pathAccum = 0f;
+                RebuildFormationPaths();
+            }
+
             RebuildAgentSnapshots(mission);
             _agentVersion++;
 
@@ -115,6 +130,28 @@ namespace New_ZZZF.TacticalMap.Core
             _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
                 ? CameraController.Instance.TargetWorldPos
                 : (Vec2?)null;
+        }
+
+        private void RebuildFormationPaths()
+        {
+            if (_navigationPathService == null) return;
+
+            foreach (var formation in _formationTracker.Snapshots)
+            {
+                formation.PathPoints.Clear();
+                if (!formation.HasOrder) continue;
+
+                // The route is most useful for the player's own formations and for enemy formations
+                // whose current order is explicitly exposed by the engine.
+                List<Vec2> path;
+                if (_navigationPathService.TryGetPath(
+                    formation.AveragePosition,
+                    formation.OrderPosition,
+                    out path))
+                {
+                    formation.PathPoints.AddRange(path);
+                }
+            }
         }
 
         private void RebuildAgentSnapshots(Mission mission)
