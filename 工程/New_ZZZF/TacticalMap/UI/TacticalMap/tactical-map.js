@@ -15,6 +15,7 @@
   let runtimeState = null;
   let terrainCanvas = null;
   let tacticalCanvas = null;
+  let navMeshCanvas = null;
   let selectedFormation = -1;
   let rafPending = false;
 
@@ -45,11 +46,6 @@
     } catch (_) { return null; }
   }
 
-  // Canonical display convention for the current Bannerlord tactical map:
-  // TerrainCache.WorldToUV() intentionally maps world-X+ toward smaller U.
-  // The baked terrain therefore needs one horizontal mirror for display.
-  // All point positions use the same map-space U directly. Facing vectors need X inversion
-  // because they are directions rather than positions.
   function screenU(mapU) {
     return Number(mapU || 0);
   }
@@ -70,6 +66,7 @@
     const height = Number(state?.height || 0);
     terrainCanvas = state ? decodeImage(state.terrainBaseRgba, width, height) : null;
     tacticalCanvas = state ? decodeImage(state.tacticalRgba || state.riskRgba, width, height) : null;
+    navMeshCanvas = state ? decodeImage(state.navMeshRgba, width, height) : null;
     scheduleRender();
   }
 
@@ -140,13 +137,17 @@
     const orderText = f.hasOrder
       ? Number(f.orderU || 0).toFixed(3) + ', ' + Number(f.orderV || 0).toFixed(3)
       : '无当前目标';
+    const pathText = Array.isArray(f.pathPoints) && f.pathPoints.length > 1
+      ? '已找到实际 AI 路径 (' + f.pathPoints.length + ' 点)'
+      : '无可用 AI 路径';
     detailBody.innerHTML =
       '<div class="detail-row"><span>关系</span><span>' + relationText(f) + '</span></div>' +
       '<div class="detail-row"><span>编号</span><span>' + escapeHtml(f.name || '-') + '</span></div>' +
       '<div class="detail-row"><span>人数</span><span>' + Number(f.count || 0) + '</span></div>' +
       '<div class="detail-row"><span>位置</span><span>' + Number(f.u || 0).toFixed(3) + ', ' + Number(f.v || 0).toFixed(3) + '</span></div>' +
       '<div class="detail-row"><span>指向</span><span>' + screenFacingU(f.facingU).toFixed(2) + ', ' + Number(f.facingV || 0).toFixed(2) + '</span></div>' +
-      '<div class="detail-row"><span>当前命令点</span><span>' + orderText + '</span></div>';
+      '<div class="detail-row"><span>当前命令点</span><span>' + orderText + '</span></div>' +
+      '<div class="detail-row"><span>路径</span><span>' + pathText + '</span></div>';
   }
 
   function drawStaticMap(x, y, w, h) {
@@ -160,6 +161,14 @@
     ctx.scale(-1, 1);
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(terrainCanvas, 0, 0, w, h);
+
+    // The navigation mask is authoritative for walkability. Transparent pixels are on NavMesh;
+    // red pixels are outside the engine AI navigation surface.
+    if (navMeshCanvas) {
+      ctx.globalAlpha = 0.58;
+      ctx.drawImage(navMeshCanvas, 0, 0, w, h);
+    }
+
     if (tacticalCanvas && staticState?.enableRisk) {
       ctx.globalAlpha = 0.46;
       ctx.drawImage(tacticalCanvas, 0, 0, w, h);
@@ -194,16 +203,46 @@
     ctx.save();
     ctx.setLineDash([5, 4]);
     ctx.strokeStyle = color;
-    ctx.globalAlpha = .72;
-    ctx.lineWidth = 1.1;
+    ctx.globalAlpha = .50;
+    ctx.lineWidth = 1.0;
     ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(ox, oy); ctx.stroke();
     ctx.restore();
 
-    // The line is formation -> order. Arrowhead terminates at the order point.
     const nx = dx / len, ny = dy / len;
-    drawArrow(ox - nx * 7, oy - ny * 7, nx, ny, 7, color, 1.1);
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(ox, oy, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawPath(points, x, y, w, h, color, selected) {
+    if (!Array.isArray(points) || points.length < 2) return;
+    ctx.save();
     ctx.strokeStyle = color;
-    ctx.strokeRect(ox - 3, oy - 3, 6, 6);
+    ctx.globalAlpha = selected ? .95 : .72;
+    ctx.lineWidth = selected ? 2.2 : 1.5;
+    ctx.setLineDash(selected ? [] : [7, 4]);
+    ctx.beginPath();
+    points.forEach((p, i) => {
+      const px = x + screenU(p.u) * w;
+      const py = y + Number(p.v || 0) * h;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+    ctx.restore();
+
+    const end = points[points.length - 1];
+    const ex = x + screenU(end.u) * w;
+    const ey = y + Number(end.v || 0) * h;
+    const prev = points[Math.max(0, points.length - 2)];
+    const px = x + screenU(prev.u) * w;
+    const py = y + Number(prev.v || 0) * h;
+    const dx = ex - px, dy = ey - py;
+    const len = Math.hypot(dx, dy);
+    if (len >= .001) {
+      drawArrow(ex - dx / len * 7, ey - dy / len * 7, dx / len, dy / len, 7, color, selected ? 1.5 : 1.0);
+    }
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(ex, ey, 3.5, 0, Math.PI * 2); ctx.fill();
   }
 
   function drawMarkers(x, y, w, h) {
@@ -213,12 +252,26 @@
       const px = x + screenU(f.u) * w, py = y + f.v * h;
       const selected = index === selectedFormation;
       const stroke = f.enemy ? '#ff4c4c' : '#4ade80';
-      if (f.hasOrder) drawOrderLine(
-        px,
-        py,
-        x + screenU(f.orderU) * w,
-        y + f.orderV * h,
-        selected ? '#ffe69a' : stroke);
+      const path = Array.isArray(f.pathPoints) ? f.pathPoints : [];
+
+      if (path.length > 1) {
+        drawPath(path, x, y, w, h, selected ? '#ffe69a' : stroke, selected);
+      } else if (f.hasOrder) {
+        drawOrderLine(
+          px,
+          py,
+          x + screenU(f.orderU) * w,
+          y + f.orderV * h,
+          selected ? '#ffe69a' : stroke);
+      } else if (f.hasOrder) {
+        drawOrderLine(
+          px,
+          py,
+          x + screenU(f.orderU) * w,
+          y + f.orderV * h,
+          selected ? '#ffe69a' : stroke);
+      }
+
       const size = Math.max(8, Math.min(17, 8 + Math.sqrt(Math.max(1, Number(f.count || 1))) * .45));
       ctx.strokeStyle = selected ? '#ffe69a' : stroke;
       ctx.lineWidth = selected ? 2.4 : 1.5;
@@ -269,7 +322,6 @@
   function getUv(event) {
     const rect = canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return { u: 0, v: 0 };
-    // The displayed terrain is mirrored, so screen U already matches TerrainCache's map U.
     return {
       u: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
       v: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))
