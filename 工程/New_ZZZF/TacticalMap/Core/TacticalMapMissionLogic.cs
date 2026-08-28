@@ -1,4 +1,5 @@
 using System;
+using TaleWorlds.InputSystem;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
@@ -56,6 +57,8 @@ namespace New_ZZZF.TacticalMap.Core
                 _missionScreen = ScreenManager.TopScreen as MissionScreen;
             if (_missionScreen == null) return;
 
+            HandleToggleInput();
+
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
             TacticalMapHtmlUi.Instance.Tick(dt);
@@ -67,6 +70,25 @@ namespace New_ZZZF.TacticalMap.Core
                 TacticalMapLog.Info("Mission heartbeat. UIVisible=" + TacticalMapHtmlUi.Instance.IsVisible +
                                     " Mode=" + TacticalMapHtmlUi.Instance.Mode +
                                     " Baked=" + _controller.Cache.IsBaked);
+            }
+        }
+
+        private void HandleToggleInput()
+        {
+            InputKey toggleKey = TacticalSettings.Instance.ToggleKey;
+
+            try
+            {
+                if (DebugInput != null && DebugInput.IsKeyPressed(toggleKey))
+                {
+                    TacticalMapHtmlUi.Instance.ToggleInteractive();
+                    TacticalMapLog.Info("Toggle key pressed: " + toggleKey +
+                                        ", new mode=" + TacticalMapHtmlUi.Instance.Mode);
+                }
+            }
+            catch (Exception ex)
+            {
+                TacticalMapLog.Error("TacticalMap toggle input handling failed.", ex);
             }
         }
 
