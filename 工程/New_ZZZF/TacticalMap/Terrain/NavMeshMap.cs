@@ -56,8 +56,23 @@ namespace New_ZZZF.TacticalMap.Terrain
                     }
                     else
                     {
-                        // Visible mask for areas the AI navigation mesh does not cover.
-                        SetPixel(x, y, 150, 32, 32, 135);
+                        // Do not paint every non-walkable cell as a solid block. At 256x256,
+                        // a one-cell-wide fence would otherwise become much thicker than an agent.
+                        // We keep a subtle interior tint and emphasize only the NavMesh boundary.
+                        SetPixel(x, y, 120, 28, 28, 42);
+                    }
+                }
+
+                // Boundary pass: only non-walkable cells adjacent to walkable space receive a
+                // strong edge. This makes fences/walls read as thin boundaries while solid
+                // building interiors remain visually subdued.
+                for (int x = 0; x < width; x++)
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        if (_walkable[y * width + x]) continue;
+                        if (!TouchesWalkable(x, y, width, height)) continue;
+                        SetPixel(x, y, 165, 42, 38, 150);
                     }
                 }
 
@@ -73,6 +88,15 @@ namespace New_ZZZF.TacticalMap.Terrain
                 _rgba = null;
                 TacticalMapLog.Error("NavMeshMap.Build failed.", ex);
             }
+        }
+
+        private bool TouchesWalkable(int x, int y, int width, int height)
+        {
+            if (x > 0 && _walkable[y * width + (x - 1)]) return true;
+            if (x + 1 < width && _walkable[y * width + (x + 1)]) return true;
+            if (y > 0 && _walkable[(y - 1) * width + x]) return true;
+            if (y + 1 < height && _walkable[(y + 1) * width + x]) return true;
+            return false;
         }
 
         private void SetPixel(int x, int y, byte r, byte g, byte b, byte a)
