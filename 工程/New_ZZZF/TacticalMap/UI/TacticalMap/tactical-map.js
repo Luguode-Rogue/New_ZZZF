@@ -263,13 +263,6 @@
           x + screenU(f.orderU) * w,
           y + f.orderV * h,
           selected ? '#ffe69a' : stroke);
-      } else if (f.hasOrder) {
-        drawOrderLine(
-          px,
-          py,
-          x + screenU(f.orderU) * w,
-          y + f.orderV * h,
-          selected ? '#ffe69a' : stroke);
       }
 
       const size = Math.max(8, Math.min(17, 8 + Math.sqrt(Math.max(1, Number(f.count || 1))) * .45));
