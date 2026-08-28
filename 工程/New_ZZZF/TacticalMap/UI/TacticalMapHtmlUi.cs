@@ -34,6 +34,7 @@ namespace New_ZZZF.TacticalMap.UI
         private TacticalMapUiMode _mode = TacticalMapUiMode.CompactPassive;
         private string _terrainBase64;
         private string _tacticalBase64;
+        private string _navMeshBase64;
 
         public static TacticalMapHtmlUi Instance => _instance.Value;
         public bool IsVisible => _pageOpened;
@@ -133,6 +134,7 @@ namespace New_ZZZF.TacticalMap.UI
             _lastTerrainSignature = 0;
             _terrainBase64 = null;
             _tacticalBase64 = null;
+            _navMeshBase64 = null;
             if (_registered && HtmlUiService.IsReady) OpenForMission();
         }
 
@@ -153,6 +155,7 @@ namespace New_ZZZF.TacticalMap.UI
             _lastTerrainSignature = 0;
             _terrainBase64 = null;
             _tacticalBase64 = null;
+            _navMeshBase64 = null;
             try { HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden); } catch { }
         }
 
@@ -237,12 +240,15 @@ namespace New_ZZZF.TacticalMap.UI
         private void PublishStaticStateIfChanged()
         {
             Terrain.TerrainCache cache = _controller.Cache;
-            int terrainSignature = ComputeTerrainSignature(cache);
+            Terrain.NavMeshMap navMesh = _controller.NavigationMap;
+            int terrainSignature = ComputeTerrainSignature(cache, navMesh);
             if (terrainSignature == _lastTerrainSignature) return;
 
             _terrainBase64 = cache.TerrainBaseRGBA == null ? null : Convert.ToBase64String(cache.TerrainBaseRGBA);
             _tacticalBase64 = TacticalSettings.Instance.EnableRiskOverlay && cache.TacticalRGBA != null
                 ? Convert.ToBase64String(cache.TacticalRGBA) : null;
+            _navMeshBase64 = navMesh != null && navMesh.RGBA != null
+                ? Convert.ToBase64String(navMesh.RGBA) : null;
             _lastTerrainSignature = terrainSignature;
 
             _scope.SetState(StaticStateKey, new
@@ -254,9 +260,11 @@ namespace New_ZZZF.TacticalMap.UI
                 worldWidth = cache.WorldW,
                 worldHeight = cache.WorldH,
                 terrainVersion = terrainSignature,
+                navMeshVersion = navMesh == null ? 0 : navMesh.Version,
                 terrainBaseRgba = _terrainBase64,
                 tacticalRgba = _tacticalBase64,
                 riskRgba = _tacticalBase64,
+                navMeshRgba = _navMeshBase64,
                 enableRisk = TacticalSettings.Instance.EnableRiskOverlay
             });
         }
@@ -270,6 +278,20 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 Vec2 uv = cache.WorldToUV(f.AveragePosition);
                 Vec2 orderUv = cache.WorldToUV(f.OrderPosition);
+                var route = new List<object>();
+                if (f.PathPoints != null)
+                {
+                    foreach (Vec2 worldPoint in f.PathPoints)
+                    {
+                        Vec2 pathUv = cache.WorldToUV(worldPoint);
+                        route.Add(new
+                        {
+                            u = Clamp01(pathUv.X),
+                            v = Clamp01(pathUv.Y)
+                        });
+                    }
+                }
+
                 formations.Add(new
                 {
                     name = f.Name ?? string.Empty,
@@ -283,7 +305,8 @@ namespace New_ZZZF.TacticalMap.UI
                     facingV = f.Facing.Y,
                     hasOrder = f.HasOrder,
                     orderU = Clamp01(orderUv.X),
-                    orderV = Clamp01(orderUv.Y)
+                    orderV = Clamp01(orderUv.Y),
+                    pathPoints = route
                 });
             }
 
@@ -330,7 +353,7 @@ namespace New_ZZZF.TacticalMap.UI
             };
         }
 
-        private static int ComputeTerrainSignature(Terrain.TerrainCache cache)
+        private static int ComputeTerrainSignature(Terrain.TerrainCache cache, Terrain.NavMeshMap navMesh)
         {
             unchecked
             {
@@ -341,6 +364,7 @@ namespace New_ZZZF.TacticalMap.UI
                 hash = hash * 31 + (cache.TerrainBaseRGBA == null ? 0 : cache.TerrainBaseRGBA.Length);
                 hash = hash * 31 + (cache.TacticalRGBA == null ? 0 : cache.TacticalRGBA.Length);
                 hash = hash * 31 + (cache.LastError ?? string.Empty).GetHashCode();
+                hash = hash * 31 + (navMesh == null ? 0 : navMesh.Version);
                 return hash;
             }
         }
