@@ -79,7 +79,9 @@ namespace New_ZZZF.TacticalMap.Core
 
             try
             {
-                if (DebugInput != null && DebugInput.IsKeyPressed(toggleKey))
+                // Use Bannerlord's normal global input API, matching the rest of New_ZZZF.
+                // DebugInput is a debug-oriented input channel and must not own the player hotkey.
+                if (Input.IsKeyPressed(toggleKey))
                 {
                     TacticalMapHtmlUi.Instance.ToggleInteractive();
                     TacticalMapLog.Info("Toggle key pressed: " + toggleKey +
