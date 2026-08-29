@@ -53,7 +53,11 @@ namespace New_ZZZF.TacticalMap.UI
             if (_registered || !HtmlUiService.IsReady) return;
 
             string assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
-            string uiRoot = Path.Combine(assemblyDir, "UI");
+            DirectoryInfo binDir = Directory.GetParent(assemblyDir);
+            DirectoryInfo moduleDir = binDir == null ? null : Directory.GetParent(binDir.FullName);
+            string uiRoot = moduleDir == null
+                ? Path.Combine(assemblyDir, "UI")
+                : Path.Combine(moduleDir.FullName, "UI");
             if (!Directory.Exists(uiRoot))
                 throw new DirectoryNotFoundException("TacticalMap HtmlUI content root not found: " + uiRoot);
 
@@ -69,7 +73,7 @@ namespace New_ZZZF.TacticalMap.UI
 
             RegisterCommands();
             _registered = true;
-            HtmlUiLogger.Info("TacticalMap HtmlUI registered.");
+            HtmlUiLogger.Info("TacticalMap HtmlUI registered. Root=" + uiRoot);
             if (_controller != null) OpenForMission();
         }
 
@@ -81,7 +85,6 @@ namespace New_ZZZF.TacticalMap.UI
                 bool value = payload?["value"]?.Value<bool>() ?? false;
                 SetInteractive(value);
             });
-            _scope.RegisterCommand("longPressNext", _ => AdvanceLongPress());
             _scope.RegisterCommand("escape", _ => SetInteractive(false));
             _scope.RegisterCommand("clientLog", payload =>
             {
@@ -190,11 +193,6 @@ namespace New_ZZZF.TacticalMap.UI
         }
 
         public void ToggleInteractive()
-        {
-            SetInteractive(!IsInteractive);
-        }
-
-        public void AdvanceLongPress()
         {
             SetInteractive(!IsInteractive);
         }
