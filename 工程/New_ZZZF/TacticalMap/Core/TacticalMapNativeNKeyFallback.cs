@@ -32,7 +32,7 @@ namespace New_ZZZF.TacticalMap.Core
                 bool nativeDown = missionActive && (GetAsyncKeyState(VkN) & 0x8000) != 0;
                 bool nativeRising = nativeDown && !_wasDown;
                 bool bannerlordDown = false;
-                try { bannerlordDown = missionActive && TaleWorlds.InputSystem.Input.IsKeyDown(InputKey.N); }
+                try { bannerlordDown = missionActive && TaleWorlds.InputSystem.Input.IsKeyDown(TaleWorlds.InputSystem.InputKey.N); }
                 catch { }
 
                 _wasDown = nativeDown;
