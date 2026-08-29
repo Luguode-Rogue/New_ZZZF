@@ -32,6 +32,7 @@ namespace New_ZZZF
     {
         private Harmony _harmony;
         private bool _harmonyPatched;
+        private bool _tacticalMapToggleKeyWasDown;
 
         protected override void OnSubModuleLoad()
         {
@@ -64,7 +65,7 @@ namespace New_ZZZF
             }
 
             CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
-            TacticalMapLog.Info("CustomSkill HtmlUI InitializeOnFrameworkReady registered.");
+            TacticalMapLog.Info("CustomSkill HtmlUi InitializeOnFrameworkReady registered.");
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
 
@@ -195,17 +196,21 @@ namespace New_ZZZF
             var activeState = stateManager?.ActiveState;
             var customVisible = CustomSkillHtmlUi.Instance.IsVisible;
             var mPressed = Input.IsKeyPressed(InputKey.M);
-            var tacticalMapPressed = Input.IsKeyPressed(TacticalSettings.Instance.ToggleKey);
             var shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
             var campaignAvailable = Campaign.Current != null;
             var missionActive = Mission.Current != null;
             var isMenuState = activeState?.IsMenuState ?? true;
 
-            // TacticalMap 的 N 键是 New_ZZZF 正式游戏热键，统一在 SubModule 的全局输入入口处理。
-            // 不再依赖 MissionLogic.DebugInput 或 HTML/WebView 输入状态。
-            if (tacticalMapPressed && missionActive && !customVisible)
+            InputKey tacticalMapToggleKey = TacticalSettings.Instance.ToggleKey;
+            bool tacticalMapToggleKeyDown = missionActive && Input.IsKeyDown(tacticalMapToggleKey);
+            bool tacticalMapTogglePressed = tacticalMapToggleKeyDown && !_tacticalMapToggleKeyWasDown;
+            _tacticalMapToggleKeyWasDown = tacticalMapToggleKeyDown;
+
+            // TacticalMap 的 N 键是 New_ZZZF 正式游戏热键。
+            // 使用 KeyDown 上升沿，避免 IsKeyPressed 被其他输入读取点消费导致切换失效。
+            if (tacticalMapTogglePressed && missionActive && !customVisible)
             {
-                TacticalMapLog.Info("TacticalMap toggle key pressed: " + TacticalSettings.Instance.ToggleKey);
+                TacticalMapLog.Info("TacticalMap toggle key pressed: " + tacticalMapToggleKey);
                 TacticalMapHtmlUi.Instance.ToggleInteractive();
                 TacticalMapLog.Info("TacticalMap mode after toggle: " + TacticalMapHtmlUi.Instance.Mode);
             }
