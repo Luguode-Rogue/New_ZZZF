@@ -184,6 +184,210 @@ FullInteractive -> CompactPassive
 
 `TacticalMap`、`N key`、`InputTrace`、`DebugInput`、`Input.IsKeyDown`、`Input.IsKeyPressed`、`Harmony fallback`、`GetAsyncKeyState`、`HtmlUiInputMode`、`MouseCaptured`、`Consumer hotkey`
 
+## N 键 / 输入问题通用排查经验（可复用）
+
+这次问题额外形成一套独立的通用排查顺序。以后遇到任何“某个按键没有效果”的问题，必须优先按证据链排查，不得直接替换输入 API。
+
+### 正确证据链
+
+统一按照下面顺序建立事实：
+
+```text
+物理按键
+  ↓
+输入观察层是否记录
+  ↓
+Bannerlord InputContext 是否得到按键状态
+  ↓
+Consumer 热键处理是否执行
+  ↓
+业务方法是否执行
+  ↓
+业务状态是否改变
+  ↓
+Framework/UI 状态是否同步
+  ↓
+最终视觉/交互结果是否改变
+```
+
+只有上一层已经被日志或代码证据证明正常，才能进入下一层排查。
+
+### 经验 1：日志缺少某个键，不等于输入缺少某个键
+
+必须先确认日志系统是否实际追踪该键。
+
+例如：
+
+```text
+InputTrace 没有 N
+```
+
+首先只能得到：
+
+```text
+不知道 N 的日志状态
+```
+
+不能直接得到：
+
+```text
+N 没有进入输入系统
+```
+
+任何输入诊断器都必须先检查“观测集合/过滤条件”，再解释日志缺失。
+
+### 经验 2：不要在证据不足时连续更换输入 API
+
+以下修改不能作为独立的排错证据：
+
+```text
+DebugInput.IsKeyPressed
+→ Input.IsKeyPressed
+→ Input.IsKeyDown
+→ GetAsyncKeyState
+```
+
+每次换 API 都应该先回答：
+
+```text
+原 API 实际返回什么？
+新 API 实际返回什么？
+两者差异是什么？
+```
+
+没有这三个答案时，换 API 只是扩大变量数量，并不能缩小故障范围。
+
+### 经验 3：输入 owner 必须唯一
+
+业务热键应由 Consumer 自己拥有；Framework 的 InputMode、Overlay、WebView2 输入归属则由 Framework 唯一管理。
+
+禁止在已有 Consumer hotkey 之外继续堆叠：
+
+```text
+第二个 Harmony hotkey
+第三个 Win32 fallback
+额外的 Framework 输入 Patch
+```
+
+除非已经证明原 owner 本身无法覆盖目标输入场景，而且新路径有明确生命周期和 owner 设计。
+
+### 经验 4：不同层的 Bug 不要直接建立因果关系
+
+例如：
+
+```text
+WindowTracker Cross-thread exception
+```
+
+和：
+
+```text
+N 键没有切换地图
+```
+
+可以同时发生，但必须分别建立证据。不能因为两个问题同时出现，就直接把前者认定为后者的根因。
+
+### 经验 5：先验证业务状态，再验证 UI 表现
+
+对于状态型功能，必须把：
+
+```text
+后端状态
+```
+
+和：
+
+```text
+界面视觉结果
+```
+
+分开验证。
+
+例如本次最终日志已经证明：
+
+```text
+CompactPassive
+→ FullInteractive
+→ MouseCaptured
+```
+
+所以后端状态切换已经成功。即使用户当时主观感觉“地图没切”，下一步也应该检查：
+
+```text
+页面布局
+CSS class
+前端 runtime state
+资源部署路径
+```
+
+而不是再次修改 N 键。
+
+### 经验 6：运行时资源路径必须和工程部署源一一对应
+
+HtmlUI 类问题必须同时检查：
+
+```text
+工程资源源
+↓
+BUTR _Module
+↓
+最终 Mod 目录
+↓
+C# RegisterContentRoot
+↓
+实际加载页面
+```
+
+如果仓库中存在多份：
+
+```text
+源码 UI
+bin UI
+旧 UI
+```
+
+就必须先确认哪一份是真正运行时资源，否则会出现：
+
+```text
+代码已经修改
+但游戏表现完全没变化
+```
+
+这种假性“功能修复失败”。
+
+### 经验 7：最终修复必须由完整证据闭环，而不是单条日志
+
+一个输入问题只有在至少能够同时确认：
+
+```text
+输入到达
+→ 业务处理执行
+→ 状态前后值变化
+→ 下游状态同步
+```
+
+之后才能说“已经修复”。
+
+### 经验 8：修复过程中不得把“理论正确”写成“实机验证通过”
+
+源码逻辑正确只说明：
+
+```text
+代码层面可能正确
+```
+
+只有真实游戏日志同时证明状态转移和实际表现后，才能记录为：
+
+```text
+实机验证通过
+```
+
+### 本次经验的核心原则
+
+以后遇到类似问题，优先遵守：
+
+> **先建立观测，再建立因果；先证明是哪一层坏了，再修改那一层。**
+
 ## 快速复用格式
 
 以后修复新问题时，统一增加：
