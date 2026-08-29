@@ -64,7 +64,7 @@ namespace New_ZZZF
             }
 
             CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
-            TacticalMapLog.Info("CustomSkillHtmlUi.InitializeOnFrameworkReady registered.");
+            TacticalMapLog.Info("CustomSkill HtmlUI InitializeOnFrameworkReady registered.");
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
 
@@ -142,7 +142,7 @@ namespace New_ZZZF
             try { TacticalMapHtmlUi.Instance.Dispose(); }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
             try { CustomSkillHtmlUi.Instance.Dispose(); }
-            catch (Exception ex) { TacticalMapLog.Error("CustomSkillHtmlUi.Dispose failed.", ex); }
+            catch (Exception ex) { TacticalMapLog.Error("CustomSkill HtmlUI Dispose failed.", ex); }
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
             base.OnSubModuleUnloaded();
         }
@@ -195,10 +195,20 @@ namespace New_ZZZF
             var activeState = stateManager?.ActiveState;
             var customVisible = CustomSkillHtmlUi.Instance.IsVisible;
             var mPressed = Input.IsKeyPressed(InputKey.M);
+            var tacticalMapPressed = Input.IsKeyPressed(TacticalSettings.Instance.ToggleKey);
             var shiftDown = Input.IsKeyDown(InputKey.LeftShift) || Input.IsKeyDown(InputKey.RightShift);
             var campaignAvailable = Campaign.Current != null;
             var missionActive = Mission.Current != null;
             var isMenuState = activeState?.IsMenuState ?? true;
+
+            // TacticalMap 的 N 键是 New_ZZZF 正式游戏热键，统一在 SubModule 的全局输入入口处理。
+            // 不再依赖 MissionLogic.DebugInput 或 HTML/WebView 输入状态。
+            if (tacticalMapPressed && missionActive && !customVisible)
+            {
+                TacticalMapLog.Info("TacticalMap toggle key pressed: " + TacticalSettings.Instance.ToggleKey);
+                TacticalMapHtmlUi.Instance.ToggleInteractive();
+                TacticalMapLog.Info("TacticalMap mode after toggle: " + TacticalMapHtmlUi.Instance.Mode);
+            }
 
             if (mPressed || (Input.IsKeyDown(InputKey.M) && shiftDown))
             {
