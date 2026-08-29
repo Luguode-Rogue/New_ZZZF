@@ -1,5 +1,4 @@
 using System;
-using TaleWorlds.InputSystem;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
@@ -57,8 +56,6 @@ namespace New_ZZZF.TacticalMap.Core
                 _missionScreen = ScreenManager.TopScreen as MissionScreen;
             if (_missionScreen == null) return;
 
-            HandleToggleInput();
-
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
             TacticalMapHtmlUi.Instance.Tick(dt);
@@ -70,27 +67,6 @@ namespace New_ZZZF.TacticalMap.Core
                 TacticalMapLog.Info("Mission heartbeat. UIVisible=" + TacticalMapHtmlUi.Instance.IsVisible +
                                     " Mode=" + TacticalMapHtmlUi.Instance.Mode +
                                     " Baked=" + _controller.Cache.IsBaked);
-            }
-        }
-
-        private void HandleToggleInput()
-        {
-            InputKey toggleKey = TacticalSettings.Instance.ToggleKey;
-
-            try
-            {
-                // Use Bannerlord's normal global input API, matching the rest of New_ZZZF.
-                // DebugInput is a debug-oriented input channel and must not own the player hotkey.
-                if (Input.IsKeyPressed(toggleKey))
-                {
-                    TacticalMapHtmlUi.Instance.ToggleInteractive();
-                    TacticalMapLog.Info("Toggle key pressed: " + toggleKey +
-                                        ", new mode=" + TacticalMapHtmlUi.Instance.Mode);
-                }
-            }
-            catch (Exception ex)
-            {
-                TacticalMapLog.Error("TacticalMap toggle input handling failed.", ex);
             }
         }
 
@@ -112,9 +88,8 @@ namespace New_ZZZF.TacticalMap.Core
                 _ready = _controller.Initialize(Mission);
                 if (_ready)
                 {
-                    // The terrain bake only samples the heightmap/material layers. Scene geometry
-                    // such as houses and fences lives in GameEntity physics, so add its XY footprint
-                    // before the HTML static snapshot is published.
+                    // Terrain bake samples the height/material layers. Scene geometry such as
+                    // houses and fences is handled separately by SceneObstacleMap.
                     SceneObstacleMap.Rebuild(_controller.Cache, Mission.Scene);
                     TacticalMapHtmlUi.Instance.AttachController(_controller);
                 }
