@@ -12,6 +12,7 @@
       <div>
         <div class="eyebrow">NEW_ZZZF / BATTLEFIELD</div>
         <h1>Tactical Map</h1>
+        <div id="shortcutHint" class="eyebrow">快捷键：N 进入/退出全屏操作　ESC 退出全屏操作</div>
       </div>
       <div id="modeLabel" class="mode-label">观察</div>
     </header>
@@ -24,7 +25,7 @@
 
       <section class="map-panel">
         <canvas id="mapCanvas" width="1024" height="768" tabindex="0" aria-label="战场地图"></canvas>
-        <div id="hint" class="hint">被动小图　进入操作大图后可下达移动、镜头与朝向命令</div>
+        <div id="hint" class="hint">被动小图　按 N 进入全屏操作</div>
       </section>
 
       <aside id="detailPanel" class="panel detail-panel">
@@ -45,6 +46,33 @@
     </footer>
   </div>
 
+  <script>
+  (() => {
+    'use strict';
+    const app = window.game.app;
+
+    window.addEventListener('keydown', event => {
+      const key = String(event.key || '').toLowerCase();
+
+      if (key === 'n') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        try { app.call('toggleInteractive').catch(() => {}); } catch (_) {}
+        return;
+      }
+
+      if (key === 'escape') {
+        let interactive = false;
+        try { interactive = !!app.state.get('tacticalMap.runtime')?.interactive; } catch (_) {}
+        if (!interactive) return;
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        try { app.call('escape').catch(() => {}); } catch (_) {}
+      }
+    }, true);
+  })();
+  </script>
   <script src="tactical-map.js"></script>
 </body>
 </html>
