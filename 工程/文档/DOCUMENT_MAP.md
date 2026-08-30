@@ -8,7 +8,8 @@
 |---|---|---|
 | 了解整个项目 | `工程/文档/README.md` | `工程/文档/项目文档/PROJECT_ARCHITECTURE.md` |
 | 开始开发新功能 | `工程/文档/项目文档/DEVELOPMENT_GUIDE.md` | 对应功能主文档 |
-| TacticalMap 开发 | `工程/文档/功能/TacticalMap.md` | TacticalMap 历史审计 / Bug 记录 |
+| TacticalMap 开发 | `工程/文档/功能/TacticalMap.md` | `工程/文档/功能/TacticalMap_AI开发指南.md` |
+| TacticalMap AI/代码代理开发 | `工程/文档/功能/TacticalMap_AI开发指南.md` | `工程/文档/历史/BUG_HISTORY.md` |
 | 技能系统开发 | `工程/文档/功能/技能系统.md` | 技能系统原教程 / 技术参考 |
 | SpellForge | `工程/文档/功能/SpellForge.md` | 原功能资料 |
 | 世界状态继承 | `工程/文档/功能/世界状态继承系统.md` | 数据设计 / 已知问题 |
@@ -44,7 +45,13 @@
 
 先查：
 
-`功能/TacticalMap.md` → TacticalMap 审计 → Bug 经验库
+`功能/TacticalMap.md` → TacticalMap AI开发指南 → TacticalMap 审计 → Bug 经验库
+
+### TacticalMap 输入、焦点、部署异常
+
+先查：
+
+`功能/TacticalMap_AI开发指南.md` → `历史/2026-08-30_TacticalMap_N键与鼠标焦点复盘.md` → `BUG_HISTORY.md`
 
 ### 技能系统出现存档、UI、触发器异常
 
