@@ -52,6 +52,7 @@
     const app = window.game.app;
 
     window.addEventListener('keydown', event => {
+      if (event.repeat) return;
       const key = String(event.key || '').toLowerCase();
 
       if (key === 'n') {
