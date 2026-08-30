@@ -9,6 +9,7 @@
 ## 入口
 
 - [Bug 修复经验库](BUG_HISTORY.md)
+- [2026-08-30 TacticalMap N 键与鼠标焦点复盘](2026-08-30_TacticalMap_N键与鼠标焦点复盘.md)
 - [工作日志](../工作日志/README.md)
 - [UI 开发历史](../UI开发文档/README.md)
 - [技能系统历史](../技能系统/README.md)
