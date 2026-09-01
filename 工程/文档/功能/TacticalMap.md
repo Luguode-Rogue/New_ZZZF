@@ -67,14 +67,17 @@ SubModule
 3. Terrain / Tracking / Order / Camera 模块保持职责单一。
 4. 所有版本敏感 API 集中隔离。
 5. 高频日志默认关闭；只有排查问题时临时提高日志级别。
-6. 任何新 Bug 修复都必须进入 [Bug 修复经验库](../历史/BUG_HISTORY.md)。
+6. 任何新 Bug 修复都必须进入 [Bug 修复经验库](../历史/BUG_HISTORY.md) 或对应的日期复盘文档。
+7. AI/代码代理进行 TacticalMap 开发时，必须先阅读 [TacticalMap AI 开发指南](TacticalMap_AI开发指南.md)。
 
 ## 5. 历史资料
 
+- [TacticalMap AI 开发指南](TacticalMap_AI开发指南.md)
 - [2026-08-01 战术地图审计文档](../UI开发文档/2026-08-01_战术地图TacticalMap_审计文档.md)
 - [2026-08-01 战术地图项目计划/进度](../UI开发文档/2026-08-01_战术地图TacticalMap_项目计划书_进度.md)
 - [UI 开发文档索引](../UI开发文档/README.md)
 - [Bug 修复经验库](../历史/BUG_HISTORY.md)
+- [2026-08-30 N 键与鼠标焦点复盘](../历史/2026-08-30_TacticalMap_N键与鼠标焦点复盘.md)
 
 ## 6. 使用规则
 

@@ -6,9 +6,8 @@ using System.Threading.Tasks;
 namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
-    /// 战术语义地形推断器。
-    /// 不依赖任何“森林/悬崖”高层语义接口，而是用 高度 + 法线 + 材质层 + 邻域突变 推断。
-    /// 这是纯数据计算阶段，不访问 Scene / Game API，可安全并行执行。
+    /// Builds gameplay-relevant terrain semantics from height, normal, material and local relief.
+    /// No Scene/Game API is accessed here, so the classification pass can run in parallel.
     /// </summary>
     public static class TerrainAnalyzer
     {
@@ -23,71 +22,115 @@ namespace New_ZZZF.TacticalMap.Terrain
             if (w <= 0 || h <= 0) return;
 
             float range = Math.Max(0.001f, cache.MaxH - cache.MinH);
-            var forestMaterials = new HashSet<short>(s.ForestMaterialIndices ?? Array.Empty<short>());
+            var forestMaterials = new HashSet<short>(s.ForestMaterialIndices ?? new short[0]);
             var watch = Stopwatch.StartNew();
 
             Parallel.For(0, w, x =>
             {
                 for (int y = 0; y < h; y++)
                 {
-                    var cell = cache.Cells[x, y];
+                    TerrainCell cell = cache.Cells[x, y];
+
                     float slope = 1f - cell.Normal.z;
                     if (slope < 0f) slope = 0f;
                     else if (slope > 1f) slope = 1f;
                     cell.Slope = slope;
 
                     float centerHeight = heights[x, y];
-                    float jump = 0f;
-                    if (x > 0) jump = Math.Max(jump, Math.Abs(centerHeight - heights[x - 1, y]));
-                    if (x < w - 1) jump = Math.Max(jump, Math.Abs(centerHeight - heights[x + 1, y]));
-                    if (y > 0) jump = Math.Max(jump, Math.Abs(centerHeight - heights[x, y - 1]));
-                    if (y < h - 1) jump = Math.Max(jump, Math.Abs(centerHeight - heights[x, y + 1]));
+                    float neighborSum = 0f;
+                    int neighborCount = 0;
+                    float maxJump = 0f;
+                    int minX = Math.Max(0, x - 1);
+                    int maxX = Math.Min(w - 1, x + 1);
+                    int minY = Math.Max(0, y - 1);
+                    int maxY = Math.Min(h - 1, y + 1);
+
+                    for (int nx = minX; nx <= maxX; nx++)
+                    {
+                        for (int ny = minY; ny <= maxY; ny++)
+                        {
+                            if (nx == x && ny == y) continue;
+                            float nh = heights[nx, ny];
+                            neighborSum += nh;
+                            neighborCount++;
+                            float delta = Math.Abs(centerHeight - nh);
+                            if (delta > maxJump) maxJump = delta;
+                        }
+                    }
+
+                    float neighborhoodAverage = neighborCount > 0 ? neighborSum / neighborCount : centerHeight;
+                    float relativeDelta = centerHeight - neighborhoodAverage;
+                    cell.RelativeHeight = Clamp(relativeDelta / Math.Max(0.5f, s.HighGroundReferenceHeight), -1f, 1f);
+                    cell.HighGround = Math.Max(0f, cell.RelativeHeight);
+                    cell.IsHighGround = cell.HighGround >= 0.25f;
+
+                    // Height discontinuities are a stronger cliff signal than generic movement
+                    // difficulty. Keep the normalized value for pathing/risk consumers.
+                    float cliffJumpThreshold = Math.Max(1.0f, Math.Min(s.CliffHeightJump, cache.CellStep * 0.45f));
+                    cell.HeightBreak = Clamp(maxJump / cliffJumpThreshold, 0f, 1f);
 
                     float heightFrac = (cell.Height - cache.MinH) / range;
-                    cell.IsWater = heightFrac <= s.WaterHeightFraction;
-                    cell.IsCliff = !cell.IsWater && (slope > s.CliffSlopeThreshold || jump > s.CliffHeightJump);
+                    cell.IsWater = heightFrac <= s.WaterHeightFraction && slope < 0.28f;
 
-                    bool vegMat = false;
-                    var layers = cell.MaterialLayers;
+                    // The previous threshold required an unusually vertical surface before it
+                    // became a cliff. Use the configured threshold but also recognize a sharp
+                    // height discontinuity. This catches both carved cliffs and abrupt ledges.
+                    float cliffSlopeThreshold = Clamp(Math.Min(s.CliffSlopeThreshold, 0.45f), 0.28f, 0.75f);
+                    cell.IsCliff = !cell.IsWater &&
+                                   (slope >= cliffSlopeThreshold || maxJump >= cliffJumpThreshold);
+
+                    bool vegetationMaterial = false;
+                    short[] layers = cell.MaterialLayers;
                     if (layers != null && layers.Length > 0 && forestMaterials.Count > 0)
                     {
                         for (int i = 0; i < layers.Length; i++)
                         {
                             if (forestMaterials.Contains(layers[i]))
                             {
-                                vegMat = true;
+                                vegetationMaterial = true;
                                 break;
                             }
                         }
                     }
-                    cell.IsForest = !cell.IsWater && !cell.IsCliff && slope < 0.12f && vegMat;
+                    cell.IsForest = !cell.IsWater && !cell.IsCliff && vegetationMaterial && slope < 0.30f;
 
-                    if (cell.IsCliff)
-                    {
-                        cell.Kind = TerrainKind.Cliff;
-                        cell.Risk = 0.9f;
-                    }
-                    else if (cell.IsWater)
-                    {
+                    if (cell.IsWater)
                         cell.Kind = TerrainKind.Water;
-                        cell.Risk = 0.7f;
-                    }
+                    else if (cell.IsCliff)
+                        cell.Kind = TerrainKind.Cliff;
                     else if (cell.IsForest)
-                    {
                         cell.Kind = TerrainKind.Forest;
-                        cell.Risk = 0.35f;
-                    }
                     else
-                    {
                         cell.Kind = TerrainKind.Plain;
-                        cell.Risk = 0f;
-                    }
+
+                    float slopeCost = SmoothStep(0.18f, Math.Max(0.22f, cliffSlopeThreshold), slope) * 0.58f;
+                    float breakCost = cell.HeightBreak * 0.32f;
+                    float materialCost = cell.IsForest ? 0.14f : 0f;
+                    float blockerCost = cell.IsCliff ? 1f : (cell.IsWater ? 0.92f : 0f);
+                    cell.MovementCost = Clamp(Math.Max(blockerCost, slopeCost + breakCost + materialCost), 0f, 1f);
+
+                    cell.Risk = cell.MovementCost;
                 }
             });
 
             watch.Stop();
             New_ZZZF.TacticalMap.Diagnostics.TacticalMapLog.Info(
                 "TerrainAnalyzer.ClassifyAll completed in " + watch.ElapsedMilliseconds + " ms. Cells=" + (w * h));
+        }
+
+        private static float SmoothStep(float edge0, float edge1, float value)
+        {
+            if (value <= edge0) return 0f;
+            if (value >= edge1) return 1f;
+            float t = (value - edge0) / Math.Max(0.0001f, edge1 - edge0);
+            return t * t * (3f - 2f * t);
+        }
+
+        private static float Clamp(float value, float min, float max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
         }
     }
 }

@@ -2,12 +2,6 @@
   <PropertyGroup>
     <HtmlUiModuleDeployDir Condition="'$(HtmlUiModuleDeployDir)' == ''">$(GameFolder)\Modules\$(ModuleId)</HtmlUiModuleDeployDir>
     <HtmlUiBinaryDeployDir Condition="'$(HtmlUiBinaryDeployDir)' == ''">$(HtmlUiModuleDeployDir)\bin\$(GameBinariesFolder)</HtmlUiBinaryDeployDir>
-
-    <CustomSkillHtmlUiSource>$(MSBuildProjectDirectory)\GUI\Html\CustomSkill</CustomSkillHtmlUiSource>
-    <CustomSkillHtmlUiDeploy>$(HtmlUiBinaryDeployDir)\CustomSkillUI</CustomSkillHtmlUiDeploy>
-
-    <TacticalMapHtmlUiSource>$(MSBuildProjectDirectory)\TacticalMap\UI\TacticalMap</TacticalMapHtmlUiSource>
-    <TacticalMapHtmlUiDeploy>$(HtmlUiBinaryDeployDir)\UI\TacticalMap</TacticalMapHtmlUiDeploy>
   </PropertyGroup>
 
   <ItemGroup>
@@ -48,45 +42,5 @@
       Lines="Module=New_ZZZF;Target=$(TargetPath);Deployed=$(HtmlUiBinaryDeployDir)\$(TargetFileName);BuildConfiguration=$(Configuration);TargetFramework=$(TargetFramework)"
       Overwrite="true"
       Encoding="UTF-8" />
-  </Target>
-
-  <Target Name="DeployCustomSkillHtmlUi"
-          AfterTargets="Build"
-          Condition="'$(TargetFramework)' == 'net472' and Exists('$(GameFolder)\Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll') and Exists('$(CustomSkillHtmlUiSource)')">
-    <Message Importance="High" Text="[CustomSkill] Deploy HtmlUI: '$(CustomSkillHtmlUiSource)' -> '$(CustomSkillHtmlUiDeploy)'" />
-    <MakeDir Directories="$(CustomSkillHtmlUiDeploy)" />
-    <ItemGroup>
-      <_CustomSkillHtmlFiles Include="$(CustomSkillHtmlUiSource)\**\*" />
-    </ItemGroup>
-    <Copy
-      SourceFiles="@(_CustomSkillHtmlFiles)"
-      DestinationFiles="@(_CustomSkillHtmlFiles->'$(CustomSkillHtmlUiDeploy)\%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
-  </Target>
-
-  <Target Name="DeployTacticalMapHtmlUi"
-          AfterTargets="Build"
-          Condition="'$(TargetFramework)' == 'net472' and Exists('$(GameFolder)\Modules\BannerlordHtmlUI\bin\Win64_Shipping_Client\BannerlordHtmlUI.dll') and Exists('$(TacticalMapHtmlUiSource)')">
-    <Message Importance="High" Text="[TacticalMap] Deploy HtmlUI: '$(TacticalMapHtmlUiSource)' -> '$(TacticalMapHtmlUiDeploy)'" />
-    <MakeDir Directories="$(TacticalMapHtmlUiDeploy)" />
-    <ItemGroup>
-      <_TacticalMapHtmlFiles Include="$(TacticalMapHtmlUiSource)\**\*" />
-    </ItemGroup>
-    <Copy
-      SourceFiles="@(_TacticalMapHtmlFiles)"
-      DestinationFiles="@(_TacticalMapHtmlFiles->'$(TacticalMapHtmlUiDeploy)\%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
-  </Target>
-
-  <Target Name="CleanupLegacyTacticalMapHtmlUi"
-          AfterTargets="Build"
-          Condition="'$(TargetFramework)' == 'net472'">
-    <PropertyGroup>
-      <_LegacyTacticalMapGameDir>$(HtmlUiBinaryDeployDir)\TacticalMapUI</_LegacyTacticalMapGameDir>
-      <_LegacyTacticalMapBuildDir>$(TargetDir)TacticalMapUI</_LegacyTacticalMapBuildDir>
-    </PropertyGroup>
-    <Message Importance="Normal" Text="[TacticalMap] Removing legacy HtmlUI outputs if present." />
-    <RemoveDir Directories="$(_LegacyTacticalMapGameDir)" Condition="Exists('$(_LegacyTacticalMapGameDir)')" />
-    <RemoveDir Directories="$(_LegacyTacticalMapBuildDir)" Condition="Exists('$(_LegacyTacticalMapBuildDir)')" />
   </Target>
 </Project>

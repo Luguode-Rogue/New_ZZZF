@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using BannerlordHtmlUI;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Core;
@@ -30,93 +29,63 @@ namespace New_ZZZF.TacticalMap.UI
         private bool _registered;
         private bool _pageOpened;
         private float _publishAccum;
-        private float _keyHoldAccum;
-        private bool _toggleKeyDown;
-        private bool _longPressTriggered;
         private string _lastRuntimeSignature;
         private int _lastTerrainSignature;
         private TacticalMapUiMode _mode = TacticalMapUiMode.CompactPassive;
         private string _terrainBase64;
-        private string _riskBase64;
+        private string _tacticalBase64;
+        private string _navMeshBase64;
 
         public static TacticalMapHtmlUi Instance => _instance.Value;
-        public bool IsVisible => _pageOpened && _mode != TacticalMapUiMode.Hidden;
+        public bool IsVisible => _pageOpened;
         public TacticalMapUiMode Mode => _mode;
-
-        // Compact mode is deliberately display-only. Only FullInteractive may own WebView input.
         public bool IsInteractive => _mode == TacticalMapUiMode.FullInteractive;
 
         private TacticalMapHtmlUi() { }
 
         public void InitializeOnFrameworkReady()
         {
-            TacticalMapLog.Info("TacticalMapHtmlUi.InitializeOnFrameworkReady called. FrameworkReady=" + HtmlUiService.IsReady);
             HtmlUiService.OnReady(Register);
         }
 
         private void Register()
         {
-            TacticalMapLog.Section("HTMLUI REGISTER");
-            TacticalMapLog.Info("Register entered. FrameworkReady=" + HtmlUiService.IsReady);
             if (_registered || !HtmlUiService.IsReady) return;
 
-            try
-            {
-                string assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
-                string uiRoot = Path.Combine(assemblyDir, "UI");
-                TacticalMapLog.Info("HtmlUI AssemblyDir=" + assemblyDir);
-                TacticalMapLog.Info("HtmlUI ContentRoot=" + uiRoot + ", Exists=" + Directory.Exists(uiRoot));
-                if (!Directory.Exists(uiRoot))
-                    throw new DirectoryNotFoundException("TacticalMap HtmlUI content root not found: " + uiRoot);
+            string assemblyDir = Path.GetDirectoryName(typeof(TacticalMapHtmlUi).Assembly.Location) ?? ".";
+            DirectoryInfo binDir = Directory.GetParent(assemblyDir);
+            DirectoryInfo moduleDir = binDir == null ? null : Directory.GetParent(binDir.FullName);
+            string uiRoot = moduleDir == null
+                ? Path.Combine(assemblyDir, "UI")
+                : Path.Combine(moduleDir.FullName, "UI");
+            if (!Directory.Exists(uiRoot))
+                throw new DirectoryNotFoundException("TacticalMap HtmlUI content root not found: " + uiRoot);
 
-                _scope = HtmlUiService.CreateScope(OwnerId);
-                _scope.RegisterContentRoot(ContentRootName, uiRoot);
-                TacticalMapLog.Info("ContentRoot registered: " + ContentRootName);
-                _pageId = _scope.RegisterPage(new HtmlUiPage(PageName, "TacticalMap/index.html")
-                {
-                    ContentRootId = ContentRootName,
-                    HotReload = true,
-                    DefaultInputMode = HtmlUiInputMode.Passive,
-                    CloseOnEscape = false
-                });
-                TacticalMapLog.Info("Page registered. PageId=" + _pageId + ", Html=TacticalMap/index.html, CloseOnEscape=false");
-
-                RegisterCommands();
-                _registered = true;
-                HtmlUiLogger.Info("TacticalMap HtmlUI registered.");
-                TacticalMapLog.Info("TacticalMap HtmlUI registration SUCCESS.");
-                if (_controller != null) OpenForMission();
-            }
-            catch (Exception ex)
+            _scope = HtmlUiService.CreateScope(OwnerId);
+            _scope.RegisterContentRoot(ContentRootName, uiRoot);
+            _pageId = _scope.RegisterPage(new HtmlUiPage(PageName, "TacticalMap/index.html")
             {
-                TacticalMapLog.Error("TacticalMap HtmlUI registration FAILED.", ex);
-                throw;
-            }
+                ContentRootId = ContentRootName,
+                HotReload = true,
+                DefaultInputMode = HtmlUiInputMode.Passive,
+                CloseOnEscape = false
+            });
+
+            RegisterCommands();
+            _registered = true;
+            HtmlUiLogger.Info("TacticalMap HtmlUI registered. Root=" + uiRoot);
+            if (_controller != null) OpenForMission();
         }
 
         private void RegisterCommands()
         {
-            _scope.RegisterCommand("toggleInteractive", _ =>
-            {
-                TacticalMapLog.Info("HTML command toggleInteractive received.");
-                ToggleInteractive();
-            });
+            _scope.RegisterCommand("toggleInteractive", _ => ToggleInteractive());
             _scope.RegisterCommand("setInteractive", payload =>
             {
                 bool value = payload?["value"]?.Value<bool>() ?? false;
-                TacticalMapLog.Info("HTML command setInteractive=" + value);
                 SetInteractive(value);
             });
-            _scope.RegisterCommand("longPressNext", _ =>
-            {
-                TacticalMapLog.Info("HTML command longPressNext received.");
-                AdvanceLongPress();
-            });
-            _scope.RegisterCommand("escape", _ =>
-            {
-                TacticalMapLog.Info("HTML command escape received.");
-                SetInteractive(false);
-            });
+            _scope.RegisterCommand("escape", _ => SetInteractive(false));
             _scope.RegisterCommand("clientLog", payload =>
             {
                 string message = payload?["message"]?.Value<string>() ?? string.Empty;
@@ -126,7 +95,6 @@ namespace New_ZZZF.TacticalMap.UI
             _scope.RegisterCommand("selectFormation", payload =>
             {
                 string name = payload?["name"]?.Value<string>();
-                TacticalMapLog.Info("HTML command selectFormation=" + (name ?? "<clear>"));
                 if (string.IsNullOrWhiteSpace(name))
                     _controller?.HandleHtmlClearFormationSelection();
                 else
@@ -135,24 +103,18 @@ namespace New_ZZZF.TacticalMap.UI
             });
             _scope.RegisterCommand("move", payload =>
             {
-                TacticalMapLog.Info("HTML command move received.");
-                var controller = _controller;
-                if (controller != null)
-                    ExecuteUv("move", payload, new Action<float, float>(controller.HandleHtmlMoveClick));
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("move", payload, controller.HandleHtmlMoveClick);
             });
             _scope.RegisterCommand("face", payload =>
             {
-                TacticalMapLog.Info("HTML command face received.");
-                var controller = _controller;
-                if (controller != null)
-                    ExecuteUv("face", payload, new Action<float, float>(controller.HandleHtmlFaceClick));
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("face", payload, controller.HandleHtmlFaceClick);
             });
             _scope.RegisterCommand("camera", payload =>
             {
-                TacticalMapLog.Info("HTML command camera received.");
-                var controller = _controller;
-                if (controller != null)
-                    ExecuteUv("camera", payload, new Action<float, float>(controller.HandleHtmlCameraClick));
+                TacticalMapController controller = _controller;
+                if (controller != null) ExecuteUv("camera", payload, controller.HandleHtmlCameraClick);
             });
             _scope.RegisterCommand("refresh", _ => PublishState(true));
             _scope.RegisterRequest("getState", _ => Task.FromResult<object>(BuildRuntimeState()));
@@ -160,35 +122,27 @@ namespace New_ZZZF.TacticalMap.UI
 
         private static void ExecuteUv(string command, JToken payload, Action<float, float> handler)
         {
-            TacticalMapLog.Info("ExecuteUv " + command + ". Handler=" + (handler != null));
             if (handler == null || payload == null) return;
             float u = payload["u"]?.Value<float>() ?? -1f;
             float v = payload["v"]?.Value<float>() ?? -1f;
-            TacticalMapLog.Info("ExecuteUv " + command + ": u=" + u + ", v=" + v);
             handler(u, v);
         }
 
         public void AttachController(TacticalMapController controller)
         {
-            TacticalMapLog.Section("HTMLUI ATTACH CONTROLLER");
-            TacticalMapLog.Info("AttachController controllerNull=" + (controller == null));
             _controller = controller;
             _mode = TacticalMapUiMode.CompactPassive;
             _publishAccum = 0f;
-            _keyHoldAccum = 0f;
-            _toggleKeyDown = false;
-            _longPressTriggered = false;
             _lastRuntimeSignature = null;
             _lastTerrainSignature = 0;
             _terrainBase64 = null;
-            _riskBase64 = null;
+            _tacticalBase64 = null;
+            _navMeshBase64 = null;
             if (_registered && HtmlUiService.IsReady) OpenForMission();
         }
 
         public void DetachController()
         {
-            TacticalMapLog.Section("HTMLUI DETACH CONTROLLER");
-            TacticalMapLog.Info("DetachController PageOpened=" + _pageOpened + ", Registered=" + _registered);
             try
             {
                 if (_pageOpened && _registered && HtmlUiService.IsReady)
@@ -200,31 +154,22 @@ namespace New_ZZZF.TacticalMap.UI
             _controller = null;
             _mode = TacticalMapUiMode.CompactPassive;
             _publishAccum = 0f;
-            _keyHoldAccum = 0f;
-            _toggleKeyDown = false;
-            _longPressTriggered = false;
             _lastRuntimeSignature = null;
             _lastTerrainSignature = 0;
             _terrainBase64 = null;
-            _riskBase64 = null;
+            _tacticalBase64 = null;
+            _navMeshBase64 = null;
             try { HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden); } catch { }
-            TacticalMapLog.Info("DetachController completed.");
         }
 
         private void OpenForMission()
         {
-            TacticalMapLog.Info("OpenForMission controller=" + (_controller != null) + ", registered=" + _registered + ", ready=" + HtmlUiService.IsReady + ", opened=" + _pageOpened);
             if (_controller == null || !_registered || !HtmlUiService.IsReady || _pageOpened) return;
             try
             {
-                if (!HtmlUiService.Pages.Open(_pageId))
-                {
-                    TacticalMapLog.Warn("HtmlUiService.Pages.Open returned false. PageId=" + _pageId);
-                    return;
-                }
+                if (!HtmlUiService.Pages.Open(_pageId)) return;
                 _pageOpened = true;
                 ApplyInputMode();
-                TacticalMapLog.Info("HTMLUI PAGE OPENED. PageId=" + _pageId);
                 PublishState(true);
             }
             catch (Exception ex)
@@ -239,111 +184,24 @@ namespace New_ZZZF.TacticalMap.UI
         {
             if (_controller == null) return;
             if (!_pageOpened && _registered && HtmlUiService.IsReady) OpenForMission();
-
-            // The toggle key is consumed by Bannerlord-side state handling, never by the WebView.
-            UpdateToggleKey(dt);
-
             if (!_pageOpened) return;
+
             _publishAccum += Math.Max(0f, dt);
             if (_publishAccum < 0.10f) return;
             _publishAccum = 0f;
             PublishState(false);
         }
 
-        private void UpdateToggleKey(float dt)
+        public void ToggleInteractive()
         {
-            bool isDown;
-            try { isDown = Input.IsKeyDown(TacticalSettings.Instance.ToggleKey); }
-            catch (Exception ex) { TacticalMapLog.Error("Toggle key read failed.", ex); return; }
-            if (isDown && !_toggleKeyDown)
-            {
-                _toggleKeyDown = true;
-                _keyHoldAccum = 0f;
-                _longPressTriggered = false;
-                TacticalMapLog.Info("Toggle key DOWN. Key=" + TacticalSettings.Instance.ToggleKey + ", Mode=" + _mode);
-                return;
-            }
-            if (isDown)
-            {
-                _keyHoldAccum += Math.Max(0f, dt);
-                if (!_longPressTriggered && _keyHoldAccum >= TacticalSettings.Instance.ToggleLongPressThreshold)
-                {
-                    _longPressTriggered = true;
-                    TacticalMapLog.Info("Toggle key LONG PRESS. Duration=" + _keyHoldAccum + ", Mode=" + _mode);
-                    AdvanceLongPress();
-                }
-                return;
-            }
-            if (_toggleKeyDown)
-            {
-                if (!_longPressTriggered)
-                {
-                    TacticalMapLog.Info("Toggle key SHORT PRESS. Duration=" + _keyHoldAccum + ", Mode=" + _mode);
-                    ToggleInteractive();
-                }
-                _toggleKeyDown = false;
-                _keyHoldAccum = 0f;
-                _longPressTriggered = false;
-            }
+            SetInteractive(!IsInteractive);
         }
 
-        private void ToggleInteractive()
+        public void SetInteractive(bool interactive)
         {
-            TacticalMapUiMode before = _mode;
-            switch (_mode)
-            {
-                case TacticalMapUiMode.CompactPassive:
-                    _mode = TacticalMapUiMode.FullInteractive;
-                    break;
-                case TacticalMapUiMode.FullInteractive:
-                case TacticalMapUiMode.FullPassive:
-                    _mode = TacticalMapUiMode.CompactPassive;
-                    break;
-                case TacticalMapUiMode.CompactInteractive:
-                    _mode = TacticalMapUiMode.CompactPassive;
-                    break;
-                default:
-                    _mode = TacticalMapUiMode.CompactPassive;
-                    break;
-            }
-            TacticalMapLog.Info("ToggleInteractive: " + before + " -> " + _mode);
-            ApplyInputMode();
-            PublishState(true);
-        }
-
-        private void AdvanceLongPress()
-        {
-            TacticalMapUiMode before = _mode;
-            switch (_mode)
-            {
-                case TacticalMapUiMode.CompactPassive:
-                    _mode = TacticalMapUiMode.FullInteractive;
-                    break;
-                case TacticalMapUiMode.FullInteractive:
-                case TacticalMapUiMode.FullPassive:
-                    _mode = TacticalMapUiMode.Hidden;
-                    break;
-                default:
-                    _mode = TacticalMapUiMode.CompactPassive;
-                    break;
-            }
-            TacticalMapLog.Info("AdvanceLongPress: " + before + " -> " + _mode);
-            ApplyInputMode();
-            PublishState(true);
-        }
-
-        private void SetInteractive(bool interactive)
-        {
-            TacticalMapUiMode before = _mode;
-            if (interactive)
-            {
-                _mode = TacticalMapUiMode.FullInteractive;
-            }
-            else
-            {
-                _mode = TacticalMapUiMode.CompactPassive;
-            }
-            TacticalMapLog.Info("SetInteractive(" + interactive + "): " + before + " -> " + _mode);
+            TacticalMapUiMode next = interactive ? TacticalMapUiMode.FullInteractive : TacticalMapUiMode.CompactPassive;
+            if (_mode == next) return;
+            _mode = next;
             ApplyInputMode();
             PublishState(true);
         }
@@ -352,23 +210,14 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                if (_mode == TacticalMapUiMode.Hidden)
-                {
-                    HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden);
-                    TacticalMapLog.Info("InputMode=Hidden, Mode=" + _mode);
-                }
-                else if (_mode == TacticalMapUiMode.FullInteractive)
-                {
-                    HtmlUiService.SetInputMode(HtmlUiInputMode.MouseCaptured);
-                    TacticalMapLog.Info("InputMode=MouseCaptured, Mode=FullInteractive");
-                }
-                else
-                {
-                    HtmlUiService.SetInputMode(HtmlUiInputMode.Passive);
-                    TacticalMapLog.Info("InputMode=Passive, Mode=" + _mode + ". Compact map is display-only.");
-                }
+                HtmlUiService.SetInputMode(IsInteractive
+                    ? HtmlUiInputMode.MouseCaptured
+                    : HtmlUiInputMode.Passive);
             }
-            catch (Exception ex) { TacticalMapLog.Error("TacticalMap HtmlUI input mode change failed.", ex); }
+            catch (Exception ex)
+            {
+                TacticalMapLog.Error("TacticalMap HtmlUI input mode change failed.", ex);
+            }
         }
 
         private void PublishState(bool force)
@@ -377,7 +226,7 @@ namespace New_ZZZF.TacticalMap.UI
             try
             {
                 PublishStaticStateIfChanged();
-                var runtime = BuildRuntimeState();
+                object runtime = BuildRuntimeState();
                 string signature = JsonConvert.SerializeObject(runtime, Formatting.None);
                 if (!force && string.Equals(signature, _lastRuntimeSignature, StringComparison.Ordinal)) return;
                 _lastRuntimeSignature = signature;
@@ -388,13 +237,18 @@ namespace New_ZZZF.TacticalMap.UI
 
         private void PublishStaticStateIfChanged()
         {
-            var cache = _controller.Cache;
-            int terrainSignature = ComputeTerrainSignature(cache);
+            Terrain.TerrainCache cache = _controller.Cache;
+            Terrain.NavMeshMap navMesh = _controller.NavigationMap;
+            int terrainSignature = ComputeTerrainSignature(cache, navMesh);
             if (terrainSignature == _lastTerrainSignature) return;
+
             _terrainBase64 = cache.TerrainBaseRGBA == null ? null : Convert.ToBase64String(cache.TerrainBaseRGBA);
-            _riskBase64 = TacticalSettings.Instance.EnableRiskOverlay && cache.RiskRGBA != null ? Convert.ToBase64String(cache.RiskRGBA) : null;
+            _tacticalBase64 = TacticalSettings.Instance.EnableRiskOverlay && cache.TacticalRGBA != null
+                ? Convert.ToBase64String(cache.TacticalRGBA) : null;
+            _navMeshBase64 = navMesh != null && navMesh.RGBA != null
+                ? Convert.ToBase64String(navMesh.RGBA) : null;
             _lastTerrainSignature = terrainSignature;
-            TacticalMapLog.Info("Publishing static State. Baked=" + cache.IsBaked + ", Size=" + cache.Width + "x" + cache.Height + ", TerrainBytes=" + (cache.TerrainBaseRGBA == null ? 0 : cache.TerrainBaseRGBA.Length) + ", RiskBytes=" + (cache.RiskRGBA == null ? 0 : cache.RiskRGBA.Length) + ", Error=" + (cache.LastError ?? "<none>"));
+
             _scope.SetState(StaticStateKey, new
             {
                 width = cache.Width,
@@ -404,53 +258,100 @@ namespace New_ZZZF.TacticalMap.UI
                 worldWidth = cache.WorldW,
                 worldHeight = cache.WorldH,
                 terrainVersion = terrainSignature,
+                navMeshVersion = navMesh == null ? 0 : navMesh.Version,
                 terrainBaseRgba = _terrainBase64,
-                riskRgba = _riskBase64,
+                tacticalRgba = _tacticalBase64,
+                riskRgba = _tacticalBase64,
+                navMeshRgba = _navMeshBase64,
                 enableRisk = TacticalSettings.Instance.EnableRiskOverlay
             });
-            TacticalMapLog.Info("Static State published.");
         }
 
         private object BuildRuntimeState()
         {
-            var cache = _controller.Cache;
-            var settings = TacticalSettings.Instance;
+            Terrain.TerrainCache cache = _controller.Cache;
+            New_ZZZF.TacticalMap.Config.TacticalSettings settings = New_ZZZF.TacticalMap.Config.TacticalSettings.Instance;
             var formations = new List<object>();
             foreach (var f in _controller.FormationSnapshots)
             {
                 Vec2 uv = cache.WorldToUV(f.AveragePosition);
-                formations.Add(new { name = f.Name ?? string.Empty, count = f.Count, player = f.IsPlayer, enemy = f.IsEnemy, u = Clamp01(uv.X), v = Clamp01(uv.Y), facingU = f.Facing.X, facingV = f.Facing.Y });
+                Vec2 orderUv = cache.WorldToUV(f.OrderPosition);
+                var route = new List<object>();
+                if (f.PathPoints != null)
+                {
+                    foreach (Vec2 worldPoint in f.PathPoints)
+                    {
+                        Vec2 pathUv = cache.WorldToUV(worldPoint);
+                        route.Add(new
+                        {
+                            u = Clamp01(pathUv.X),
+                            v = Clamp01(pathUv.Y)
+                        });
+                    }
+                }
+
+                formations.Add(new
+                {
+                    name = f.Name ?? string.Empty,
+                    count = f.Count,
+                    player = f.IsPlayer,
+                    enemy = f.IsEnemy,
+                    neutral = f.IsNeutral,
+                    u = Clamp01(uv.X),
+                    v = Clamp01(uv.Y),
+                    facingU = f.Facing.X,
+                    facingV = f.Facing.Y,
+                    hasOrder = f.HasOrder,
+                    orderU = Clamp01(orderUv.X),
+                    orderV = Clamp01(orderUv.Y),
+                    pathPoints = route
+                });
             }
+
             var agents = new List<object>();
             Vec2? player = _controller.PlayerPos;
             if (player.HasValue && settings.EnableAgentMarkers)
             {
-                float detailDistanceSquared = settings.AgentDetailDistance * settings.AgentDetailDistance;
+                float limitSquared = settings.AgentDetailDistance * settings.AgentDetailDistance;
                 foreach (var agent in _controller.AgentSnapshots)
                 {
                     Vec2 world = cache.UVToWorld(new Vec2(agent.U, agent.V));
-                    if ((world - player.Value).LengthSquared > detailDistanceSquared) continue;
-                    agents.Add(new { u = Clamp01(agent.U), v = Clamp01(agent.V), player = agent.PlayerTeam, neutral = agent.Neutral });
+                    if ((world - player.Value).LengthSquared > limitSquared) continue;
+                    agents.Add(new
+                    {
+                        u = Clamp01(agent.U),
+                        v = Clamp01(agent.V),
+                        player = agent.PlayerTeam,
+                        neutral = agent.Neutral
+                    });
                 }
             }
-            var playerUv = player.HasValue ? cache.WorldToUV(player.Value) : Vec2.Zero;
-            var target = _controller.CameraTarget;
-            var targetUv = target.HasValue ? cache.WorldToUV(target.Value) : Vec2.Zero;
+
+            Vec2? target = _controller.CameraTarget;
+            Vec2 playerUv = player.HasValue ? cache.WorldToUV(player.Value) : Vec2.Zero;
+            Vec2 targetUv = target.HasValue ? cache.WorldToUV(target.Value) : Vec2.Zero;
             return new
             {
                 mode = _mode.ToString(),
-                visible = _mode != TacticalMapUiMode.Hidden && _controller.IsVisible,
+                visible = _controller.IsVisible,
                 interactive = IsInteractive,
                 selectedFormation = _controller.SelectedFormationName,
-                player = player.HasValue ? (object)new { u = Clamp01(playerUv.X), v = Clamp01(playerUv.Y), facingU = _controller.PlayerFacing.X, facingV = _controller.PlayerFacing.Y } : null,
+                player = player.HasValue ? (object)new
+                {
+                    u = Clamp01(playerUv.X),
+                    v = Clamp01(playerUv.Y),
+                    facingU = _controller.PlayerFacing.X,
+                    facingV = _controller.PlayerFacing.Y
+                } : null,
                 cameraTarget = target.HasValue ? (object)new { u = Clamp01(targetUv.X), v = Clamp01(targetUv.Y) } : null,
                 formations,
                 agents,
-                agentVersion = _controller.AgentDataVersion
+                agentVersion = _controller.AgentDataVersion,
+                agentDetailDistance = settings.AgentDetailDistance
             };
         }
 
-        private static int ComputeTerrainSignature(Terrain.TerrainCache cache)
+        private static int ComputeTerrainSignature(Terrain.TerrainCache cache, Terrain.NavMeshMap navMesh)
         {
             unchecked
             {
@@ -459,8 +360,9 @@ namespace New_ZZZF.TacticalMap.UI
                 hash = hash * 31 + cache.Height;
                 hash = hash * 31 + (cache.IsBaked ? 1 : 0);
                 hash = hash * 31 + (cache.TerrainBaseRGBA == null ? 0 : cache.TerrainBaseRGBA.Length);
-                hash = hash * 31 + (cache.RiskRGBA == null ? 0 : cache.RiskRGBA.Length);
+                hash = hash * 31 + (cache.TacticalRGBA == null ? 0 : cache.TacticalRGBA.Length);
                 hash = hash * 31 + (cache.LastError ?? string.Empty).GetHashCode();
+                hash = hash * 31 + (navMesh == null ? 0 : navMesh.Version);
                 return hash;
             }
         }
@@ -485,9 +387,6 @@ namespace New_ZZZF.TacticalMap.UI
     public enum TacticalMapUiMode
     {
         CompactPassive,
-        CompactInteractive,
-        FullPassive,
-        FullInteractive,
-        Hidden
+        FullInteractive
     }
 }

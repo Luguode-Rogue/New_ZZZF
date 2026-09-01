@@ -32,6 +32,7 @@ namespace New_ZZZF
     {
         private Harmony _harmony;
         private bool _harmonyPatched;
+        private bool _tacticalMapToggleKeyWasDown;
 
         protected override void OnSubModuleLoad()
         {
@@ -64,7 +65,7 @@ namespace New_ZZZF
             }
 
             CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
-            TacticalMapLog.Info("CustomSkillHtmlUi.InitializeOnFrameworkReady registered.");
+            TacticalMapLog.Info("CustomSkill HtmlUi InitializeOnFrameworkReady registered.");
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
 
@@ -133,6 +134,7 @@ namespace New_ZZZF
             TacticalMapLog.Info("TacticalMapBootstrap.OnMissionStart completed.");
             mission.AddMissionBehavior(new AffixMissionBehavior());
             mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
+            mission.AddMissionBehavior(new ArcherReposition.ArcherRepositionBehavior()); // 射手防发呆重定位（删除此行 + ArcherReposition 文件夹即可整体移除该功能）
         }
 
         protected override void OnSubModuleUnloaded()
@@ -142,7 +144,7 @@ namespace New_ZZZF
             try { TacticalMapHtmlUi.Instance.Dispose(); }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
             try { CustomSkillHtmlUi.Instance.Dispose(); }
-            catch (Exception ex) { TacticalMapLog.Error("CustomSkillHtmlUi.Dispose failed.", ex); }
+            catch (Exception ex) { TacticalMapLog.Error("CustomSkill HtmlUI Dispose failed.", ex); }
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
             base.OnSubModuleUnloaded();
         }
@@ -182,7 +184,6 @@ namespace New_ZZZF
                 campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
                 campaignGameStarter.AddBehavior(new HeroChangeCampaignBehavior());
                 campaignGameStarter.AddBehavior(new AffixCampaignBehavior());
-                campaignGameStarter.AddBehavior(new New_ZZZF.PrisonBreakBribe.PrisonBreakBribeBehavior());
             }
         }
 
@@ -200,6 +201,20 @@ namespace New_ZZZF
             var campaignAvailable = Campaign.Current != null;
             var missionActive = Mission.Current != null;
             var isMenuState = activeState?.IsMenuState ?? true;
+
+            InputKey tacticalMapToggleKey = TacticalSettings.Instance.ToggleKey;
+            bool tacticalMapToggleKeyDown = missionActive && Input.IsKeyDown(tacticalMapToggleKey);
+            bool tacticalMapTogglePressed = tacticalMapToggleKeyDown && !_tacticalMapToggleKeyWasDown;
+            _tacticalMapToggleKeyWasDown = tacticalMapToggleKeyDown;
+
+            // TacticalMap 的 N 键是 New_ZZZF 正式游戏热键。
+            // 使用 KeyDown 上升沿，避免 IsKeyPressed 被其他输入读取点消费导致切换失效。
+            if (tacticalMapTogglePressed && missionActive && !customVisible)
+            {
+                TacticalMapLog.Info("TacticalMap toggle key pressed: " + tacticalMapToggleKey);
+                TacticalMapHtmlUi.Instance.ToggleInteractive();
+                TacticalMapLog.Info("TacticalMap mode after toggle: " + TacticalMapHtmlUi.Instance.Mode);
+            }
 
             if (mPressed || (Input.IsKeyDown(InputKey.M) && shiftDown))
             {

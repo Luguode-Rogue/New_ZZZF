@@ -47,7 +47,12 @@ namespace New_ZZZF.GUI
         {
             if (_registered || !HtmlUiService.IsReady) return;
             string assemblyDir = Path.GetDirectoryName(typeof(CustomSkillHtmlUi).Assembly.Location) ?? ".";
-            string uiRoot = Path.Combine(assemblyDir, "CustomSkillUI");
+            DirectoryInfo binDir = Directory.GetParent(assemblyDir);
+            DirectoryInfo moduleDir = binDir == null ? null : Directory.GetParent(binDir.FullName);
+            string uiRoot = moduleDir == null
+                ? Path.Combine(assemblyDir, "UI")
+                : Path.Combine(moduleDir.FullName, "UI");
+            uiRoot = Path.Combine(uiRoot, "CustomSkill");
             if (!Directory.Exists(uiRoot)) throw new DirectoryNotFoundException("CustomSkill HtmlUI content root not found: " + uiRoot);
 
             _scope = HtmlUiService.CreateScope(OwnerId);
@@ -63,7 +68,7 @@ namespace New_ZZZF.GUI
             });
             RegisterCommands();
             _registered = true;
-            HtmlUiLogger.Info("CustomSkill HtmlUI v4 registered with authoritative page lifecycle callbacks.");
+            HtmlUiLogger.Info("CustomSkill HtmlUI v4 registered with authoritative page lifecycle callbacks. Root=" + uiRoot);
         }
 
         private void OnPageOpened()

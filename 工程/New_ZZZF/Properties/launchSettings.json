@@ -3,7 +3,7 @@
     "Bannerlord": {
       "commandName": "Executable",
       "executablePath": "E:\\SteamLibrary\\steamapps\\common\\Mount & Blade II Bannerlord\\bin\\Win64_Shipping_Client\\Bannerlord.exe",
-      "commandLineArgs": "/singleplayer _MODULES_*Bannerlord.Harmony*Bannerlord.ButterLib*Bannerlord.UIExtenderEx*Bannerlord.MBOptionScreen*Native*SandBoxCore*CustomBattle*Sandbox*StoryMode*NavalDLC*New_ZZZF*ProjectileTrajectorySystem*LegacyWorld*XinLiu_SkillsOverhaul*QuickPickup*CleanHeroCreate*LockOnOverhaul*DesperateThrow*SocialSkillsOverhaul*SmeltingOverhaul*NpcCapSplit*BetterTime*_MODULES_",
+      "commandLineArgs": "/singleplayer _MODULES_*Bannerlord.Harmony*Bannerlord.ButterLib*Bannerlord.UIExtenderEx*Bannerlord.MBOptionScreen*Native*SandBoxCore*CustomBattle*Sandbox*StoryMode*BannerlordHtmlUI*NavalDLC*New_ZZZF*ProjectileTrajectorySystem*LegacyWorld*XinLiu_SkillsOverhaul*QuickPickup*CleanHeroCreate*DesperateThrow*SocialSkillsOverhaul*SmeltingOverhaul*NpcCapSplit*BetterTime*_MODULES_",
       "workingDirectory": "E:\\SteamLibrary\\steamapps\\common\\Mount & Blade II Bannerlord\\bin\\Win64_Shipping_Client\\"
     },
     "BLSE Bannerlord": {
