@@ -92,7 +92,8 @@ namespace New_ZZZF
             WeaponComponentData defendItem,
             bool isPassiveUsage)
         {
-            if (attackerAgent == null || defenderAgent == null)
+            if (attackerAgent == null || defenderAgent == null
+                || !attackerAgent.IsActive() || !defenderAgent.IsActive())
                 return false;
 
             EquipmentIndex attackerOffHand = attackerAgent.GetOffhandWieldedItemIndex();
@@ -219,9 +220,10 @@ namespace New_ZZZF
             if (wieldedIndex == EquipmentIndex.None)
                 return;
 
-            defenderAgent.DropItem(
-                wieldedIndex,
-                WeaponClass.Undefined);
+            // AV 根因修复：DropItem 会触碰原生 Agent/装备状态，绝不能在伤害/格挡判定调用栈内
+            // 直接执行（DeferredDisarmPatch 的 Harmony 补丁可能因 PatchAll 失败而不在场）。
+            // 改为标记延迟，由 SkillSystemBehavior.OnMissionTick 后的安全阶段统一执行。
+            DeferredDisarmExecutor.Mark(defenderAgent, wieldedIndex);
         }
     }
 

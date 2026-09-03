@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- New_ZZZF 闪退排查 —— 子系统开关（false=禁用该子系统，重启游戏生效）-->
+<!-- 排查矩阵：① 全 false 测基线；② 仅开 HarmonyPatchAll；③ 逐组开 Behavior-->
+<NewZZZFDiag>
+  <!-- TacticalMap 战术地图（初始化/挂载/N键/Tick）-->
+  <TacticalMap>true</TacticalMap>
+  <!-- 技能 HTML 界面（CustomSkillHtmlUi 初始化/Tick/M键）-->
+  <CustomSkillHtmlUi>true</CustomSkillHtmlUi>
+  <!-- 战斗内技能系统 Behavior-->
+  <SkillSystemBehavior>true</SkillSystemBehavior>
+  <!-- 斩击镜头 Behavior-->
+  <MountedSlashCamera>true</MountedSlashCamera>
+  <!-- 英雄切换系统（MissionBehavior + CampaignBehavior）-->
+  <HeroChange>true</HeroChange>
+  <!-- 词缀系统（MissionBehavior + CampaignBehavior + Ctrl+F5~F9）-->
+  <Affix>true</Affix>
+  <!-- 兵种状态浮窗 Behavior-->
+  <AgentStatusView>true</AgentStatusView>
+  <!-- Harmony PatchAll（全部 [HarmonyPatch] 补丁，含 NewDamageModel）-->
+  <HarmonyPatchAll>true</HarmonyPatchAll>
+  <!-- 技能注册加载（true/SkillFactory/SkillConfig + L 键热重载）-->
+  <SkillRegistry>true</SkillRegistry>
+  <!-- 伤害模型替换（InitializeGameStarter 的 WOW_*/ZZZF_* 模型）-->
+  <DamageModels>true</DamageModels>
+</NewZZZFDiag>

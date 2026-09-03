@@ -37,66 +37,85 @@ namespace New_ZZZF
         protected override void OnSubModuleLoad()
         {
             base.OnSubModuleLoad();
+            NewZZZFDiag.Load();   // 闪退排查：先读子系统开关（ModuleData/NewZZZF_Diag.xml）
             TacticalMapLog.Initialize();
             TacticalMapLog.Section("SUBMODULE LOAD");
             TacticalMapLog.Info("Assembly=" + typeof(SubModule).Assembly.Location);
             TacticalMapLog.Info("ModLogPath=" + TacticalMapLog.LogPath);
 
-            try
+            if (NewZZZFDiag.TacticalMap)
             {
-                TacticalMapBootstrap.OnSubModuleLoad();
-                TacticalMapLog.Info("TacticalMapBootstrap.OnSubModuleLoad completed.");
-            }
-            catch (Exception ex)
-            {
-                TacticalMapLog.Error("TacticalMapBootstrap.OnSubModuleLoad failed.", ex);
-                throw;
+                try
+                {
+                    TacticalMapBootstrap.OnSubModuleLoad();
+                    TacticalMapLog.Info("TacticalMapBootstrap.OnSubModuleLoad completed.");
+                }
+                catch (Exception ex)
+                {
+                    TacticalMapLog.Error("TacticalMapBootstrap.OnSubModuleLoad failed.", ex);
+                    throw;
+                }
+
+                try
+                {
+                    TacticalMapHtmlUi.Instance.InitializeOnFrameworkReady();
+                    TacticalMapLog.Info("TacticalMapHtmlUi.InitializeOnFrameworkReady registered.");
+                }
+                catch (Exception ex)
+                {
+                    TacticalMapLog.Error("TacticalMapHtmlUi.InitializeOnFrameworkReady failed.", ex);
+                    throw;
+                }
             }
 
-            try
+            if (NewZZZFDiag.CustomSkillHtmlUi)
             {
-                TacticalMapHtmlUi.Instance.InitializeOnFrameworkReady();
-                TacticalMapLog.Info("TacticalMapHtmlUi.InitializeOnFrameworkReady registered.");
+                CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
+                TacticalMapLog.Info("CustomSkill HtmlUi InitializeOnFrameworkReady registered.");
             }
-            catch (Exception ex)
-            {
-                TacticalMapLog.Error("TacticalMapHtmlUi.InitializeOnFrameworkReady failed.", ex);
-                throw;
-            }
-
-            CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
-            TacticalMapLog.Info("CustomSkill HtmlUi InitializeOnFrameworkReady registered.");
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
 
         public override void OnNewGameCreated(Game game, object initializerObject)
         {
             base.OnNewGameCreated(game, initializerObject);
-            ApplyZZZFSkillDisplayNames();
-            InformationManager.DisplayMessage(new InformationMessage("Save_SkillConfigManager.Instance._troopSkillMap", Colors.Red));
-            CompositeSpellRegistry.LoadAndRegisterAll();
-            SkillFactory.SkillToItemObject();
-            SkillConfigManager.Instance._troopSkillMap.Clear();
-            if (!(SkillConfigManager.Instance._troopSkillMap != null && SkillConfigManager.Instance._troopSkillMap.Count > 1))
+            if (NewZZZFDiag.SkillRegistry)
             {
-                try
+                ApplyZZZFSkillDisplayNames();
+                InformationManager.DisplayMessage(new InformationMessage("Save_SkillConfigManager.Instance._troopSkillMap", Colors.Red));
+                CompositeSpellRegistry.LoadAndRegisterAll();
+                SkillFactory.SkillToItemObject();
+                SkillConfigManager.Instance._troopSkillMap.Clear();
+                if (!(SkillConfigManager.Instance._troopSkillMap != null && SkillConfigManager.Instance._troopSkillMap.Count > 1))
                 {
-                    string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
-                    SkillConfigManager.Instance.LoadFromXml(xmlPath);
-                    InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] 技能配置加载完成！"));
-                }
-                catch (Exception ex)
-                {
-                    InformationManager.DisplayMessage(new InformationMessage($"[New_ZZZF] 配置加载失败: {ex.Message}"));
+                    try
+                    {
+                        string xmlPath = "../../Modules/New_ZZZF/ModuleData/troop_skills.xml";
+                        SkillConfigManager.Instance.LoadFromXml(xmlPath);
+                        InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] 技能配置加载完成！"));
+                    }
+                    catch (Exception ex)
+                    {
+                        InformationManager.DisplayMessage(new InformationMessage($"[New_ZZZF] 配置加载失败: {ex.Message}"));
+                    }
                 }
             }
 
-            if (!_harmonyPatched)
+            if (NewZZZFDiag.HarmonyPatchAll && !_harmonyPatched)
             {
                 _harmonyPatched = true;
                 _harmony = new Harmony("New_ZZZF");
-                _harmony.PatchAll(Assembly.GetExecutingAssembly());
-                InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] Harmony 补丁已就绪（新游戏）。"));
+                try
+                {
+                    _harmony.PatchAll(Assembly.GetExecutingAssembly());
+                    InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] Harmony 补丁已就绪（新游戏）。"));
+                }
+                catch (Exception ex)
+                {
+                    // 一条补丁签名不符会中断 PatchAll 并使其余补丁（含缴械延迟补丁）全部失效
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "[New_ZZZF] Harmony 补丁应用失败: " + ex.Message, Colors.Red));
+                }
             }
         }
 
@@ -108,17 +127,28 @@ namespace New_ZZZF
         public override void OnGameLoaded(Game game, object gameStarterObject)
         {
             base.OnGameLoaded(game, gameStarterObject);
-            ApplyZZZFSkillDisplayNames();
-            CompositeSpellRegistry.LoadAndRegisterAll();
-            SkillFactory.SkillToItemObject();
-            SkillConfigManager.Instance._troopSkillMap.Clear();
+            if (NewZZZFDiag.SkillRegistry)
+            {
+                ApplyZZZFSkillDisplayNames();
+                CompositeSpellRegistry.LoadAndRegisterAll();
+                SkillFactory.SkillToItemObject();
+                SkillConfigManager.Instance._troopSkillMap.Clear();
+            }
 
-            if (!_harmonyPatched)
+            if (NewZZZFDiag.HarmonyPatchAll && !_harmonyPatched)
             {
                 _harmonyPatched = true;
                 _harmony = new Harmony("New_ZZZF");
-                _harmony.PatchAll(Assembly.GetExecutingAssembly());
-                InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] Harmony 补丁已就绪（读档后）。"));
+                try
+                {
+                    _harmony.PatchAll(Assembly.GetExecutingAssembly());
+                    InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] Harmony 补丁已就绪（读档后）。"));
+                }
+                catch (Exception ex)
+                {
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "[New_ZZZF] Harmony 补丁应用失败: " + ex.Message, Colors.Red));
+                }
             }
         }
 
@@ -127,23 +157,37 @@ namespace New_ZZZF
             base.OnMissionBehaviorInitialize(mission);
             TacticalMapLog.Section("MISSION BEHAVIOR INITIALIZE");
             TacticalMapLog.Info("Mission=" + (mission == null ? "null" : mission.GetType().FullName));
-            mission.AddMissionBehavior(new SkillSystemBehavior());
-            mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
-            mission.AddMissionBehavior(new HeroChangeMissionBehavior());
-            TacticalMapBootstrap.OnMissionStart(mission);
-            TacticalMapLog.Info("TacticalMapBootstrap.OnMissionStart completed.");
-            mission.AddMissionBehavior(new AffixMissionBehavior());
-            mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
+            if (NewZZZFDiag.SkillSystemBehavior)
+                mission.AddMissionBehavior(new SkillSystemBehavior());
+            if (NewZZZFDiag.MountedSlashCamera)
+                mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
+            if (NewZZZFDiag.HeroChange)
+                mission.AddMissionBehavior(new HeroChangeMissionBehavior());
+            if (NewZZZFDiag.TacticalMap)
+            {
+                TacticalMapBootstrap.OnMissionStart(mission);
+                TacticalMapLog.Info("TacticalMapBootstrap.OnMissionStart completed.");
+            }
+            if (NewZZZFDiag.Affix)
+                mission.AddMissionBehavior(new AffixMissionBehavior());
+            if (NewZZZFDiag.AgentStatusView)
+                mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
         }
 
         protected override void OnSubModuleUnloaded()
         {
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_BEGIN");
             TacticalMapLog.Section("SUBMODULE UNLOAD");
-            try { TacticalMapHtmlUi.Instance.Dispose(); }
-            catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
-            try { CustomSkillHtmlUi.Instance.Dispose(); }
-            catch (Exception ex) { TacticalMapLog.Error("CustomSkill HtmlUI Dispose failed.", ex); }
+            if (NewZZZFDiag.TacticalMap)
+            {
+                try { TacticalMapHtmlUi.Instance.Dispose(); }
+                catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
+            }
+            if (NewZZZFDiag.CustomSkillHtmlUi)
+            {
+                try { CustomSkillHtmlUi.Instance.Dispose(); }
+                catch (Exception ex) { TacticalMapLog.Error("CustomSkill HtmlUI Dispose failed.", ex); }
+            }
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
             base.OnSubModuleUnloaded();
         }
@@ -170,26 +214,40 @@ namespace New_ZZZF
 
         protected override void InitializeGameStarter(Game game, IGameStarter gameStarterObject)
         {
-            gameStarterObject.AddModel(new WOW_DefaultStrikeMagnitudeModel());
-            gameStarterObject.AddModel(new WOW_CustomBattleAgentStatCalculateModel());
-            gameStarterObject.AddModel(new WOW_CustomAgentApplyDamageModel());
+            if (NewZZZFDiag.DamageModels)
+            {
+                gameStarterObject.AddModel(new WOW_DefaultStrikeMagnitudeModel());
+                gameStarterObject.AddModel(new WOW_CustomBattleAgentStatCalculateModel());
+                gameStarterObject.AddModel(new WOW_CustomAgentApplyDamageModel());
+                if (game.GameType is Campaign)
+                {
+                    gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
+                    gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
+                    gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());
+                    gameStarterObject.AddModel(new WOW_DefaultPartySpeedCalculatingModel());
+                }
+            }
             if (game.GameType is Campaign)
             {
-                gameStarterObject.AddModel(new WOW_SandboxAgentApplyDamageModel());
-                gameStarterObject.AddModel(new WOW_SandboxStrikeMagnitudeModel());
-                gameStarterObject.AddModel(new ZZZF_SandboxAgentStatCalculateModel());
-                gameStarterObject.AddModel(new WOW_DefaultPartySpeedCalculatingModel());
                 CampaignGameStarter campaignGameStarter = gameStarterObject as CampaignGameStarter;
-                campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
-                campaignGameStarter.AddBehavior(new HeroChangeCampaignBehavior());
-                campaignGameStarter.AddBehavior(new AffixCampaignBehavior());
+                if (NewZZZFDiag.HeroChange)
+                {
+                    campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
+                    campaignGameStarter.AddBehavior(new HeroChangeCampaignBehavior());
+                }
+                if (NewZZZFDiag.Affix)
+                    campaignGameStarter.AddBehavior(new AffixCampaignBehavior());
             }
         }
 
         protected override void OnApplicationTick(float dt)
         {
             base.OnApplicationTick(dt);
-            CustomSkillHtmlUi.Instance.Tick(dt);
+            // 延迟缴械的统一执行点：每帧必跑、主线程、不依赖任何 Behavior 挂载或 Harmony 补丁。
+            // （Mark 发生在上一帧 Mission.Tick 的碰撞判定内，此处在其后的安全阶段执行 DropItem）
+            DeferredDisarmExecutor.Execute(Mission.Current);
+            if (NewZZZFDiag.CustomSkillHtmlUi)
+                CustomSkillHtmlUi.Instance.Tick(dt);
 
             var game = Game.Current;
             var stateManager = game?.GameStateManager;
@@ -202,7 +260,7 @@ namespace New_ZZZF
             var isMenuState = activeState?.IsMenuState ?? true;
 
             InputKey tacticalMapToggleKey = TacticalSettings.Instance.ToggleKey;
-            bool tacticalMapToggleKeyDown = missionActive && Input.IsKeyDown(tacticalMapToggleKey);
+            bool tacticalMapToggleKeyDown = NewZZZFDiag.TacticalMap && missionActive && Input.IsKeyDown(tacticalMapToggleKey);
             bool tacticalMapTogglePressed = tacticalMapToggleKeyDown && !_tacticalMapToggleKeyWasDown;
             _tacticalMapToggleKeyWasDown = tacticalMapToggleKeyDown;
 
@@ -248,7 +306,7 @@ namespace New_ZZZF
                 bool normalMPressed = !shiftDown && mPressed;
 
                 // M：新的 HTML 技能界面
-                if (normalMPressed)
+                if (normalMPressed && NewZZZFDiag.CustomSkillHtmlUi)
                 {
                     HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_ACCEPTED_OPEN_HTML");
                     if (ScreenManager.TopScreen is CustomSkillScreen)
@@ -258,7 +316,7 @@ namespace New_ZZZF
                 }
 
                 // Shift+M：旧的 Gauntlet 技能界面
-                if (shiftMPressed)
+                if (shiftMPressed && NewZZZFDiag.CustomSkillHtmlUi)
                 {
                     HtmlUiInputTraceLogger.Event("NEW_ZZZF_SHIFT_M_ACCEPTED_OPEN_GAUNTLET");
                     if (CustomSkillHtmlUi.Instance.IsVisible)
@@ -268,7 +326,7 @@ namespace New_ZZZF
                     return;
                 }
 
-                if (Input.IsKeyDown(InputKey.L))
+                if (Input.IsKeyDown(InputKey.L) && NewZZZFDiag.SkillRegistry)
                 {
                     SkillFactory.Refresh_skillRegistry();
                     CompositeSpellRegistry.LoadAndRegisterAll();
@@ -294,7 +352,7 @@ namespace New_ZZZF
                         SkillConfigManager.Instance._troopSkillMap[item.Key] = SkillConfigManager.ListToSkillSet(item.Value);
                 }
 
-                if (Campaign.Current != null && Mission.Current == null)
+                if (Campaign.Current != null && Mission.Current == null && NewZZZFDiag.Affix)
                 {
                     bool ctrlDown = Input.IsKeyDown(InputKey.LeftControl) || Input.IsKeyDown(InputKey.RightControl);
                     if (ctrlDown && Input.IsKeyPressed(InputKey.F5)) AffixDebugHelper.GiveRandomAffixWeapon();
