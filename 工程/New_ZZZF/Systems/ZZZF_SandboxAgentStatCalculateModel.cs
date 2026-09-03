@@ -58,19 +58,20 @@ namespace New_ZZZF.Systems
                 MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
                 if (missionScreen != null && missionScreen.SceneLayer!=null)
                 {
-                    if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(14) && Agent.Main!=null)
+                    // 修复：原实现每个 agent 的回调都会把 Agent.Main 速度 ×2（N 个 agent 每帧累乘
+                    // → Infinity 污染 native AgentDrivenProperties → 引擎 Tick 未定义行为），
+                    // 且 resultMain 可能为 null。改为仅主角自己的回调内设置固定倍率
+                    // （base.UpdateAgentStats 每帧已重置数值，松开自然恢复，无需释放分支）。
+                    if (missionScreen.SceneLayer.Input.IsGameKeyDown(14)
+                        && Agent.Main != null && agent == Agent.Main)
                     {
-                        Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 2;
-                        Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 2;
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(Agent.Main.Index, out var resultMain);
-                        resultMain.ChangeStamina(-5);
-
-                    }
-                    if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(14) && Agent.Main != null)
-                    {
-                        Agent.Main.AgentDrivenProperties.MaxSpeedMultiplier *= 1;
-                        Agent.Main.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 1;
-
+                        agentDrivenProperties.MaxSpeedMultiplier = 2f;
+                        agentDrivenProperties.CombatMaxSpeedMultiplier = 2f;
+                        if (SkillSystemBehavior.ActiveComponents.TryGetValue(Agent.Main.Index, out var resultMain)
+                            && resultMain != null)
+                        {
+                            resultMain.ChangeStamina(-5);
+                        }
                     }
                 }
                 
@@ -85,12 +86,14 @@ namespace New_ZZZF.Systems
                         //agent.AgentDrivenProperties.MaxSpeedMultiplier -= buff.enduranceRecord;
 
                         SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        agentSkillComponent.ChangeStamina(5);
+                        if (agentSkillComponent != null)
+                        {
+                            agentSkillComponent.ChangeStamina(5);
 
-                        agent.AgentDrivenProperties.SwingSpeedMultiplier += agentSkillComponent._currentStamina / 100;
-                        agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier += agentSkillComponent._currentStamina / 100;
-                        agent.AgentDrivenProperties.MaxSpeedMultiplier += agentSkillComponent._currentStamina / 100;
-
+                            agent.AgentDrivenProperties.SwingSpeedMultiplier += agentSkillComponent._currentStamina / 100;
+                            agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier += agentSkillComponent._currentStamina / 100;
+                            agent.AgentDrivenProperties.MaxSpeedMultiplier += agentSkillComponent._currentStamina / 100;
+                        }
                     }
                 }
                 if (result.StateContainer.HasState("JueXingBuff"))
@@ -99,13 +102,15 @@ namespace New_ZZZF.Systems
                     if (buff != null)
                     {
                         SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        agentSkillComponent.ChangeStamina(-5);
+                        if (agentSkillComponent != null)
+                        {
+                            agentSkillComponent.ChangeStamina(-5);
 
-                        agent.AgentDrivenProperties.SwingSpeedMultiplier += agentSkillComponent._currentStamina / 100;
-                        agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier += agentSkillComponent._currentStamina / 100;
-                        agent.AgentDrivenProperties.HandlingMultiplier += agentSkillComponent._currentStamina / 100;
-                        agent.AgentDrivenProperties.MaxSpeedMultiplier += agentSkillComponent._currentStamina / 100 * 1.5f;
-
+                            agent.AgentDrivenProperties.SwingSpeedMultiplier += agentSkillComponent._currentStamina / 100;
+                            agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier += agentSkillComponent._currentStamina / 100;
+                            agent.AgentDrivenProperties.HandlingMultiplier += agentSkillComponent._currentStamina / 100;
+                            agent.AgentDrivenProperties.MaxSpeedMultiplier += agentSkillComponent._currentStamina / 100 * 1.5f;
+                        }
                     }
                 }
                 if (result.StateContainer.HasState("GuWuBuff"))
