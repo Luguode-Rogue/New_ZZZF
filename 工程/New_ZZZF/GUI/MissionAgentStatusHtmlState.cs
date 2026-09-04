@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 
@@ -12,11 +11,6 @@ namespace New_ZZZF.GUI
     /// </summary>
     internal static class MissionAgentStatusHtmlState
     {
-        private static readonly FieldInfo SelectedSpellSlotField =
-            typeof(AgentSkillComponent).GetField(
-                "_selectedSpellSlot",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-
         public static object Build(Agent agent)
         {
             AgentSkillComponent component = agent == null
@@ -46,10 +40,8 @@ namespace New_ZZZF.GUI
                 };
             }
 
-            int selectedSlot = GetSelectedSpellSlot(component);
-            SkillBase selectedSpell = selectedSlot >= 0 && selectedSlot < component.SpellSlots.Length
-                ? component.SpellSlots[selectedSlot]
-                : null;
+            int selectedSlot = Math.Max(0, Math.Min(3, component.SelectedSpellSlot));
+            SkillBase selectedSpell = component.SpellSlots[selectedSlot];
 
             return new
             {
@@ -70,21 +62,6 @@ namespace New_ZZZF.GUI
                 selectedSpell = BuildSkill(component, selectedSpell),
                 skills = BuildSkills(component)
             };
-        }
-
-        private static int GetSelectedSpellSlot(AgentSkillComponent component)
-        {
-            if (SelectedSpellSlotField == null)
-                return 0;
-
-            try
-            {
-                return Math.Max(0, Math.Min(3, (int)SelectedSpellSlotField.GetValue(component)));
-            }
-            catch
-            {
-                return 0;
-            }
         }
 
         private static List<object> BuildSkills(AgentSkillComponent component)
