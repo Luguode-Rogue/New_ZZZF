@@ -5,30 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Tactical Map</title>
   <link rel="stylesheet" href="tactical-map.css">
-  <link rel="stylesheet" href="mission-hud.css">
 </head>
 <body>
-  <div id="missionHud" aria-hidden="true">
-    <div class="mhud-card">
-      <div class="mhud-head">
-        <div class="mhud-title" data-role="title">战场状态</div>
-        <div class="mhud-subtitle">PASSIVE HUD</div>
-      </div>
-      <div class="mhud-bars">
-        <div class="mhud-bar-row"><span class="mhud-label">生命</span><div class="mhud-track"><div class="mhud-fill hp" data-role="hp-fill"></div></div><span class="mhud-value" data-role="hp-value">-- / --</span></div>
-        <div class="mhud-bar-row"><span class="mhud-label">法力</span><div class="mhud-track"><div class="mhud-fill mana" data-role="mana-fill"></div></div><span class="mhud-value" data-role="mana-value">-- / --</span></div>
-        <div class="mhud-bar-row"><span class="mhud-label">耐力</span><div class="mhud-track"><div class="mhud-fill stamina" data-role="stamina-fill"></div></div><span class="mhud-value" data-role="stamina-value">-- / --</span></div>
-      </div>
-      <div class="mhud-meta" data-role="meta"></div>
-      <div class="mhud-selected" data-role="selected">
-        <div class="mhud-section-title">当前选中法术</div>
-        <div class="mhud-selected-name">--</div>
-      </div>
-      <div class="mhud-skills" data-role="skills"></div>
-      <div class="mhud-note">状态由 C# GameThread 发布；本面板不获取输入、不创建独立窗口。</div>
-    </div>
-  </div>
-
   <div id="app" class="map-shell mode-compact-passive" aria-hidden="true">
     <header class="topbar">
       <div>
@@ -69,6 +47,5 @@
   </div>
 
   <script src="tactical-map.js"></script>
-  <script src="mission-hud.js"></script>
 </body>
 </html>
