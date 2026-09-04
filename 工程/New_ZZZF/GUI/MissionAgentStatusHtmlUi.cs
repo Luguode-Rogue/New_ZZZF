@@ -92,8 +92,15 @@ namespace New_ZZZF.GUI
                 return;
             }
 
-            if (!_pageOpened && HtmlUiService.Pages.CurrentId == null)
+            // 每场战斗首次进入时主动打开一次。之后切换到其它 Consumer Page 不抢占。
+            if (!_pageOpened && _publishAccum < 0f)
                 EnsureOpen();
+
+            // 用负值哨兵表示“本场已尝试启动”，避免与其它 Page 发生抢占循环。
+            if (_publishAccum < 0f)
+                _publishAccum += Math.Max(0f, dt);
+            else
+                _publishAccum = -0.0001f;
 
             if (!_pageOpened)
                 return;
@@ -108,13 +115,14 @@ namespace New_ZZZF.GUI
 
         private void EnsureOpen()
         {
-            if (_pageOpened || !_registered || !HtmlUiService.IsReady || HtmlUiService.Pages.CurrentId != null)
+            if (_pageOpened || !_registered || !HtmlUiService.IsReady)
                 return;
 
             try
             {
                 if (!HtmlUiService.Pages.Open(_pageId))
                     return;
+
                 _pageOpened = true;
                 _lastSignature = null;
                 PublishState(true);
@@ -149,6 +157,9 @@ namespace New_ZZZF.GUI
 
         public void StopForMission()
         {
+            if (!_missionActive && !_pageOpened)
+                return;
+
             _missionActive = false;
             _pageOpened = false;
             _publishAccum = 0f;
@@ -182,6 +193,8 @@ namespace New_ZZZF.GUI
             _registered = false;
             _pageOpened = false;
             _missionActive = false;
+            _publishAccum = 0f;
+            _lastSignature = null;
         }
     }
 }
