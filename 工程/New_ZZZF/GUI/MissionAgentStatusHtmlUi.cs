@@ -24,6 +24,7 @@ namespace New_ZZZF.GUI
         private string _pageId;
         private bool _registered;
         private bool _pageOpened;
+        private bool _missionActive;
         private float _publishAccum;
         private string _lastSignature;
 
@@ -62,7 +63,9 @@ namespace New_ZZZF.GUI
                     ContentRootId = ContentRootName,
                     HotReload = true,
                     DefaultInputMode = HtmlUiInputMode.Passive,
-                    CloseOnEscape = false
+                    CloseOnEscape = false,
+                    Opened = () => _pageOpened = true,
+                    Closed = () => _pageOpened = false
                 });
 
                 _registered = true;
@@ -77,41 +80,19 @@ namespace New_ZZZF.GUI
             }
         }
 
-        public void EnsureOpen()
-        {
-            if (!_registered || !HtmlUiService.IsReady || _pageOpened)
-                return;
-
-            // Framework 当前为单 Page Host。已有其它 Consumer 页面时不抢占当前页面。
-            if (HtmlUiService.Pages.CurrentId != null)
-                return;
-
-            try
-            {
-                if (!HtmlUiService.Pages.Open(_pageId))
-                    return;
-
-                _pageOpened = true;
-                _publishAccum = 0f;
-                _lastSignature = null;
-                PublishState(true);
-            }
-            catch (Exception ex)
-            {
-                _pageOpened = false;
-                HtmlUiLogger.Error("MissionAgentStatus HtmlUI open failed.", ex);
-            }
-        }
-
         public void Tick(float dt)
         {
             if (!_registered || !HtmlUiService.IsReady)
                 return;
 
-            if (!string.Equals(HtmlUiService.Pages.CurrentId, _pageId, StringComparison.OrdinalIgnoreCase))
-                _pageOpened = false;
+            _missionActive = Mission.Current != null;
+            if (!_missionActive)
+            {
+                StopForMission();
+                return;
+            }
 
-            if (!_pageOpened)
+            if (!_pageOpened && HtmlUiService.Pages.CurrentId == null)
                 EnsureOpen();
 
             if (!_pageOpened)
@@ -123,6 +104,26 @@ namespace New_ZZZF.GUI
 
             _publishAccum = 0f;
             PublishState(false);
+        }
+
+        private void EnsureOpen()
+        {
+            if (_pageOpened || !_registered || !HtmlUiService.IsReady || HtmlUiService.Pages.CurrentId != null)
+                return;
+
+            try
+            {
+                if (!HtmlUiService.Pages.Open(_pageId))
+                    return;
+                _pageOpened = true;
+                _lastSignature = null;
+                PublishState(true);
+            }
+            catch (Exception ex)
+            {
+                _pageOpened = false;
+                HtmlUiLogger.Error("MissionAgentStatus HtmlUI open failed.", ex);
+            }
         }
 
         private void PublishState(bool force)
@@ -146,8 +147,23 @@ namespace New_ZZZF.GUI
             }
         }
 
+        public void StopForMission()
+        {
+            _missionActive = false;
+            _pageOpened = false;
+            _publishAccum = 0f;
+            _lastSignature = null;
+
+            if (_registered && HtmlUiService.IsReady && string.Equals(HtmlUiService.Pages.CurrentId, _pageId, StringComparison.OrdinalIgnoreCase))
+            {
+                try { HtmlUiService.Pages.Close(_pageId); }
+                catch (Exception ex) { HtmlUiLogger.Error("MissionAgentStatus HtmlUI mission close failed.", ex); }
+            }
+        }
+
         public void Dispose()
         {
+            StopForMission();
             try
             {
                 if (_registered && HtmlUiService.IsReady && !string.IsNullOrEmpty(_pageId))
@@ -165,8 +181,7 @@ namespace New_ZZZF.GUI
             _pageId = null;
             _registered = false;
             _pageOpened = false;
-            _publishAccum = 0f;
-            _lastSignature = null;
+            _missionActive = false;
         }
     }
 }
