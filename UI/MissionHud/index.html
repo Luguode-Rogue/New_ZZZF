@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>New_ZZZF Battlefield Status</title>
+  <link rel="stylesheet" href="mission-hud.css">
+</head>
+<body>
+  <main id="hud" aria-hidden="true">
+    <section class="card">
+      <header class="header">
+        <div class="identity">
+          <div class="eyebrow">NEW_ZZZF / BATTLEFIELD</div>
+          <h1 data-role="name">战场状态</h1>
+        </div>
+        <div class="live">LIVE</div>
+      </header>
+
+      <section class="resources">
+        <div class="resource hp">
+          <div class="resource-head"><span>生命</span><span data-role="hp-text">-- / --</span></div>
+          <div class="track"><div class="fill" data-role="hp-fill"></div></div>
+        </div>
+        <div class="resource mana">
+          <div class="resource-head"><span>法力</span><span data-role="mana-text">-- / --</span></div>
+          <div class="track"><div class="fill" data-role="mana-fill"></div></div>
+        </div>
+        <div class="resource stamina">
+          <div class="resource-head"><span>耐力</span><span data-role="stamina-text">-- / --</span></div>
+          <div class="track"><div class="fill" data-role="stamina-fill"></div></div>
+        </div>
+      </section>
+
+      <section class="facts" data-role="facts"></section>
+
+      <section class="selected">
+        <div class="section-title">当前选中法术</div>
+        <div class="selected-main">
+          <div class="selected-slot" data-role="selected-slot">--</div>
+          <div class="selected-name" data-role="selected-name">空</div>
+          <div class="selected-cd" data-role="selected-cd">--</div>
+        </div>
+        <div class="selected-desc" data-role="selected-desc">未选择法术</div>
+      </section>
+
+      <section class="skill-section">
+        <div class="section-title">携带技能</div>
+        <div class="skills" data-role="skills"></div>
+      </section>
+    </section>
+  </main>
+  <script src="mission-hud.js"></script>
+</body>
+</html>
