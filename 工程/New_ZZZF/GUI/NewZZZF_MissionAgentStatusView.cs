@@ -9,9 +9,18 @@ namespace New_ZZZF
     /// </summary>
     public sealed class NewZZZF_MissionAgentStatusView : MissionView
     {
+        private bool _initialized;
+
         public override void OnMissionScreenTick(float dt)
         {
             base.OnMissionScreenTick(dt);
+
+            if (!_initialized)
+            {
+                _initialized = true;
+                MissionAgentStatusHtmlUi.Instance.InitializeOnFrameworkReady();
+            }
+
             MissionAgentStatusHtmlUi.Instance.Tick(dt);
         }
 
