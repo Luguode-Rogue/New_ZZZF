@@ -1,105 +1,112 @@
 using System;
-using TaleWorlds.Engine.GauntletUI;
-using TaleWorlds.Library;
+using BannerlordHtmlUI;
+using Newtonsoft.Json;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View;
-using TaleWorlds.MountAndBlade.View.MissionViews;
-using TaleWorlds.MountAndBlade.View.Screens;
-using TaleWorlds.ScreenSystem;
+using New_ZZZF.GUI;
 
 namespace New_ZZZF
 {
     /// <summary>
-    /// 战场法力/耐力 HUD 视图
-    /// 继承 MissionView，在 OnMissionScreenTick 中懒初始化 UI
+    /// 战场状态 HTML HUD 的 MissionView 适配层。
+    /// 不创建 Gauntlet/Win32/WebView；只负责在 GameThread 上生成并发布业务状态。
+    /// HTML 页面和输入由 BannerlordHtmlUI Framework / TacticalMap 页面统一承载。
     /// </summary>
-    public class NewZZZF_MissionAgentStatusView : MissionView
+    public sealed class NewZZZF_MissionAgentStatusView : MissionView
     {
-        private GauntletLayer _gauntletLayer;
-        private NewZZZF_MissionAgentStatusVM _dataSource;
-        private GauntletMovieIdentifier _movie;
-        private bool _initialized;
-        private bool _triedInit;
+        private const string OwnerId = "New_ZZZF.MissionAgentStatus";
+        private const string StateKey = "missionHud";
+        private HtmlUiConsumerScope _scope;
+        private bool _registerRequested;
+        private float _publishAccum;
+        private string _lastSignature;
 
-        // MissionView 的每帧回调（MissionScreen 激活时每帧调用）
         public override void OnMissionScreenTick(float dt)
         {
             base.OnMissionScreenTick(dt);
 
-            // 懒初始化：Agent.Main 存在且 MissionScreen 存在
-            if (!_triedInit && Agent.Main != null && this.MissionScreen != null)
+            if (!_registerRequested)
             {
-                _triedInit = true;
-                TryInitializeUI(this.MissionScreen);
+                _registerRequested = true;
+                try
+                {
+                    HtmlUiService.OnReady(RegisterState);
+                }
+                catch (Exception ex)
+                {
+                    HtmlUiLogger.Error("MissionAgentStatus HtmlUI OnReady registration failed.", ex);
+                    _registerRequested = false;
+                }
             }
 
-            // 每帧更新 VM 数据
-            if (_dataSource != null && Agent.Main != null)
-            {
-                SkillSystemBehavior.ActiveComponents.TryGetValue(Agent.Main.Index, out var comp);
-                _dataSource.UpdateFromComponent(comp);
-            }
+            if (_scope == null || !HtmlUiService.IsReady)
+                return;
+
+            _publishAccum += Math.Max(0f, dt);
+            if (_publishAccum < 0.10f)
+                return;
+
+            _publishAccum = 0f;
+            PublishState(false);
         }
 
-        private void TryInitializeUI(MissionScreen missionScreen)
+        private void RegisterState()
         {
-            if (_initialized)
+            if (_scope != null || !HtmlUiService.IsReady)
                 return;
-            _initialized = true;
 
             try
             {
-                _dataSource = new NewZZZF_MissionAgentStatusVM();
-
-                _gauntletLayer = new GauntletLayer("NewZZZF_MissionHUD", 30, false)
-                {
-                    IsFocusLayer = false
-                };
-
-                _movie = _gauntletLayer.LoadMovie("NewZZZF_MissionAgentStatus", _dataSource);
-
-                if (_movie == null)
-                {
-                    InformationManager.DisplayMessage(new InformationMessage(
-                        "[New_ZZZF] LoadMovie 返回 null，请检查 GUI/Prefabs/NewZZZF_MissionAgentStatus.xml"));
-                    _gauntletLayer = null;
-                    _dataSource = null;
-                    _initialized = false;
-                    return;
-                }
-
-                missionScreen.AddLayer(_gauntletLayer);
-                InformationManager.DisplayMessage(new InformationMessage("[New_ZZZF] HUD 已加载"));
+                _scope = HtmlUiService.CreateScope(OwnerId);
+                _lastSignature = null;
+                PublishState(true);
+                HtmlUiLogger.Info("MissionAgentStatus HtmlUI state scope registered.");
             }
             catch (Exception ex)
             {
-                InformationManager.DisplayMessage(new InformationMessage($"[New_ZZZF] 初始化异常: {ex.Message}"));
-                _initialized = false;
-                _triedInit = false;
+                HtmlUiLogger.Error("MissionAgentStatus HtmlUI state scope registration failed.", ex);
+                _scope = null;
+                _registerRequested = false;
+            }
+        }
+
+        private void PublishState(bool force)
+        {
+            if (_scope == null || !HtmlUiService.IsReady)
+                return;
+
+            try
+            {
+                object state = MissionAgentStatusHtmlState.Build(Agent.Main);
+                string signature = JsonConvert.SerializeObject(state, Formatting.None);
+                if (!force && string.Equals(signature, _lastSignature, StringComparison.Ordinal))
+                    return;
+
+                _lastSignature = signature;
+                _scope.SetState(StateKey, state);
+            }
+            catch (Exception ex)
+            {
+                HtmlUiLogger.Error("MissionAgentStatus HtmlUI state publish failed.", ex);
             }
         }
 
         public override void OnRemoveBehavior()
         {
-            CleanupLayer();
-            _dataSource = null;
+            try
+            {
+                if (_scope != null)
+                    _scope.Dispose();
+            }
+            catch (Exception ex)
+            {
+                HtmlUiLogger.Error("MissionAgentStatus HtmlUI scope dispose failed.", ex);
+            }
+
+            _scope = null;
+            _lastSignature = null;
+            _publishAccum = 0f;
             base.OnRemoveBehavior();
-        }
-
-        private void CleanupLayer()
-        {
-            if (_gauntletLayer != null && _movie != null)
-            {
-                _gauntletLayer.ReleaseMovie(_movie);
-                _movie = null;
-            }
-
-            if (_gauntletLayer != null)
-            {
-                if (this.MissionScreen != null)
-                    this.MissionScreen.RemoveLayer(_gauntletLayer);
-                _gauntletLayer = null;
-            }
         }
     }
 }
