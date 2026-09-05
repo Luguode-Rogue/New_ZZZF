@@ -149,6 +149,12 @@ namespace New_ZZZF.GUI
                     InvalidateForgeCache();
                 }
             }));
+            _scope.RegisterCommand("clientLog", payload =>
+            {
+                string message = payload?["message"]?.Value<string>() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(message))
+                    HtmlUiLogger.Info("CustomSkill JS: " + message);
+            });
             _scope.RegisterCommand("close", _ => Execute(Close));
             _scope.RegisterRequest("getState", _ => Task.FromResult<object>(BuildState()));
         }

@@ -15,6 +15,7 @@ using TaleWorlds.MountAndBlade.View.Screens;
 using New_ZZZF.Systems;
 using MountedSlashCamera;
 using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.Core;
 using New_ZZZF.TacticalMap.UI;
 using New_ZZZF.TacticalMap.Diagnostics;
 using TaleWorlds.CampaignSystem.ComponentInterfaces;
@@ -33,6 +34,7 @@ namespace New_ZZZF
         private Harmony _harmony;
         private bool _harmonyPatched;
         private bool _tacticalMapToggleKeyWasDown;
+        private long _tacticalMapToggleIgnoreUntilMs;
 
         protected override void OnSubModuleLoad()
         {
@@ -266,12 +268,21 @@ namespace New_ZZZF
 
             // TacticalMap 的 N 键是 New_ZZZF 正式游戏热键。
             // 使用 KeyDown 上升沿，避免 IsKeyPressed 被其他输入读取点消费导致切换失效。
-            if (tacticalMapTogglePressed && missionActive && !customVisible)
+            // 去抖：模式切换瞬间键状态快照可能出现一帧 false 造成二次上升沿（打开即闪关），
+            // 切换后 250ms 内忽略新的上升沿。
+            long nowMs = System.Diagnostics.Stopwatch.GetTimestamp() * 1000L / System.Diagnostics.Stopwatch.Frequency;
+            if (tacticalMapTogglePressed && missionActive && !customVisible && nowMs >= _tacticalMapToggleIgnoreUntilMs)
             {
+                _tacticalMapToggleIgnoreUntilMs = nowMs + 250;
                 TacticalMapLog.Info("TacticalMap toggle key pressed: " + tacticalMapToggleKey);
                 TacticalMapHtmlUi.Instance.ToggleInteractive();
                 TacticalMapLog.Info("TacticalMap mode after toggle: " + TacticalMapHtmlUi.Instance.Mode);
             }
+
+            // ESC 退出地图操作模式：直接轮询（见 TacticalMapNativeHotkeyFallback），
+            // 不再依赖 Harmony patch（原 patch 在实际运行中从未生效）。
+            if (NewZZZFDiag.TacticalMap && missionActive)
+                TacticalMapNativeHotkeyFallback.Tick(customVisible);
 
             if (mPressed || (Input.IsKeyDown(InputKey.M) && shiftDown))
             {

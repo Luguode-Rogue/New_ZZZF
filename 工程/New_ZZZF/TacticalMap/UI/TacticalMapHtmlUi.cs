@@ -92,6 +92,15 @@ namespace New_ZZZF.TacticalMap.UI
                 if (!string.IsNullOrWhiteSpace(message))
                     TacticalMapLog.Info("JS: " + message);
             });
+            _scope.RegisterCommand("canvasRect", payload =>
+            {
+                TacticalMapNativeMouseInterceptor.UpdateCanvasRect(
+                    payload?["x"]?.Value<float>() ?? 0f,
+                    payload?["y"]?.Value<float>() ?? 0f,
+                    payload?["w"]?.Value<float>() ?? 0f,
+                    payload?["h"]?.Value<float>() ?? 0f,
+                    payload?["dpr"]?.Value<float>() ?? 1f);
+            });
             _scope.RegisterCommand("selectFormation", payload =>
             {
                 string name = payload?["name"]?.Value<string>();
@@ -125,6 +134,7 @@ namespace New_ZZZF.TacticalMap.UI
             if (handler == null || payload == null) return;
             float u = payload["u"]?.Value<float>() ?? -1f;
             float v = payload["v"]?.Value<float>() ?? -1f;
+            TacticalMapLog.Info("HTML " + command + " click u=" + u.ToString("0.000") + " v=" + v.ToString("0.000"));
             handler(u, v);
         }
 
@@ -185,6 +195,19 @@ namespace New_ZZZF.TacticalMap.UI
             if (_controller == null) return;
             if (!_pageOpened && _registered && HtmlUiService.IsReady) OpenForMission();
             if (!_pageOpened) return;
+
+            // Native mouse path: Chromium input is unreliable while the game owns the foreground,
+            // so interactive clicks are polled here instead (see TacticalMapNativeMouseInterceptor).
+            if (_mode == TacticalMapUiMode.FullInteractive && _registered && HtmlUiService.IsReady)
+            {
+                var windowState = HtmlUiService.Host.GetWindowState();
+                TacticalMapNativeMouseInterceptor.Tick(_controller, new System.Drawing.Rectangle(
+                    windowState.Left, windowState.Top, windowState.Width, windowState.Height));
+            }
+            else
+            {
+                TacticalMapNativeMouseInterceptor.Tick(null, System.Drawing.Rectangle.Empty);
+            }
 
             _publishAccum += Math.Max(0f, dt);
             if (_publishAccum < 0.10f) return;

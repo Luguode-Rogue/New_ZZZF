@@ -1,100 +1,57 @@
 using System;
-using System.Reflection;
 using System.Runtime.InteropServices;
-using HarmonyLib;
 using TaleWorlds.MountAndBlade;
-using New_ZZZF.GUI;
 using New_ZZZF.TacticalMap.Diagnostics;
 using New_ZZZF.TacticalMap.UI;
 
 namespace New_ZZZF.TacticalMap.Core
 {
     /// <summary>
-    /// Native hotkey fallback for TacticalMap.
-    /// Runs from the Bannerlord game tick so N/ESC remain available even when
-    /// the HTML overlay currently owns keyboard focus.
+    /// Game-tick ESC watcher for TacticalMap.
+    ///
+    /// This was originally a Harmony patch over SubModule.OnApplicationTick, but patch
+    /// application proved unreliable in practice (it silently never ran, which disabled the ESC
+    /// exit). It is now invoked directly from SubModule.OnApplicationTick and only owns ESC:
+    /// the N toggle stays with SubModule's own Input.IsKeyDown edge detector, because the
+    /// keyboard always remains with the game while the map owns the mouse.
     /// </summary>
-    [HarmonyPatch(typeof(New_ZZZF.SubModule), "OnApplicationTick")]
     internal static class TacticalMapNativeHotkeyFallback
     {
-        private const int VkN = 0x4E;
         private const int VkEscape = 0x1B;
-
-        private static bool _nWasDown;
-        private static bool _escapeWasDown;
-        private static FieldInfo _managedEdgeField;
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int virtualKey);
 
-        [HarmonyPrefix]
-        private static void Prefix(New_ZZZF.SubModule __instance)
+        private static bool _escapeWasDown;
+
+        public static void Tick(bool customVisible)
         {
             try
             {
-                bool missionActive = Mission.Current != null;
-                if (!missionActive)
+                if (Mission.Current == null)
                 {
-                    _nWasDown = false;
                     _escapeWasDown = false;
                     return;
                 }
-
-                bool customVisible = false;
-                try { customVisible = CustomSkillHtmlUi.Instance.IsVisible; }
-                catch { }
-
-                bool nativeNDown = (GetAsyncKeyState(VkN) & 0x8000) != 0;
-                bool nativeNRising = nativeNDown && !_nWasDown;
-                _nWasDown = nativeNDown;
-
-                if (!customVisible && nativeNRising)
-                {
-                    TacticalMapHtmlUi map = TacticalMapHtmlUi.Instance;
-                    TacticalMapLog.Info(
-                        "TacticalMap native N key rising edge observed: nativeDown=" + nativeNDown +
-                        " modeBefore=" + map.Mode);
-
-                    // Keep SubModule's normal N edge detector from handling the same key again.
-                    SetManagedNDown(__instance, true);
-                    map.ToggleInteractive();
-
-                    TacticalMapLog.Info("TacticalMap native N fallback toggled mode=" + map.Mode);
-                }
+                if (customVisible) return;
 
                 bool nativeEscapeDown = (GetAsyncKeyState(VkEscape) & 0x8000) != 0;
                 bool nativeEscapeRising = nativeEscapeDown && !_escapeWasDown;
                 _escapeWasDown = nativeEscapeDown;
 
-                if (!customVisible && nativeEscapeRising)
+                if (!nativeEscapeRising) return;
+
+                TacticalMapHtmlUi map = TacticalMapHtmlUi.Instance;
+                if (map.IsVisible && map.IsInteractive)
                 {
-                    TacticalMapHtmlUi map = TacticalMapHtmlUi.Instance;
-                    if (map.IsVisible && map.IsInteractive)
-                    {
-                        TacticalMapLog.Info("TacticalMap native ESC fallback: leaving FullInteractive.");
-                        map.SetInteractive(false);
-                    }
+                    TacticalMapLog.Info("TacticalMap ESC watcher: leaving interactive mode.");
+                    map.SetInteractive(false);
                 }
             }
             catch (Exception ex)
             {
-                TacticalMapLog.Error("TacticalMap native hotkey fallback failed.", ex);
+                TacticalMapLog.Error("TacticalMap ESC watcher failed.", ex);
             }
-        }
-
-        private static void SetManagedNDown(New_ZZZF.SubModule instance, bool value)
-        {
-            if (instance == null) return;
-            try
-            {
-                if (_managedEdgeField == null)
-                    _managedEdgeField = typeof(New_ZZZF.SubModule).GetField(
-                        "_tacticalMapToggleKeyWasDown",
-                        BindingFlags.Instance | BindingFlags.NonPublic);
-
-                _managedEdgeField?.SetValue(instance, value);
-            }
-            catch { }
         }
     }
 }

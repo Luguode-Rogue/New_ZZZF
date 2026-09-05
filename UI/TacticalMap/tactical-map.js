@@ -30,6 +30,23 @@
     });
   }
 
+  // Report the map canvas on-screen rectangle: the game thread polls physical clicks against
+  // it (native interceptor), because Chromium drops mouse input while unfocused.
+  function reportCanvasRect() {
+    try {
+      const r = canvas.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        app.call('canvasRect', { x: r.left, y: r.top, w: r.width, h: r.height, dpr: window.devicePixelRatio || 1 }).catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  // Input diagnostics: proves whether Chromium sees pointer events at all.
+  let diagMove = 0;
+  document.addEventListener('pointermove', () => {
+    if ((++diagMove & 31) === 1) clientLog('diag pointermove n=' + diagMove);
+  });
+
   function decodeImage(base64, width, height) {
     if (!base64 || width <= 0 || height <= 0) return null;
     try {
@@ -336,7 +353,9 @@
     } catch (_) {}
   });
 
-  window.addEventListener('resize', scheduleRender);
+  window.addEventListener('resize', () => { scheduleRender(); reportCanvasRect(); });
+  setInterval(reportCanvasRect, 3000);
+  reportCanvasRect();
   app.state.subscribe('tacticalMap.static', applyStatic);
   app.state.subscribe('tacticalMap.runtime', applyRuntime);
   app.errors.on(error => clientLog('runtime error=' + (error?.message || error)));
