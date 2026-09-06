@@ -51,7 +51,7 @@ namespace New_ZZZF.ContinuousCollision
                 _gridTimer = 0f;
             }
 
-            RebuildGridIfNeeded(dt);
+            RebuildGrid();
             CleanupStates();
 
             foreach (Agent attacker in Mission.Current.Agents)
@@ -67,6 +67,14 @@ namespace New_ZZZF.ContinuousCollision
                 if (currentPose.Weapon.CurrentUsageItem == null || currentPose.WeaponLength <= 0f)
                 {
                     state.HasPreviousPose = false;
+                    continue;
+                }
+
+                bool attackAnimation = attacker.GetCurrentActionType(0).ToString().IndexOf("Attack", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (_settings.EnabledWithoutAttackAnimation && attackAnimation)
+                {
+                    state.PreviousPose = currentPose;
+                    state.HasPreviousPose = true;
                     continue;
                 }
 
@@ -152,13 +160,12 @@ namespace New_ZZZF.ContinuousCollision
             }
         }
 
-        private void RebuildGridIfNeeded(float dt)
+        private void RebuildGrid()
         {
-            // Rebuild once per tick. Grid construction is linear and prevents the collision phase from becoming O(N^2).
             _grid.Clear();
             foreach (Agent agent in Mission.Current.Agents)
             {
-                if (!IsEligibleVictim(agent, agent))
+                if (agent == null || !agent.IsActive() || !agent.IsHuman || agent.IsMount)
                 {
                     continue;
                 }
@@ -201,11 +208,6 @@ namespace New_ZZZF.ContinuousCollision
                 return false;
             }
             return _settings.FriendlyFire || !attacker.IsFriendOf(victim);
-        }
-
-        private static bool IsEligibleVictim(Agent agent, Agent ignored)
-        {
-            return agent != null && agent.IsActive() && agent.IsHuman && !agent.IsMount;
         }
 
         private bool HasHitCooldown(AgentCollisionState state, int victimIndex, float now)
