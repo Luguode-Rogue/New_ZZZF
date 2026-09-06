@@ -28,120 +28,172 @@ namespace New_ZZZF.ContinuousCollision
                 return false;
             }
 
-            bool thrust = IsLikelyThrust(pose, contact.Position);
-            StrikeType strikeType = thrust ? StrikeType.Thrust : StrikeType.Swing;
-            DamageTypes damageType = thrust ? weaponData.ThrustDamageType : weaponData.SwingDamageType;
-            Agent.UsageDirection attackDirection = thrust
-                ? Agent.UsageDirection.AttackUp
-                : Agent.UsageDirection.AttackLeft;
-
-            sbyte victimBoneIndex = ResolveVictimBone(victim, contact.VictimHeight);
-            BoneBodyPartType bodyPart = ResolveBodyPart(victim, victimBoneIndex, contact.VictimHeight);
-            sbyte weaponAttachBone = ResolveWeaponAttachBone(attacker, weapon);
-
-            Vec3 blowDirection = Normalize(Subtract(pose.Tip, pose.Base));
-            if (LengthSquared(blowDirection) < 1e-5f)
+            try
             {
-                blowDirection = pose.Direction;
-            }
+                bool thrust = IsLikelyThrust(pose, contact.Position);
+                StrikeType strikeType = thrust ? StrikeType.Thrust : StrikeType.Swing;
+                DamageTypes damageType = thrust ? weaponData.ThrustDamageType : weaponData.SwingDamageType;
+                Agent.UsageDirection attackDirection = thrust
+                    ? Agent.UsageDirection.AttackUp
+                    : Agent.UsageDirection.AttackLeft;
 
-            Vec3 victimVelocity = victim.Velocity;
-            AttackCollisionData collisionData = AttackCollisionData.GetAttackCollisionDataForDebugPurpose(
-                false,
-                false,
-                false,
-                true,
-                false,
-                false,
-                false,
-                false,
-                false,
-                thrust,
-                false,
-                false,
-                CombatCollisionResult.StrikeAgent,
-                pose.WeaponSlot,
-                (int)strikeType,
-                (int)damageType,
-                victimBoneIndex,
-                bodyPart,
-                weaponAttachBone,
-                attackDirection,
-                -1,
-                (CombatHitResultFlags)0,
-                0.5f,
-                Math.Max(0f, contact.WeaponDistance),
-                0f,
-                0f,
-                0f,
-                0f,
-                0f,
-                0f,
-                Vec3.Zero,
-                blowDirection,
-                contact.Position,
-                Vec3.Zero,
-                contact.Position,
-                victimVelocity,
-                contact.Normal,
-                Vec3.Zero,
-                Vec3.Zero);
+                sbyte victimBoneIndex = ResolveVictimBone(victim, contact.VictimHeight);
+                BoneBodyPartType bodyPart = ResolveBodyPart(victim, victimBoneIndex, contact.VictimHeight);
+                sbyte weaponAttachBone = ResolveWeaponAttachBone(attacker, weapon);
 
-            AttackInformation attackInformation = new AttackInformation(
-                attacker,
-                victim,
-                WeakGameEntity.Invalid,
-                collisionData,
-                weapon);
+                Vec3 blowDirection = Normalize(Subtract(pose.Tip, pose.Base));
+                if (LengthSquared(blowDirection) < 1e-5f)
+                {
+                    blowDirection = pose.Direction;
+                }
 
-            CombatLogData combatLog;
-            int speedBonus;
-            MissionCombatMechanicsHelper.GetAttackCollisionResults(
-                attackInformation,
-                false,
-                1f,
-                false,
-                ref collisionData,
-                out combatLog,
-                out speedBonus);
+                Vec3 victimVelocity = victim.Velocity;
+                AttackCollisionData collisionData = AttackCollisionData.GetAttackCollisionDataForDebugPurpose(
+                    false,
+                    false,
+                    false,
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false,
+                    thrust,
+                    false,
+                    false,
+                    CombatCollisionResult.StrikeAgent,
+                    pose.WeaponSlot,
+                    (int)strikeType,
+                    (int)damageType,
+                    victimBoneIndex,
+                    bodyPart,
+                    weaponAttachBone,
+                    attackDirection,
+                    -1,
+                    (CombatHitResultFlags)0,
+                    0.5f,
+                    Math.Max(0f, contact.WeaponDistance),
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    0f,
+                    Vec3.Zero,
+                    blowDirection,
+                    contact.Position,
+                    Vec3.Zero,
+                    contact.Position,
+                    victimVelocity,
+                    contact.Normal,
+                    Vec3.Zero,
+                    Vec3.Zero);
 
-            if (collisionData.InflictedDamage > 0)
-            {
-                float calculatedDamage = MissionGameModels.Current.AgentApplyDamageModel.CalculateDamage(
-                    attackInformation,
+                ContinuousCollisionLog.Trace(
+                    "CONTACT"
+                    + " | attacker=" + attacker.Index
+                    + " | victim=" + victim.Index
+                    + " | strike=" + strikeType
+                    + " | damageType=" + damageType
+                    + " | bodyPart=" + bodyPart
+                    + " | victimBone=" + victimBoneIndex
+                    + " | weaponSlot=" + pose.WeaponSlot
+                    + " | weaponDistance=" + contact.WeaponDistance.ToString("F3")
+                    + " | hit=" + FormatVec3(contact.Position));
+
+                AttackInformation attackInformation = new AttackInformation(
+                    attacker,
+                    victim,
+                    WeakGameEntity.Invalid,
                     collisionData,
-                    collisionData.InflictedDamage);
-                collisionData.InflictedDamage = Math.Max(0, (int)Math.Round(calculatedDamage));
-            }
+                    weapon);
 
-            if (collisionData.InflictedDamage <= 0)
+                CombatLogData combatLog;
+                int speedBonus;
+                MissionCombatMechanicsHelper.GetAttackCollisionResults(
+                    attackInformation,
+                    false,
+                    1f,
+                    false,
+                    ref collisionData,
+                    out combatLog,
+                    out speedBonus);
+
+                ContinuousCollisionLog.Trace(
+                    "MECHANICS_RESULT"
+                    + " | attacker=" + attacker.Index
+                    + " | victim=" + victim.Index
+                    + " | baseMagnitude=" + collisionData.BaseMagnitude
+                    + " | inflictedBeforeDamageModel=" + collisionData.InflictedDamage
+                    + " | speedBonus=" + speedBonus);
+
+                if (collisionData.InflictedDamage > 0)
+                {
+                    float calculatedDamage = MissionGameModels.Current.AgentApplyDamageModel.CalculateDamage(
+                        attackInformation,
+                        collisionData,
+                        collisionData.InflictedDamage);
+                    collisionData.InflictedDamage = Math.Max(0, (int)Math.Round(calculatedDamage));
+
+                    ContinuousCollisionLog.Trace(
+                        "DAMAGE_MODEL_RESULT"
+                        + " | attacker=" + attacker.Index
+                        + " | victim=" + victim.Index
+                        + " | calculatedDamage=" + calculatedDamage.ToString("F2")
+                        + " | inflictedDamage=" + collisionData.InflictedDamage);
+                }
+
+                if (collisionData.InflictedDamage <= 0)
+                {
+                    ContinuousCollisionLog.Warn(
+                        "CONTACT_NO_DAMAGE"
+                        + " | attacker=" + attacker.Index
+                        + " | victim=" + victim.Index
+                        + " | strike=" + strikeType
+                        + " | bodyPart=" + bodyPart);
+                    return false;
+                }
+
+                Blow blow = new Blow(attacker.Index);
+                blow.WeaponRecord.FillAsMeleeBlow(weapon.Item, weaponData, pose.WeaponSlot, weaponAttachBone);
+                blow.GlobalPosition = contact.Position;
+                blow.Direction = blowDirection;
+                blow.SwingDirection = blowDirection;
+                blow.InflictedDamage = collisionData.InflictedDamage;
+                blow.BaseMagnitude = collisionData.BaseMagnitude;
+                blow.DefenderStunPeriod = collisionData.DefenderStunPeriod;
+                blow.AttackerStunPeriod = collisionData.AttackerStunPeriod;
+                blow.AbsorbedByArmor = collisionData.AbsorbedByArmor;
+                blow.MovementSpeedDamageModifier = collisionData.MovementSpeedDamageModifier;
+                blow.StrikeType = strikeType;
+                blow.AttackType = (AgentAttackType)0;
+                blow.BlowFlag = BlowFlags.None;
+                blow.OwnerId = attacker.Index;
+                blow.BoneIndex = victimBoneIndex;
+                blow.VictimBodyPart = bodyPart;
+                blow.DamageType = damageType;
+                blow.DamageCalculated = true;
+                blow.IsFallDamage = false;
+
+                float victimHealthBefore = victim.Health;
+                victim.RegisterBlow(blow, collisionData);
+                ContinuousCollisionLog.Info(
+                    "BLOW_REGISTERED"
+                    + " | attacker=" + attacker.Index
+                    + " | victim=" + victim.Index
+                    + " | damage=" + collisionData.InflictedDamage
+                    + " | healthBefore=" + victimHealthBefore.ToString("F1")
+                    + " | healthAfter=" + victim.Health.ToString("F1"));
+                return true;
+            }
+            catch (Exception ex)
             {
+                ContinuousCollisionLog.Error(
+                    "TryApplyContact failed | attacker=" + attacker.Index
+                    + " | victim=" + victim.Index,
+                    ex);
                 return false;
             }
-
-            Blow blow = new Blow(attacker.Index);
-            blow.WeaponRecord.FillAsMeleeBlow(weapon.Item, weaponData, pose.WeaponSlot, weaponAttachBone);
-            blow.GlobalPosition = contact.Position;
-            blow.Direction = blowDirection;
-            blow.SwingDirection = blowDirection;
-            blow.InflictedDamage = collisionData.InflictedDamage;
-            blow.BaseMagnitude = collisionData.BaseMagnitude;
-            blow.DefenderStunPeriod = collisionData.DefenderStunPeriod;
-            blow.AttackerStunPeriod = collisionData.AttackerStunPeriod;
-            blow.AbsorbedByArmor = collisionData.AbsorbedByArmor;
-            blow.MovementSpeedDamageModifier = collisionData.MovementSpeedDamageModifier;
-            blow.StrikeType = strikeType;
-            blow.AttackType = (AgentAttackType)0;
-            blow.BlowFlag = BlowFlags.None;
-            blow.OwnerId = attacker.Index;
-            blow.BoneIndex = victimBoneIndex;
-            blow.VictimBodyPart = bodyPart;
-            blow.DamageType = damageType;
-            blow.DamageCalculated = true;
-            blow.IsFallDamage = false;
-
-            victim.RegisterBlow(blow, collisionData);
-            return true;
         }
 
         private static bool IsLikelyThrust(in WeaponPose pose, Vec3 hitPosition)
@@ -220,6 +272,11 @@ namespace New_ZZZF.ContinuousCollision
                 }
             }
             return -1;
+        }
+
+        private static string FormatVec3(Vec3 value)
+        {
+            return "(" + value.x.ToString("F3") + "," + value.y.ToString("F3") + "," + value.z.ToString("F3") + ")";
         }
 
         private static Vec3 Subtract(Vec3 a, Vec3 b) => new Vec3(a.x - b.x, a.y - b.y, a.z - b.z, -1f);
