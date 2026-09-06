@@ -42,6 +42,8 @@ namespace New_ZZZF.ContinuousCollision
 
         public static void Info(string message) { Write("INFO", message); }
         public static void Warn(string message) { Write("WARN", message); }
+        public static void Trace(string message) { Write("TRACE", message); }
+        public static void Section(string name) { Write("TRACE", "========== " + name + " =========="); }
 
         public static void Error(string message, Exception ex = null)
         {
@@ -49,8 +51,6 @@ namespace New_ZZZF.ContinuousCollision
                 ? message
                 : message + " | " + ex.GetType().Name + ": " + ex.Message + Environment.NewLine + ex.StackTrace);
         }
-
-        public static void Trace(string message) { Write("TRACE", message); }
 
         private static void EnsureInitialized()
         {
