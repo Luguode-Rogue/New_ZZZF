@@ -34,6 +34,23 @@ namespace New_ZZZF.TacticalMap.Config
         public int BakeResolution = 256;
         public float UpdateInterval = 0.2f;
 
+        /// <summary>
+        /// 【旧路线·已停用】拍照式地形底图 v6：每场新建 SceneView/RT/Camera，结束时销毁。
+        /// 渲染对象生命周期在多次进出战斗时反复污染引擎状态（卡死/卡顿多次实测），
+        /// 2026-09-06 起默认关闭，改用 TerrainPhotoV2。代码保留供回退验证。
+        /// </summary>
+        public bool PhotoMap = false;
+
+        /// <summary>
+        /// 【新路线】拍照式地形底图 v2：渲染对象全进程单例——SceneView/RT/Camera 只创建一次，
+        /// 永不销毁（无 Cleanup/Shutdown/销毁时机问题）；每场仅 SetScene 切场景 + 拍摄 + 停用。
+        /// 回读仍走 SaveToFile 落盘（引擎唯一安全路线）。同场景进程级照片缓存。
+        /// </summary>
+        public bool TerrainPhotoV2 = true;
+
+        /// <summary>拍照像素回读为 BGRA 时置 true（若底图红蓝反色则翻转此开关）。</summary>
+        public bool PhotoMapSwapRedBlue = false;
+
         // Bannerlord's normal.z-derived slope value is not an angle; 0.45 already represents
         // a genuinely steep surface. Lowering the previous 0.55 avoids missing carved ledges.
         public float CliffSlopeThreshold = 0.45f;

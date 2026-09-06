@@ -5,6 +5,7 @@ using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using TaleWorlds.MountAndBlade.View.Screens;
 using New_ZZZF.TacticalMap.Config;
+using New_ZZZF.TacticalMap.Diagnostics;
 using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.Tracking;
 
@@ -19,12 +20,10 @@ namespace New_ZZZF.TacticalMap.Core
         private readonly Mission _mission;
         private readonly TerrainCache _cache;
         private readonly NavMeshMap _navigationMap;
-        private readonly NavigationPathService _navigationPathService;
         private readonly FormationTracker _formationTracker;
         private readonly OrderSystem _orderSystem;
         private bool _visible;
         private float _accum;
-        private float _pathAccum;
         private Vec2? _playerPos;
         private Vec2? _camTarget;
         private Vec2 _playerFacing = Vec2.Zero;
@@ -50,7 +49,6 @@ namespace New_ZZZF.TacticalMap.Core
             var settings = TacticalSettings.Instance;
             _cache = new TerrainCache(settings);
             _navigationMap = new NavMeshMap(_cache);
-            _navigationPathService = new NavigationPathService(mission?.Scene);
             _formationTracker = new FormationTracker();
             _orderSystem = new OrderSystem(_cache);
             CameraController.Instance = new CameraController();
@@ -91,25 +89,28 @@ namespace New_ZZZF.TacticalMap.Core
 
             if (CameraController.Instance != null)
             {
+                long camStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 if (ms != null && mission != null && mission.Scene != null)
                     CameraController.Instance.Initialize(ms, mission.Scene);
                 CameraController.Instance.CaptureBaseHeight(mission);
                 CameraController.Instance.Tick(dt);
+                Diagnostics.TacticalMapPerf.Add(Diagnostics.TacticalMapPerf.Camera,
+                    System.Diagnostics.Stopwatch.GetTimestamp() - camStart);
             }
 
             _accum += dt;
-            _pathAccum += dt;
             if (_accum < TacticalSettings.Instance.UpdateInterval) return;
 
             _accum = 0f;
+            long snapStart = System.Diagnostics.Stopwatch.GetTimestamp();
             _formationTracker.Update(mission);
-            if (_pathAccum >= 0.45f)
-            {
-                _pathAccum = 0f;
-                RebuildFormationPaths();
-            }
+            Diagnostics.TacticalMapPerf.Add(Diagnostics.TacticalMapPerf.Snapshots,
+                System.Diagnostics.Stopwatch.GetTimestamp() - snapStart);
 
+            long agentStart = System.Diagnostics.Stopwatch.GetTimestamp();
             RebuildAgentSnapshots(mission);
+            Diagnostics.TacticalMapPerf.Add(Diagnostics.TacticalMapPerf.Agents,
+                System.Diagnostics.Stopwatch.GetTimestamp() - agentStart);
             _agentVersion++;
 
             if (!string.IsNullOrWhiteSpace(_selectedFormationName))
@@ -130,28 +131,6 @@ namespace New_ZZZF.TacticalMap.Core
             _camTarget = (CameraController.Instance != null && CameraController.Instance.Active)
                 ? CameraController.Instance.TargetWorldPos
                 : (Vec2?)null;
-        }
-
-        private void RebuildFormationPaths()
-        {
-            if (_navigationPathService == null) return;
-
-            foreach (var formation in _formationTracker.Snapshots)
-            {
-                formation.PathPoints.Clear();
-                if (!formation.HasOrder) continue;
-
-                // The route is most useful for the player's own formations and for enemy formations
-                // whose current order is explicitly exposed by the engine.
-                List<Vec2> path;
-                if (_navigationPathService.TryGetPath(
-                    formation.AveragePosition,
-                    formation.OrderPosition,
-                    out path))
-                {
-                    formation.PathPoints.AddRange(path);
-                }
-            }
         }
 
         private void RebuildAgentSnapshots(Mission mission)
@@ -202,13 +181,19 @@ namespace New_ZZZF.TacticalMap.Core
         public void HandleHtmlMoveClick(float u, float v)
         {
             if (!ValidateHtmlUv(u, v)) return;
-            IssueOrderAtWorld(_cache.UVToWorld(new Vec2(u, v)), TacticalClickMode.Move);
+            Vec2 world = _cache.UVToWorld(new Vec2(u, v));
+            int issued = _orderSystem.IssueOrderCounted(_mission, world, TacticalClickMode.Move, _selectedFormationName);
+            TacticalMapLog.Info("Move order result: issued=" + issued + " uv=(" + u.ToString("0.000") + "," + v.ToString("0.000") +
+                                ") world=(" + world.X.ToString("0.0") + "," + world.Y.ToString("0.0") + ")");
         }
 
         public void HandleHtmlFaceClick(float u, float v)
         {
             if (!ValidateHtmlUv(u, v)) return;
-            IssueOrderAtWorld(_cache.UVToWorld(new Vec2(u, v)), TacticalClickMode.Face);
+            Vec2 world = _cache.UVToWorld(new Vec2(u, v));
+            int issued = _orderSystem.IssueOrderCounted(_mission, world, TacticalClickMode.Face, _selectedFormationName);
+            TacticalMapLog.Info("Face order result: issued=" + issued + " uv=(" + u.ToString("0.000") + "," + v.ToString("0.000") +
+                                ") world=(" + world.X.ToString("0.0") + "," + world.Y.ToString("0.0") + ")");
         }
 
         public void HandleHtmlCameraClick(float u, float v)

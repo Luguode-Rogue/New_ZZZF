@@ -43,8 +43,11 @@ namespace New_ZZZF.TacticalMap.Core
         {
             var scale = dpr <= 0f ? 1f : dpr;
             // The page reports CSS pixels; GetCursorPos works in physical pixels. Convert once here.
-            _rectX = x * scale; _rectY = y * scale; _rectW = w * scale; _rectH = h * scale;
-            if (!_rectLogged)
+            float nx = x * scale, ny = y * scale, nw = w * scale, nh = h * scale;
+            bool changed = Math.Abs(nx - _rectX) > 8f || Math.Abs(ny - _rectY) > 8f ||
+                           Math.Abs(nw - _rectW) > 8f || Math.Abs(nh - _rectH) > 8f;
+            _rectX = nx; _rectY = ny; _rectW = nw; _rectH = nh;
+            if (!_rectLogged || changed)
             {
                 _rectLogged = true;
                 TacticalMapLog.Info("Canvas rect received: css=(" + x + "," + y + " " + w + "x" + h + ") dpr=" + scale +

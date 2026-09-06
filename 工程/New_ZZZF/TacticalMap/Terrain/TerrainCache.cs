@@ -62,6 +62,12 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         public TerrainCell[,] Cells { get; private set; }
         public byte[] TerrainBaseRGBA { get; private set; }
+
+        /// <summary>拍照底图（高分辨率发布缓冲，行 0 = 南，与 TerrainBaseRGBA 布局一致）；null = 尚未拍照。</summary>
+        public byte[] PhotoBaseRGBA { get; private set; }
+        public int PhotoWidth { get; private set; }
+        public int PhotoHeight { get; private set; }
+
         public byte[] TacticalRGBA { get; private set; }
         public byte[] RiskRGBA => TacticalRGBA;
         public byte[] AgentRGBA { get; private set; }
@@ -129,6 +135,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                 CellStep = Math.Max(WorldW, WorldH) / res;
 
                 int cacheSignature = ComputeCacheSignature(nodeDim, nodeSize, minH, maxH, battleMin, battleMax);
+                BakeSignature = cacheSignature;
                 if (SceneBakeCache.TryGetValue(scene, out var cached) && cached != null && cached.Signature == cacheSignature)
                 {
                     ApplyCachedBake(cached, scene);
@@ -138,6 +145,30 @@ namespace New_ZZZF.TacticalMap.Terrain
                 }
 
                 Cells = new TerrainCell[Width, Height];
+
+                if (_settings.PhotoMap)
+                {
+                    // 拍照模式轻量路径：跳过 65536 次逐格采样与 ClassifyAll（那是进场 10 秒冻结的来源）。
+                    // 底图放纯黑占位（2026-09-06 裁决：拍照完成前不再发布彩色占位底图），
+                    // 真实场景像素由 TerrainPhotoCapture 完成后回填并触发重发布。
+                    // 寻路数据走引擎 NavMeshMap（独立构建，不受影响）；风险叠加层在此模式下不可用。
+                    TerrainBaseRGBA = new byte[Width * Height * 4];
+                    for (int i = 3; i < TerrainBaseRGBA.Length; i += 4)
+                        TerrainBaseRGBA[i] = 255;
+                    TacticalRGBA = new byte[Width * Height * 4];
+                    AgentRGBA = new byte[Width * Height * 4];
+                    for (int x = 0; x < Width; x++)
+                        for (int y = 0; y < Height; y++)
+                            Cells[x, y] = new TerrainCell { MaterialLayers = new short[0] };
+                    _baked = true;
+                    LastError = null;
+                    // photo 模式不写 SceneBakeCache：缓存键是 Scene 引用，同场景重进必 miss（新 Scene
+                    // 实例），同 Mission 内不会二次 bake，快照只会白占 ~3.5MB 等待 GC（2026-09-06 修复）。
+                    watch.Stop();
+                    TacticalMapLog.Info("Terrain bake LIGHT (photo mode). Total=" + watch.ElapsedMilliseconds + " ms.");
+                    return true;
+                }
+
                 float[,] heights = new float[Width, Height];
                 for (int x = 0; x < Width; x++)
                 {
@@ -240,7 +271,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 for (int y = 0; y < Height; y++)
                 {
-                    var c = Cells[x, y];
+                    var c = Cells[x, y] ?? new TerrainCell();
                     snapshot.Cells[index++] = new CellSnapshot
                     {
                         Height = c.Height,
@@ -312,6 +343,51 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         public bool IsBaked => _baked;
         public string LastError { get; private set; }
+
+        /// <summary>本次烘焙的场景签名（nodeDim/size/高度/bounds/设置混合哈希）——同场景退出再进值不变，用作照片缓存键。</summary>
+        public int BakeSignature { get; private set; }
+
+        /// <summary>拍照底图替换计数：每次 ApplyPhotoPixels 自增，用于发布签名去重。</summary>
+        public int PhotoVersion { get; private set; }
+
+        /// <summary>
+        /// 用拍照回读的高分辨率像素替换底图。
+        /// PhotoBaseRGBA 按原分辨率发布给 HTML；TerrainBaseRGBA 重采样进逻辑栅格供旧 MinimapWidget 使用。
+        /// 布局一致：行号大 = 世界 Y 大（北），行 0 = 南。
+        /// </summary>
+        public void ApplyPhotoPixels(byte[] rgba, int photoW, int photoH)
+        {
+            if (rgba == null || photoW <= 0 || photoH <= 0 || rgba.Length != photoW * photoH * 4) return;
+            PhotoBaseRGBA = rgba;
+            PhotoWidth = photoW;
+            PhotoHeight = photoH;
+            TerrainBaseRGBA = DownsampleNearest(rgba, photoW, photoH, Width, Height);
+            PhotoVersion++;
+            // 把游戏内实际显示的地图导出到 Logs/PhotoMapDump（正常关游戏时自动清理）
+            PhotoMapDump.Save(rgba, photoW, photoH, BakeSignature, PhotoVersion);
+        }
+
+        private byte[] DownsampleNearest(byte[] src, int sw, int sh, int dw, int dh)
+        {
+            var dst = new byte[dw * dh * 4];
+            for (int y = 0; y < dh; y++)
+            {
+                int sy = Math.Min(sh - 1, y * sh / dh);
+                int rowBase = sy * sw;
+                int dstRow = y * dw;
+                for (int x = 0; x < dw; x++)
+                {
+                    int sx = Math.Min(sw - 1, x * sw / dw);
+                    int s = (rowBase + sx) * 4;
+                    int d = (dstRow + x) * 4;
+                    dst[d] = src[s];
+                    dst[d + 1] = src[s + 1];
+                    dst[d + 2] = src[s + 2];
+                    dst[d + 3] = 255;
+                }
+            }
+            return dst;
+        }
 
         public Vec2 CellCenter(int x, int y)
         {

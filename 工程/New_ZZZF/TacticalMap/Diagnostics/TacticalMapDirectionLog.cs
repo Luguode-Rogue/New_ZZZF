@@ -15,6 +15,12 @@ namespace New_ZZZF.TacticalMap.Diagnostics
         private static bool _initialized;
         private static bool _sessionStarted;
 
+        /// <summary>
+        /// 默认关闭：该日志每 0.2s × 每个敌方编队在游戏主线程做一次同步文件 IO
+        /// （File.AppendAllText 开-写-关），战斗中构成持续卡顿来源。需要敌方朝向诊断时置 true。
+        /// </summary>
+        public static bool Enabled;
+
         public static string LogPath
         {
             get { EnsureInitialized(); return _logPath; }
@@ -22,6 +28,7 @@ namespace New_ZZZF.TacticalMap.Diagnostics
 
         public static void Info(string message)
         {
+            if (!Enabled) return;
             EnsureInitialized();
             if (string.IsNullOrEmpty(_logPath)) return;
 

@@ -31,7 +31,13 @@ namespace New_ZZZF.TacticalMap.Core
 
         public void IssueOrder(Mission mission, Vec2 worldPos, TacticalClickMode mode, string selectedFormationName)
         {
-            if (mission == null || mission.Scene == null) return;
+            IssueOrderCounted(mission, worldPos, mode, selectedFormationName);
+        }
+
+        /// <summary>执行命令并返回实际下达的编队数量（0 = 无可命令目标）。</summary>
+        public int IssueOrderCounted(Mission mission, Vec2 worldPos, TacticalClickMode mode, string selectedFormationName)
+        {
+            if (mission == null || mission.Scene == null) return 0;
 
             var formations = SelectionSystem.GetTargetFormations(mission, selectedFormationName);
             if (formations.Count == 0)
@@ -39,7 +45,7 @@ namespace New_ZZZF.TacticalMap.Core
                 InformationManager.DisplayMessage(new InformationMessage(
                     "战术地图：未选择任何编队",
                     new Color(1f, 0.6f, 0.1f, 1f)));
-                return;
+                return 0;
             }
 
             float height = 0f;
@@ -88,6 +94,7 @@ namespace New_ZZZF.TacticalMap.Core
                     $"战术地图：已向 {issued} 个编队下达[{label}]指令",
                     new Color(0.2f, 0.9f, 1f, 1f)));
             }
+            return issued;
         }
     }
 

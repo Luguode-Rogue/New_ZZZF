@@ -18,7 +18,6 @@ namespace New_ZZZF.TacticalMap.Tracking
         public uint Color;
         public int Count;
         public string Name;
-        public List<Vec2> PathPoints { get; } = new List<Vec2>();
     }
 
     public sealed class FormationTracker

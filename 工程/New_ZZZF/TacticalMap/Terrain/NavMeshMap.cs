@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using New_ZZZF.TacticalMap.Diagnostics;
@@ -8,6 +9,22 @@ namespace New_ZZZF.TacticalMap.Terrain
     /// <summary>Projects the engine AI navigation mesh onto the tactical-map raster.</summary>
     public sealed class NavMeshMap
     {
+        private sealed class CachedNav
+        {
+            public bool[] Walkable;
+            public byte[] Rgba;
+        }
+
+        /// <summary>
+        /// 跨战斗缓存：键 = TerrainCache.BakeSignature（含 nodeDim/nodeSize/高度/bounds/分辨率）。
+        /// 65536 格 × 2 次原生互操作在主线程一次性跑完约 0.6~2.6s，同签名重进战斗必须复用
+        /// （与 TerrainPhotoCapture.PhotoCache 同一策略，2026-09-06 性能修复）。
+        /// </summary>
+        private static readonly Dictionary<int, CachedNav> BuildCache =
+            new Dictionary<int, CachedNav>();
+
+        private const int BuildCacheLimit = 16;
+
         private readonly TerrainCache _cache;
         private bool[] _walkable;
         private byte[] _rgba;
@@ -32,6 +49,21 @@ namespace New_ZZZF.TacticalMap.Terrain
 
             try
             {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+
+                // 签名命中：直接复用上一次构建结果（数组只读共享，构建后不再修改）
+                if (BuildCache.TryGetValue(_cache.BakeSignature, out var cachedNav)
+                    && cachedNav != null
+                    && cachedNav.Walkable != null && cachedNav.Walkable.Length == width * height)
+                {
+                    _walkable = cachedNav.Walkable;
+                    _rgba = cachedNav.Rgba;
+                    _version++;
+                    TacticalMapLog.Info("NavMeshMap CACHE HIT (signature=" + _cache.BakeSignature +
+                        "); skipped rebuild.");
+                    return;
+                }
+
                 _walkable = new bool[width * height];
                 _rgba = new byte[width * height * 4];
                 int walkableCells = 0;
@@ -77,10 +109,16 @@ namespace New_ZZZF.TacticalMap.Terrain
                 }
 
                 _version++;
+                watch.Stop();
                 TacticalMapLog.Info("NavMeshMap build complete. Faces=" + faceCount +
                                      " WalkableCells=" + walkableCells +
                                      " TotalCells=" + (width * height) +
-                                     " Coverage=" + ((float)walkableCells / Math.Max(1, width * height)).ToString("F3"));
+                                     " Coverage=" + ((float)walkableCells / Math.Max(1, width * height)).ToString("F3") +
+                                     " Total=" + watch.ElapsedMilliseconds + " ms");
+
+                // 写入跨战斗缓存；超限时整体清空（重建一次的成本可控，不做复杂淘汰）
+                if (BuildCache.Count >= BuildCacheLimit) BuildCache.Clear();
+                BuildCache[_cache.BakeSignature] = new CachedNav { Walkable = _walkable, Rgba = _rgba };
             }
             catch (Exception ex)
             {

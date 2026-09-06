@@ -206,6 +206,9 @@ namespace New_ZZZF
         //====================== 法术栏输入处理 ======================
         private int _selectedSpellSlot = 0; // 当前选中的法术栏位（0-3）
 
+        /// <summary>当前选中的法术栏位（0-3），供 HUD 等只读展示使用。</summary>
+        public int SelectedSpellSlot => _selectedSpellSlot;
+
 
         /// <summary>
         /// 尝试激活技能（核心逻辑）

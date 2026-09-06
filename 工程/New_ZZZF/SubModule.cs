@@ -12,10 +12,12 @@ using SandBox.Issues;
 using HarmonyLib;
 using System.Reflection;
 using TaleWorlds.MountAndBlade.View.Screens;
+using New_ZZZF.BattleHud;
 using New_ZZZF.Systems;
 using MountedSlashCamera;
 using New_ZZZF.TacticalMap.Config;
 using New_ZZZF.TacticalMap.Core;
+using New_ZZZF.TacticalMap.Terrain;
 using New_ZZZF.TacticalMap.UI;
 using New_ZZZF.TacticalMap.Diagnostics;
 using TaleWorlds.CampaignSystem.ComponentInterfaces;
@@ -74,6 +76,12 @@ namespace New_ZZZF
             {
                 CustomSkillHtmlUi.Instance.InitializeOnFrameworkReady();
                 TacticalMapLog.Info("CustomSkill HtmlUi InitializeOnFrameworkReady registered.");
+            }
+
+            if (NewZZZFDiag.BattleHud)
+            {
+                BattleHudHtmlUi.Instance.InitializeOnFrameworkReady();
+                TacticalMapLog.Info("BattleHud HtmlUi InitializeOnFrameworkReady registered.");
             }
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
@@ -174,6 +182,8 @@ namespace New_ZZZF
                 mission.AddMissionBehavior(new AffixMissionBehavior());
             if (NewZZZFDiag.AgentStatusView)
                 mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
+            if (NewZZZFDiag.BattleHud)
+                mission.AddMissionBehavior(new BattleHudMissionLogic());
         }
 
         protected override void OnSubModuleUnloaded()
@@ -184,11 +194,19 @@ namespace New_ZZZF
             {
                 try { TacticalMapHtmlUi.Instance.Dispose(); }
                 catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
+                // 正常关闭游戏时清空地图导出目录；闪退/卡死时文件保留作现场证据
+                try { PhotoMapDump.Cleanup(); }
+                catch (Exception ex) { TacticalMapLog.Error("PhotoMapDump.Cleanup failed.", ex); }
             }
             if (NewZZZFDiag.CustomSkillHtmlUi)
             {
                 try { CustomSkillHtmlUi.Instance.Dispose(); }
                 catch (Exception ex) { TacticalMapLog.Error("CustomSkill HtmlUI Dispose failed.", ex); }
+            }
+            if (NewZZZFDiag.BattleHud)
+            {
+                try { BattleHudHtmlUi.Instance.Dispose(); }
+                catch (Exception ex) { TacticalMapLog.Error("BattleHud HtmlUI Dispose failed.", ex); }
             }
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
             base.OnSubModuleUnloaded();
@@ -248,6 +266,8 @@ namespace New_ZZZF
             // 延迟缴械的统一执行点：每帧必跑、主线程、不依赖任何 Behavior 挂载或 Harmony 补丁。
             // （Mark 发生在上一帧 Mission.Tick 的碰撞判定内，此处在其后的安全阶段执行 DropItem）
             DeferredDisarmExecutor.Execute(Mission.Current);
+            // 拍照渲染资源的战斗后延迟销毁（跨战斗驱动；内部无待销毁项时零开销）
+            TerrainPhotoCapture.ProcessPendingShutdown();
             if (NewZZZFDiag.CustomSkillHtmlUi)
                 CustomSkillHtmlUi.Instance.Tick(dt);
 

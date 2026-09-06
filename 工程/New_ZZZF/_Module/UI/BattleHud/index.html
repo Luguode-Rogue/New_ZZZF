@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ZZZF 战斗 HUD</title>
+<style>
+:root{
+  /* 注意：Surface 文档禁止 color-scheme:dark —— iframe 子框架的画布会按配色方案
+     被 UA 填充为不透明深色（顶层文档有 WebView2 透明环境变量兜底，iframe 没有），
+     HUD 会变成一整块深色盖住游戏与地图。所有颜色显式声明，不依赖 UA 控件。 */
+  --text:#eadfce;--muted:#9b9185;
+  --gold:#e8c36e;--gold2:#f5dda5;
+  --hp:#c05a4a;--stam:#7da05e;--mana:#5e82a8;
+  --panel:rgba(18,15,11,.72);--line:rgba(211,174,92,.30);
+  font-family:"Segoe UI","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:var(--text)}
+body{pointer-events:none;user-select:none}
+#hud{position:fixed;inset:0;pointer-events:none}
+#hud.hidden{display:none}
+
+/* ---- 资源面板：右上角、战术小图（right:16px, top:1px, 400x400）正下方 ---- */
+#vitals{position:absolute;right:16px;top:409px;width:400px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:10px;background:var(--panel);box-shadow:0 6px 24px rgba(0,0,0,.45);box-sizing:border-box}
+.bar{position:relative;height:16px;margin-top:7px;border-radius:8px;background:rgba(0,0,0,.55);overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+.bar:first-child{margin-top:0}
+.bar .fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:7px;transition:width .12s linear}
+.bar.stam .fill{background:linear-gradient(180deg,#93bb72,#678a4c)}
+.bar.mana .fill{background:linear-gradient(180deg,#7496bd,#4d6f96)}
+.bar .label{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;
+  padding:0 8px;font-size:10.5px;line-height:1;color:#f2ecdd;text-shadow:0 1px 2px rgba(0,0,0,.9)}
+#badges{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.badge{padding:3px 8px;border:1px solid var(--line);border-radius:999px;background:rgba(0,0,0,.45);
+  color:#d8bf84;font-size:10px;line-height:1.4}
+.badge.off{display:none}
+#gcdBadge{color:#ffd98a}
+
+/* ---- 底部技能栏 ---- */
+#skillbar{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+  display:flex;gap:7px;align-items:flex-end;padding:8px 10px;border:1px solid var(--line);
+  border-radius:12px;background:var(--panel);box-shadow:0 6px 24px rgba(0,0,0,.45)}
+.skill{position:relative;width:58px;height:58px;border:1px solid rgba(211,174,92,.25);border-radius:9px;
+  background:rgba(8,6,4,.72);overflow:hidden}
+.skill.selected{border-color:var(--gold);box-shadow:0 0 0 1px rgba(232,195,110,.55),0 0 10px rgba(232,195,110,.25)}
+.skill .cdFill{position:absolute;left:0;right:0;bottom:0;height:0%;background:rgba(10,8,5,.78);
+  border-top:1px solid rgba(232,195,110,.35);transition:height .12s linear}
+.skill .cdText{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:700;color:#ffe3a0;text-shadow:0 1px 3px rgba(0,0,0,.95)}
+.skill .name{position:absolute;left:0;right:0;bottom:3px;text-align:center;font-size:9px;line-height:1.2;
+  color:var(--text);text-shadow:0 1px 2px rgba(0,0,0,.95);padding:0 3px;
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.skill .key{position:absolute;left:0;top:0;padding:1px 5px;font-size:8.5px;color:#cdb27b;
+  background:rgba(0,0,0,.5);border-bottom-right-radius:6px}
+.skill .cost{position:absolute;right:2px;top:2px;font-size:8.5px;color:var(--muted)}
+.skill.mana .cost{color:#9db8d8}
+.skill.gcd .cdFill{background:rgba(60,45,20,.72)}
+.skill.empty{opacity:.38}
+.skill.empty .name{color:#8d8478}
+.sep{width:1px;align-self:stretch;margin:2px 1px;background:rgba(211,174,92,.22)}
+.spellRow{display:flex;gap:7px}
+.spellCol{display:flex;flex-direction:column;gap:7px}
+</style>
+</head>
+<body>
+<div id="hud" class="hidden">
+  <div id="vitals">
+    <div class="bar stam"><div class="fill" id="stamFill"></div><div class="label"><span>耐力</span><span id="stamText"></span></div></div>
+    <div class="bar mana"><div class="fill" id="manaFill"></div><div class="label"><span>法力</span><span id="manaText"></span></div></div>
+    <div id="badges">
+      <span class="badge off" id="shieldBadge"></span>
+      <span class="badge off" id="livesBadge"></span>
+      <span class="badge off" id="gcdBadge">公共冷却</span>
+    </div>
+  </div>
+  <div id="skillbar"></div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const app = window.game.app;
+  const hud = document.getElementById('hud');
+  const skillbar = document.getElementById('skillbar');
+
+  const SLOT_KEYS = {
+    main: 'E', sub: 'Alt', passive: '被动', combat: '战技',
+    spell0: '法术1', spell1: '法术2', spell2: '法术3', spell3: '法术4'
+  };
+  // 底部技能栏展示顺序：左法术组（当前选中高亮），右侧 主动/副/战技
+  const LAYOUT = ['spell0', 'spell1', 'spell2', 'spell3', '|', 'main', 'sub', 'combat'];
+  let skillsBySlot = {};
+  let lastSig = '';
+
+  const fmt = v => Math.round(Number(v) || 0);
+
+  function renderBar(fillId, textId, cur, max, unit) {
+    const pct = max > 0 ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
+    document.getElementById(fillId).style.width = pct + '%';
+    document.getElementById(textId).textContent = fmt(cur) + '/' + fmt(max) + (unit || '');
+  }
+
+  function renderSkillBar(skills) {
+    const sig = JSON.stringify(skills);
+    if (sig === lastSig) return;          // 槽位结构变化时才重建 DOM
+    lastSig = sig;
+    skillsBySlot = {};
+    for (const s of (skills || [])) skillsBySlot[s.slot] = s;
+
+    skillbar.innerHTML = '';
+    for (const part of LAYOUT) {
+      if (part === '|') {
+        const sep = document.createElement('div');
+        sep.className = 'sep';
+        skillbar.appendChild(sep);
+        continue;
+      }
+      const s = skillsBySlot[part];
+      if (!s) continue;
+      const empty = !!s.empty;
+      const cell = document.createElement('div');
+      cell.className = 'skill' + (empty ? ' empty' : '') + (s.mana ? ' mana' : '') + (s.selected ? ' selected' : '');
+      cell.dataset.slot = part;
+      cell.innerHTML =
+        '<div class="key">' + (SLOT_KEYS[part] || '') + '</div>' +
+        (!empty ? '<div class="cost">' + fmt(s.cost) + '</div>' : '') +
+        '<div class="cdFill"></div><div class="cdText"></div>' +
+        '<div class="name"></div>';
+      skillbar.appendChild(cell);
+    }
+  }
+
+  function updateSkillCells(state) {
+    const gcd = Number(state.gcd) > 0.01;
+    const cells = skillbar.querySelectorAll('.skill');
+    for (const cell of cells) {
+      const s = skillsBySlot[cell.dataset.slot];
+      if (!s) continue;
+      const fill = cell.querySelector('.cdFill');
+      const text = cell.querySelector('.cdText');
+      const name = cell.querySelector('.name');
+      if (s.empty) { name.textContent = '空'; fill.style.height = '0%'; text.textContent = ''; continue; }
+      name.textContent = s.name || s.id || '';
+
+      if (s.passive) {
+        fill.style.height = '0%';
+        text.textContent = '';
+        continue;
+      }
+      const cd = Math.max(0, Number(s.cd) || 0);
+      const cdMax = Math.max(0.01, Number(s.cdMax) || 0.01);
+      // 冷却进度取自身 CD 与法术 GCD（按 2s 满槽估计）的较大者
+      const gcdRatio = (gcd && s.mana) ? Math.min(1, Number(state.gcd) / 2) : 0;
+      const ratio = Math.max(cd > 0 ? cd / cdMax : 0, gcdRatio);
+      fill.style.height = Math.min(100, ratio * 100) + '%';
+      text.textContent = cd > 0.05 ? (cd >= 10 ? String(Math.round(cd)) : cd.toFixed(1)) : '';
+      cell.classList.toggle('gcd', cd <= 0.01 && gcd && s.mana);
+
+      // 选中态跟随 C#（滚轮切槽）
+      cell.classList.toggle('selected', !!s.selected);
+      // 资源不足以施放时降透明度
+      const pool = s.mana ? state.mana : state.stamina;
+      cell.style.opacity = (!cd && pool < s.cost) ? '0.55' : '1';
+    }
+  }
+
+  function render(state) {
+    if (!state || !state.available) { hud.classList.add('hidden'); return; }
+    hud.classList.remove('hidden');
+    renderBar('stamFill', 'stamText', state.stamina, 100);
+    renderBar('manaFill', 'manaText', state.mana, 100);
+
+    const shield = fmt(state.shield);
+    const shieldBadge = document.getElementById('shieldBadge');
+    shieldBadge.classList.toggle('off', shield <= 0);
+    shieldBadge.textContent = '护盾 ' + shield;
+
+    const lives = Number(state.lives) || 0;
+    const livesBadge = document.getElementById('livesBadge');
+    livesBadge.classList.toggle('off', lives <= 0);
+    livesBadge.textContent = '复活 ' + lives;
+
+    const gcdOn = Number(state.gcd) > 0.01;
+    document.getElementById('gcdBadge').classList.toggle('off', !gcdOn);
+
+    renderSkillBar(state.skills);
+    updateSkillCells(state);
+  }
+
+  // 订阅 + 快照兜底（ready 水合不触发事件）
+  app.state.subscribe('battleHud', render);
+  const hydrate = () => { try { render(app.state.get('battleHud')); } catch (_) {} };
+  if (window.game && typeof window.game.ready === 'function') {
+    window.game.ready().then(hydrate).catch(hydrate);
+  } else {
+    hydrate();
+  }
+
+  // ---- 临时诊断已移除：原 3s 一次的 getComputedStyle 强制样式计算 + runtime.error 跨进程调用
+})();
+</script>
+</body>
+</html>
