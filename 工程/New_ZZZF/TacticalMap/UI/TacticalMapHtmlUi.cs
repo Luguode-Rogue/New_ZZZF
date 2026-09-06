@@ -247,6 +247,8 @@ namespace New_ZZZF.TacticalMap.UI
 
         private void ApplyInputMode()
         {
+            // 交互模式需要可见的系统光标（战斗中引擎默认隐藏指针），退出后由补丁撤销。
+            Core.TacticalMapCursorPatch.MouseRequested = IsInteractive;
             try
             {
                 HtmlUiService.SetInputMode(IsInteractive

@@ -24,6 +24,7 @@ namespace New_ZZZF.TacticalMap.Config
 
             _harmony = new Harmony("TacticalMap");
             TacticalCameraPatch.Patch(_harmony);
+            TacticalMapCursorPatch.Patch(_harmony);
 
             InformationManager.DisplayMessage(new InformationMessage(
                 "[TMap] 引导完成：TacticalMap Core + HTMLUI Consumer 已注册"));
