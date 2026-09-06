@@ -1,3 +1,4 @@
+using System;
 using HarmonyLib;
 using TaleWorlds.MountAndBlade;
 
@@ -11,12 +12,27 @@ namespace New_ZZZF.ContinuousCollision
     {
         private static void Postfix(Mission mission)
         {
-            if (mission == null || mission.GetMissionBehavior<ContinuousCollisionMissionLogic>() != null)
+            if (mission == null)
             {
+                ContinuousCollisionLog.Warn("Bootstrap skipped: mission is null.");
                 return;
             }
 
-            mission.AddMissionBehavior(new ContinuousCollisionMissionLogic());
+            if (mission.GetMissionBehavior<ContinuousCollisionMissionLogic>() != null)
+            {
+                ContinuousCollisionLog.Trace("Bootstrap skipped: ContinuousCollisionMissionLogic already exists.");
+                return;
+            }
+
+            try
+            {
+                mission.AddMissionBehavior(new ContinuousCollisionMissionLogic());
+                ContinuousCollisionLog.Info("Bootstrap injected ContinuousCollisionMissionLogic into mission.");
+            }
+            catch (Exception ex)
+            {
+                ContinuousCollisionLog.Error("Bootstrap failed to inject ContinuousCollisionMissionLogic.", ex);
+            }
         }
     }
 }
