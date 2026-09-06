@@ -31,7 +31,7 @@ namespace New_ZZZF.ContinuousCollision
             sbyte handBone = ResolveHumanBone(agent, "RightHand", "HandRight", "RHand", "Right_Hand");
             if (handBone < 0)
             {
-                return GetFallbackPose(agent, weapon, (int)slot, weaponLength, settings);
+                return GetFallbackPose(agent, weapon, (int)slot, weaponLength);
             }
 
             try
@@ -39,8 +39,7 @@ namespace New_ZZZF.ContinuousCollision
                 MatrixFrame globalFrame = agent.AgentVisuals.GetGlobalFrame();
                 MatrixFrame handFrame = agent.AgentVisuals.GetBoneEntitialFrame(handBone, false);
                 Vec3 handOrigin = TransformPoint(globalFrame, handFrame.origin);
-                Vec3 forward = TransformVector(globalFrame, handFrame.rotation.f);
-                forward = Normalize(forward);
+                Vec3 forward = Normalize(TransformVector(globalFrame, handFrame.rotation.f));
                 if (LengthSquared(forward) < 0.0001f)
                 {
                     forward = Normalize(agent.LookFrame.rotation.f);
@@ -63,7 +62,7 @@ namespace New_ZZZF.ContinuousCollision
             catch (Exception ex)
             {
                 Debug.Print("[ContinuousCollision] Weapon pose failed: " + ex.Message);
-                return GetFallbackPose(agent, weapon, (int)slot, weaponLength, settings);
+                return GetFallbackPose(agent, weapon, (int)slot, weaponLength);
             }
         }
 
@@ -82,13 +81,12 @@ namespace New_ZZZF.ContinuousCollision
             }
 
             CapsuleData capsule;
-            float capsuleScale;
-            if (!TryGetWorldBodyCapsule(victim, out capsule, out capsuleScale))
+            if (!TryGetWorldBodyCapsule(victim, out capsule))
             {
                 return false;
             }
 
-            float radius = capsule.Radius * capsuleScale + settings.WeaponRadius;
+            float radius = capsule.Radius + settings.WeaponRadius;
             SegmentHit best = default(SegmentHit);
             bool hit = false;
 
@@ -119,7 +117,7 @@ namespace New_ZZZF.ContinuousCollision
             return true;
         }
 
-        private static WeaponPose GetFallbackPose(Agent agent, MissionWeapon weapon, int slot, float weaponLength, ContinuousCollisionSettings settings)
+        private static WeaponPose GetFallbackPose(Agent agent, MissionWeapon weapon, int slot, float weaponLength)
         {
             Vec3 forward = Normalize(agent.LookFrame.rotation.f);
             if (LengthSquared(forward) < 0.0001f)
@@ -159,24 +157,26 @@ namespace New_ZZZF.ContinuousCollision
             return -1;
         }
 
-        private static bool TryGetWorldBodyCapsule(Agent agent, out CapsuleData worldCapsule, out float scale)
+        private static bool TryGetWorldBodyCapsule(Agent agent, out CapsuleData worldCapsule)
         {
             worldCapsule = default(CapsuleData);
-            scale = 1f;
             try
             {
                 Monster monster = agent.Monster;
+                float scale = Math.Max(0.01f, agent.AgentScale);
                 bool crouched = agent.CrouchMode;
                 float radius = crouched ? monster.CrouchedBodyCapsuleRadius : monster.BodyCapsuleRadius;
                 Vec3 p1 = crouched ? monster.CrouchedBodyCapsulePoint1 : monster.BodyCapsulePoint1;
                 Vec3 p2 = crouched ? monster.CrouchedBodyCapsulePoint2 : monster.BodyCapsulePoint2;
-                scale = Math.Max(0.01f, agent.AgentScale);
+                p1 = Multiply(p1, scale);
+                p2 = Multiply(p2, scale);
+                radius *= scale;
 
                 MatrixFrame globalFrame = agent.AgentVisuals.GetGlobalFrame();
                 Vec3 wp1 = TransformPoint(globalFrame, p1);
                 Vec3 wp2 = TransformPoint(globalFrame, p2);
-                worldCapsule = new CapsuleData(radius * scale, wp1, wp2);
-                return true;
+                worldCapsule = new CapsuleData(radius, wp1, wp2);
+                return radius > 0f;
             }
             catch (Exception ex)
             {
