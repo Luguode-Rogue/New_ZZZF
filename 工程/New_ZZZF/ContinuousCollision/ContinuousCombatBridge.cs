@@ -28,8 +28,7 @@ namespace New_ZZZF.ContinuousCollision
                 return false;
             }
 
-            float displacement = EstimateDisplacement(pose.Direction, attacker, contact.Position);
-            bool thrust = IsLikelyThrust(pose, contact.Position, attacker);
+            bool thrust = IsLikelyThrust(pose, contact.Position);
             StrikeType strikeType = thrust ? StrikeType.Thrust : StrikeType.Swing;
             DamageTypes damageType = thrust ? weaponData.ThrustDamageType : weaponData.SwingDamageType;
             Agent.UsageDirection attackDirection = thrust
@@ -46,7 +45,7 @@ namespace New_ZZZF.ContinuousCollision
                 blowDirection = pose.Direction;
             }
 
-            Vec3 victimVelocity = attacker == null ? Vec3.Zero : attacker.Velocity;
+            Vec3 victimVelocity = victim.Velocity;
             AttackCollisionData collisionData = AttackCollisionData.GetAttackCollisionDataForDebugPurpose(
                 false,
                 false,
@@ -145,13 +144,7 @@ namespace New_ZZZF.ContinuousCollision
             return true;
         }
 
-        private static float EstimateDisplacement(Vec3 weaponDirection, Agent attacker, Vec3 hitPosition)
-        {
-            Vec3 delta = Subtract(hitPosition, attacker.Position);
-            return Math.Abs(Dot(delta, weaponDirection));
-        }
-
-        private static bool IsLikelyThrust(in WeaponPose pose, Vec3 hitPosition, Agent attacker)
+        private static bool IsLikelyThrust(in WeaponPose pose, Vec3 hitPosition)
         {
             Vec3 toHit = Normalize(Subtract(hitPosition, pose.Base));
             float alignment = Dot(pose.Direction, toHit);
