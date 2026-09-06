@@ -195,12 +195,27 @@ namespace New_ZZZF.TacticalMap.Terrain
             try
             {
                 int rowBytes = width * 4;
-                // PhotoBaseRGBA 行 0 = 南（TerrainCache 布局），PNG 行 0 = 北 → 翻转写出。
+                byte[] line = new byte[rowBytes];
+                // 字节序链路说明（2026-09-07 实机修复，勿"简化"任何一环）：
+                //   引擎 SaveToFile 写出的 PNG 红蓝是反的（BGRA 显存直写）；
+                //   TerrainPhotographer.ApplyFromPng 用 GDI LockBits(BGRA 内存序) 按 RGBA 解析，
+                //   两次反转恰好抵消 → TerrainCache.PhotoBaseRGBA 是【正确 RGBA】；
+                //   因此这里必须把 RGBA 交换成 GDI 内存序 BGRA 再写出，否则 PNG 红蓝颠倒
+                //   （实机症状：黄绿草地显示为青蓝色）。
                 for (int y = 0; y < height; y++)
                 {
                     int srcY = height - 1 - y;
-                    Marshal.Copy(rgba, srcY * rowBytes,
-                        IntPtr.Add(data.Scan0, y * data.Stride), rowBytes);
+                    int src = srcY * rowBytes;
+                    // PhotoBaseRGBA 行 0 = 南（TerrainCache 布局），PNG 行 0 = 北 → 翻转写出。
+                    for (int x = 0; x < width; x++)
+                    {
+                        int s = src + x * 4, d = x * 4;
+                        line[d] = rgba[s + 2];     // B
+                        line[d + 1] = rgba[s + 1]; // G
+                        line[d + 2] = rgba[s];     // R
+                        line[d + 3] = 255;         // A（底图不透明）
+                    }
+                    Marshal.Copy(line, 0, IntPtr.Add(data.Scan0, y * data.Stride), rowBytes);
                 }
             }
             finally
