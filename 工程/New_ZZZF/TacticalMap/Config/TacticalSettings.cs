@@ -48,8 +48,11 @@ namespace New_ZZZF.TacticalMap.Config
         /// </summary>
         public bool TerrainPhotoV2 = true;
 
-        /// <summary>拍照像素回读为 BGRA 时置 true（若底图红蓝反色则翻转此开关）。</summary>
-        public bool PhotoMapSwapRedBlue = false;
+        /// <summary>
+        /// GDI+ Format32bppArgb 的 LockBits 内存布局为 BGRA；拍照 PNG 回读必须交换 R/B，
+        /// 才能恢复 TerrainPhotographer 内部统一使用的 RGBA 布局。
+        /// </summary>
+        public bool PhotoMapSwapRedBlue = true;
 
         // Bannerlord's normal.z-derived slope value is not an angle; 0.45 already represents
         // a genuinely steep surface. Lowering the previous 0.55 avoids missing carved ledges.
