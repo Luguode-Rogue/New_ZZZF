@@ -31,6 +31,12 @@ namespace New_ZZZF.TacticalMap.Config
         public bool TerrainPhotoV2 = true;
 
         /// <summary>
+        /// TerrainCache 的旧字段引用兼容层。
+        /// 这里只是配置别名，不会恢复旧版 TerrainPhotoCapture 渲染器；实际开关仍由 TerrainPhotoV2 控制。
+        /// </summary>
+        public bool PhotoMap => TerrainPhotoV2;
+
+        /// <summary>
         /// GDI+ Format32bppArgb 的 LockBits 内存布局为 BGRA；拍照 PNG 回读必须交换 R/B，
         /// 才能恢复 TerrainPhotographer 内部统一使用的 RGBA 布局。
         /// </summary>
