@@ -16,15 +16,14 @@ namespace New_ZZZF.TacticalMap.Core
         private bool _initialized;
         private bool _ready;
         private float _heartbeatAccum;
-        private Terrain.TerrainPhotoCapture _photoCapture;
         private Terrain.TerrainPhotographer _photographer;
-        private int _fpsFrames;       // heartbeat 周期内的帧计数（FPS 诊断）
-        private float _fpsAccum;      // 帧时间累计（秒）
-        private float _worstFrame;    // 周期内最差帧时间（秒）
-        private int _spikeFrames;     // ≥250ms 的卡顿帧计数
-        private static int _battleSeq;          // 进程内战场序号（跨场递增）
+        private int _fpsFrames;
+        private float _fpsAccum;
+        private float _worstFrame;
+        private int _spikeFrames;
+        private static int _battleSeq;
         private int _thisBattleSeq;
-        private System.Diagnostics.Stopwatch _battleWatch;  // 本场时长
+        private System.Diagnostics.Stopwatch _battleWatch;
 
         public override void OnAfterMissionCreated()
         {
@@ -72,9 +71,6 @@ namespace New_ZZZF.TacticalMap.Core
                 _missionScreen = ScreenManager.TopScreen as MissionScreen;
                 if (_missionScreen == null)
                 {
-                    // 诊断插桩（2026-09-06）：第二/三场战斗 heartbeat 完全缺失，怀疑 TopScreen 非
-                    // MissionScreen（或主循环 tick 极慢被 dt 钳制）。无 MissionScreen 时也输出心跳，
-                    // 直接观察真实 tick 频率与顶层 Screen 类型，区分"逻辑早退"与"主循环卡死"。
                     float diagFrame = Math.Max(0f, dt);
                     _fpsFrames++;
                     _fpsAccum += diagFrame;
@@ -100,9 +96,8 @@ namespace New_ZZZF.TacticalMap.Core
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
             TacticalMapHtmlUi.Instance.Tick(dt);
-            TickPhotoCapture(dt);
+            TickPhotoCapture();
 
-            // 帧率诊断：heartbeat 每 5s 输出平均 FPS / 最差帧 / >250ms 卡顿帧计数
             float frame = Math.Max(0f, dt);
             _fpsFrames++;
             _fpsAccum += frame;
@@ -114,8 +109,6 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 _heartbeatAccum = 0f;
                 float avgFrame = _fpsFrames > 0 ? _fpsAccum / _fpsFrames : 0f;
-                // 分段耗时报告：各段为 5s 窗口内累计毫秒（括号内为调用次数），
-                // 均摊到帧 = 值/5s/帧率；哪个段吃帧一目了然
                 string perf = Diagnostics.TacticalMapPerf.DrainReport(5.0);
                 TacticalMapLog.Info("Mission heartbeat. UIVisible=" + TacticalMapHtmlUi.Instance.IsVisible +
                                     " Mode=" + TacticalMapHtmlUi.Instance.Mode +
@@ -133,8 +126,6 @@ namespace New_ZZZF.TacticalMap.Core
             }
         }
 
-        /// <summary>进程级 CPU 采样（静态，跨场持续）：输出游戏与全部 WebView2 进程在窗口内的 CPU 占比。
-        /// 单核满载 = 100%。用于把"开战掉帧"的责任在 游戏引擎 / 浏览器进程 之间定量切割。</summary>
         private static double _lastWebViewCpuMs;
         private static double _lastGameCpuMs;
         private static bool _cpuBaselineSet;
@@ -177,12 +168,10 @@ namespace New_ZZZF.TacticalMap.Core
         }
 
         /// <summary>
-        /// 拍照式底图：轻量烘焙完成后发起离屏俯视拍摄，分帧驱动直至应用。
-        /// 每场战斗（同一轮次）只拍摄一次——不再于部署结束后重拍（2026-09-06 用户裁决）。
-        /// 新路线（TerrainPhotoV2，默认）：渲染对象进程级单例、永不销毁的 TerrainPhotographer。
-        /// 旧路线（PhotoMap，已停用）：TerrainPhotoCapture v6，代码保留供回退。
+        /// 拍照式底图统一走 TerrainPhotoV2。渲染对象由 TerrainPhotographer 在进程级静态字段持有，
+        /// 本 Mission 只负责驱动当前场景的拍摄状态机，禁止重新引入按战斗创建/销毁的旧路线。
         /// </summary>
-        private void TickPhotoCapture(float dt)
+        private void TickPhotoCapture()
         {
             if (_controller == null || !_ready) return;
 
@@ -190,31 +179,20 @@ namespace New_ZZZF.TacticalMap.Core
             bool applied = false;
             try
             {
-                if (TacticalSettings.Instance.TerrainPhotoV2)
-                {
-                    if (_photographer == null) _photographer = new Terrain.TerrainPhotographer();
-                    // 只在 Idle/未完成/未失败时 Start 一次——正在拍摄或已失败则只 Tick
-                    if (!_photographer.IsActive && !_photographer.IsCompleted && !_photographer.Failed)
-                        _photographer.Start(Mission, _controller.Cache);
-                    applied = _photographer.Tick();
-                }
-                else if (TacticalSettings.Instance.PhotoMap)
-                {
-                    if (_photoCapture == null) _photoCapture = new Terrain.TerrainPhotoCapture();
-                    if (!_photoCapture.IsActive && !_photoCapture.IsCompleted && !_photoCapture.Failed)
-                        _photoCapture.Start(Mission, _controller.Cache);
-                    applied = _photoCapture.Tick();
-                }
+                if (_photographer == null) _photographer = new Terrain.TerrainPhotographer();
+                if (!_photographer.IsActive && !_photographer.IsCompleted && !_photographer.Failed)
+                    _photographer.Start(Mission, _controller.Cache);
+                applied = _photographer.Tick();
             }
             catch (Exception ex)
             {
-                TacticalMapLog.Error("[PhotoMap] tick failed.", ex);
+                TacticalMapLog.Error("[PhotoV2] tick failed.", ex);
             }
             Diagnostics.TacticalMapPerf.Add(Diagnostics.TacticalMapPerf.PhotoTick,
                 System.Diagnostics.Stopwatch.GetTimestamp() - t0);
 
             if (applied)
-                TacticalMapHtmlUi.Instance.PublishState(true); // 照片入缓存后强制重发布
+                TacticalMapHtmlUi.Instance.PublishState(true);
         }
 
         private void InitializeController()
@@ -235,8 +213,6 @@ namespace New_ZZZF.TacticalMap.Core
                 _ready = _controller.Initialize(Mission);
                 if (_ready)
                 {
-                    // Terrain bake samples the height/material layers. Scene geometry such as
-                    // houses and fences is handled separately by SceneObstacleMap.
                     SceneObstacleMap.Rebuild(_controller.Cache, Mission.Scene);
                     TacticalMapHtmlUi.Instance.AttachController(_controller);
                 }
@@ -252,9 +228,9 @@ namespace New_ZZZF.TacticalMap.Core
         {
             TacticalMapLog.Section("BATTLE #" + _thisBattleSeq + " END");
             long durMs = _battleWatch?.ElapsedMilliseconds ?? -1;
-            string photoState =
-                (_photographer != null ? "V2.IsCompleted=" + _photographer.IsCompleted : "V2=null") +
-                (_photoCapture != null ? " | v6.IsCompleted=" + _photoCapture.IsCompleted + " IsActive=" + _photoCapture.IsActive + " Failed=" + _photoCapture.Failed : " | v6=null");
+            string photoState = _photographer != null
+                ? "V2.IsCompleted=" + _photographer.IsCompleted + " Failed=" + _photographer.Failed
+                : "V2=null";
             TacticalMapLog.Info("duration=" + durMs + "ms photo[" + photoState + "]");
             try { TacticalMapHtmlUi.Instance.DetachController(); }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.DetachController failed during mission end.", ex); }
@@ -275,12 +251,8 @@ namespace New_ZZZF.TacticalMap.Core
             _ready = false;
             _initialized = false;
             _heartbeatAccum = 0f;
-            // 必须先显式释放渲染资源再丢弃引用：view 持有本场景指针，
-            // 依赖 GC 终结器销毁会在下一场 Mission 开始时冻结引擎（实测）。
-            try { _photoCapture?.Shutdown(); } catch (Exception ex) { TacticalMapLog.Error("[PhotoMap] shutdown failed.", ex); }
-            _photoCapture = null;
-            // v2：渲染对象进程级单例永不销毁，结束只停用视图
-            try { _photographer?.OnMissionEnd(); } catch (Exception ex) { TacticalMapLog.Error("[PhotoV2] mission end failed.", ex); }
+            try { _photographer?.OnMissionEnd(); }
+            catch (Exception ex) { TacticalMapLog.Error("[PhotoV2] mission end failed.", ex); }
             _photographer = null;
             base.OnEndMission();
         }
