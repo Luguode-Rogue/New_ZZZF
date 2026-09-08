@@ -21,15 +21,15 @@ namespace New_ZZZF.TacticalMap.Terrain
     ///   Mission.Scene -> SceneView -> RenderTarget
     ///   -> SceneView native SaveFinalResultToDisk -> PNG -> CPU pixels
     ///
-    /// The renderer is deliberately independent from HTMLUI and TerrainCache. TerrainCache only
-    /// supplies world bounds and receives the final RGBA buffer through ApplyPhotoPixels().
+    /// The renderer is independent from HTMLUI and TerrainCache. TerrainCache only supplies
+    /// world bounds and receives the final RGBA buffer through ApplyPhotoPixels().
     ///
-    /// Important design rules:
+    /// Design rules:
     /// 1. Reuse one process-level SceneView/Camera/RenderTarget to avoid per-battle native teardown.
     /// 2. Never call GetPixelData() directly on a RenderTarget.
-    /// 3. Let SceneView own the save operation so the exported image corresponds to the rendered view.
-    /// 4. Treat file existence + pixel statistics as success criteria; a zero/black PNG is failure.
-    /// 5. Use an orthographic camera whose rectangle is exactly derived from battle bounds.
+    /// 3. Let SceneView own final-result export timing.
+    /// 4. Treat file existence plus pixel statistics as success criteria.
+    /// 5. Use an orthographic camera derived from battle bounds.
     /// </summary>
     public sealed class TerrainPhotographer
     {
@@ -51,6 +51,15 @@ namespace New_ZZZF.TacticalMap.Terrain
             public float WorldH;
         }
 
+        private struct PixelStats
+        {
+            public double AverageLuminance;
+            public double Variance;
+            public double NonBlackRatio;
+            public int MinValue;
+            public int MaxValue;
+        }
+
         private const int PhotoSize = 2048;
         private const int PublishSize = 1024;
         private const int SettleFrames = 30;
@@ -65,7 +74,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         private static SceneView _sharedView;
         private static Camera _sharedCamera;
         private static Texture _sharedTarget;
-        private static string _sharedTargetKey;
+        private static string _sharedTargetSizeKey;
 
         private Stage _stage = Stage.Idle;
         private int _waitFrames;
@@ -78,7 +87,6 @@ namespace New_ZZZF.TacticalMap.Terrain
         private TerrainCache _cache;
         private Mission _mission;
         private Stopwatch _watch;
-        private bool _completedOnce;
         private bool _failed;
 
         public bool IsCompleted => _stage == Stage.Done;
@@ -106,21 +114,22 @@ namespace New_ZZZF.TacticalMap.Terrain
                 {
                     cache.ApplyPhotoPixels(cached.Rgba, cached.Width, cached.Height);
                     _stage = Stage.Done;
-                    _completedOnce = true;
                     TacticalMapLog.Info("[PhotoNative] cache hit signature=" + cache.BakeSignature);
                     return;
                 }
 
-                string fileName = "TMapPhotoNative_" + cache.BakeSignature + ".png";
-                _savePath = IoPath.Combine(IoPath.GetTempPath(), fileName);
+                _savePath = IoPath.Combine(
+                    IoPath.GetTempPath(),
+                    "TMapPhotoNative_" + cache.BakeSignature + ".png");
                 TryDelete(_savePath);
 
                 EnsureRenderObjects();
                 ConfigureExport();
+                _sharedView.SetEnable(true);
 
                 _stage = Stage.Warming;
-                TacticalMapLog.Info("[PhotoNative] capture requested: " +
-                    "world=" + cache.WorldW.ToString("0.0") + "x" + cache.WorldH.ToString("0.0") +
+                TacticalMapLog.Info("[PhotoNative] capture requested: world=" +
+                    cache.WorldW.ToString("0.0") + "x" + cache.WorldH.ToString("0.0") +
                     " target=" + PhotoSize + "x" + GetPhotoHeight(cache) +
                     " path=" + _savePath);
             }
@@ -157,6 +166,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             _saveRequested = false;
             _stablePath = null;
             _lastLength = -1;
+            _savePath = null;
         }
 
         private bool TickWarming()
@@ -203,9 +213,10 @@ namespace New_ZZZF.TacticalMap.Terrain
 
                 if (!_saveRequested)
                 {
+                    // The View has been saving its successful render results since it was enabled.
+                    // This flag marks the point at which we stop producing additional frames.
                     _saveRequested = true;
-                    ConfigureExport();
-                    TacticalMapLog.Info("[PhotoNative] export armed; stopping render after current frame window.");
+                    TacticalMapLog.Info("[PhotoNative] export frame window complete.");
                 }
 
                 DisableView();
@@ -229,7 +240,6 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 if (!_saveRequested || string.IsNullOrEmpty(_savePath))
                     return false;
-
                 if (!File.Exists(_savePath))
                     return false;
 
@@ -249,7 +259,6 @@ namespace New_ZZZF.TacticalMap.Terrain
 
                 TryDelete(_savePath);
                 _stage = Stage.Done;
-                _completedOnce = true;
                 TacticalMapLog.Info("[PhotoNative] capture complete: elapsed=" +
                     (_watch == null ? -1 : _watch.ElapsedMilliseconds) + "ms");
                 return true;
@@ -269,7 +278,6 @@ namespace New_ZZZF.TacticalMap.Terrain
             Scene scene = _mission.Scene;
             int texW = PhotoSize;
             int texH = GetPhotoHeight(_cache);
-            string key = scene.GetHashCode() + ":" + texW + "x" + texH;
 
             bool sceneSet = false;
             if (_sharedView != null)
@@ -294,7 +302,8 @@ namespace New_ZZZF.TacticalMap.Terrain
                 _sharedView.SetClearColor(4278190080u);
             }
 
-            if (_sharedTarget == null || _sharedTargetKey != key)
+            string sizeKey = texW + "x" + texH;
+            if (_sharedTarget == null || _sharedTargetSizeKey != sizeKey)
             {
                 _sharedTarget = Texture.CreateRenderTarget(
                     "TMapPhotoNative",
@@ -304,7 +313,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     false,
                     false,
                     false);
-                _sharedTargetKey = key;
+                _sharedTargetSizeKey = sizeKey;
             }
 
             _sharedView.SetRenderTarget(_sharedTarget);
@@ -340,8 +349,6 @@ namespace New_ZZZF.TacticalMap.Terrain
             if (_sharedView == null || string.IsNullOrEmpty(_savePath))
                 return;
 
-            // Native View export. This is preferable to saving the RenderTarget directly after
-            // disabling the view because the engine owns the final-result capture timing.
             _sharedView.SetSaveFinalResultToDisk(true);
             _sharedView.SetFileNameToSaveResult(IoPath.GetFileNameWithoutExtension(_savePath));
             _sharedView.SetFileTypeToSave(View.TextureSaveFormat.TextureTypePng);
@@ -359,13 +366,12 @@ namespace New_ZZZF.TacticalMap.Terrain
                 BitmapData data = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
                 try
                 {
-                    int stride = data.Stride;
+                    int stride = Math.Abs(data.Stride);
                     byte[] raw = new byte[bmp.Width * bmp.Height * 4];
                     for (int y = 0; y < bmp.Height; y++)
                     {
                         IntPtr source = IntPtr.Add(data.Scan0, y * stride);
-                        int copy = Math.Min(Math.Abs(stride), bmp.Width * 4);
-                        Marshal.Copy(source, raw, y * bmp.Width * 4, copy);
+                        Marshal.Copy(source, raw, y * bmp.Width * 4, Math.Min(stride, bmp.Width * 4));
                     }
 
                     PixelStats stats = Analyze(raw);
@@ -375,7 +381,6 @@ namespace New_ZZZF.TacticalMap.Terrain
                         " nonBlack=" + (stats.NonBlackRatio * 100.0).ToString("0.0") + "%" +
                         " min=" + stats.MinValue + " max=" + stats.MaxValue);
 
-                    // Reject the classic failure mode: a valid PNG filled almost entirely with clear color.
                     if (stats.NonBlackRatio < 0.01 || stats.Variance < 2.0 || stats.MaxValue < 8)
                         return false;
 
@@ -387,15 +392,6 @@ namespace New_ZZZF.TacticalMap.Terrain
                     bmp.UnlockBits(data);
                 }
             }
-        }
-
-        private struct PixelStats
-        {
-            public double AverageLuminance;
-            public double Variance;
-            public double NonBlackRatio;
-            public int MinValue;
-            public int MaxValue;
         }
 
         private static PixelStats Analyze(byte[] raw)
@@ -425,11 +421,10 @@ namespace New_ZZZF.TacticalMap.Terrain
                 return new PixelStats();
 
             double avg = (double)sum / count;
-            double variance = Math.Max(0.0, sum2 / count - avg * avg);
             return new PixelStats
             {
                 AverageLuminance = avg,
-                Variance = variance,
+                Variance = Math.Max(0.0, sum2 / count - avg * avg),
                 NonBlackRatio = (double)nonBlack / count,
                 MinValue = min,
                 MaxValue = max
@@ -559,7 +554,6 @@ namespace New_ZZZF.TacticalMap.Terrain
             _cache = null;
             _mission = null;
             _watch = null;
-            _completedOnce = false;
             _failed = false;
         }
 
