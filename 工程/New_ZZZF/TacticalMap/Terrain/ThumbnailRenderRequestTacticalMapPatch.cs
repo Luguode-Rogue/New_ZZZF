@@ -6,9 +6,9 @@ using New_ZZZF.TacticalMap.Diagnostics;
 namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
-    /// The native wrapper for ThumbnailRenderRequest.CreateWithoutTexture unconditionally
-    /// dereferences GameEntity.Pointer. REV11 intentionally has no visual entity, so supply
-    /// one empty, non-physics anchor only for TacticalMap's terrain-photo request.
+    /// CreateWithoutTexture dereferences the entity argument unconditionally.
+    /// REV11 intentionally has no Agent/entity, so supply a plain empty GameEntity
+    /// only for TacticalMap's terrain-photo request and retain it until mission end.
     /// </summary>
     [HarmonyPatch(typeof(ThumbnailRenderRequest), "CreateWithoutTexture")]
     internal static class ThumbnailRenderRequestTacticalMapPatch
@@ -19,13 +19,9 @@ namespace New_ZZZF.TacticalMap.Terrain
         private static Scene _photoAnchorScene;
 
         [HarmonyPrefix]
-        private static void Prefix(
-            Scene scene,
-            GameEntity entity,
-            string debugName,
-            ref GameEntity __0)
+        private static void Prefix(Scene scene, ref GameEntity entity, string debugName)
         {
-            if (__0 != null || scene == null ||
+            if (entity != null || scene == null ||
                 !string.Equals(debugName, TacticalMapDebugName, StringComparison.Ordinal))
                 return;
 
@@ -46,7 +42,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     _photoAnchor.Pointer);
             }
 
-            __0 = _photoAnchor;
+            entity = _photoAnchor;
         }
 
         [HarmonyPatch(typeof(TerrainPhotographerRev11), nameof(TerrainPhotographerRev11.OnMissionEnd))]
