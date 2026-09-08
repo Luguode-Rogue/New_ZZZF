@@ -40,7 +40,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             public int Max;
         }
 
-        private const int PhotoRevision = 2;
+        private const int PhotoRevision = 3;
         private const int PhotoSize = 2048;
         private const int PublishSize = 1024;
         private const int CacheLimit = 8;
