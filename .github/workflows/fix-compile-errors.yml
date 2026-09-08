@@ -1,0 +1,70 @@
+name: Temporary compile error fix
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Apply fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          rev_files = [
+              Path('工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerRev10.cs'),
+              Path('工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerRev11.cs'),
+          ]
+
+          old = '''        private static string _activeRenderId;\n        private static Texture _completedTarget;\n        private static bool _renderCallbackReceived;\n'''
+          new = '''        private string _activeRenderId;\n        private Texture _completedTarget;\n        private bool _renderCallbackReceived;\n'''
+
+          for path in rev_files:
+              text = path.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'{path}: expected static state block not found')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          for path in [
+              Path('工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerNative.cs'),
+              Path('工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerNativeV5.cs'),
+          ]:
+              text = path.read_text(encoding='utf-8')
+              marker = 'using TaleWorlds.Engine;\n'
+              if 'using TaleWorlds.Library;' not in text:
+                  if marker not in text:
+                      raise SystemExit(f'{path}: TaleWorlds.Engine using marker not found')
+                  text = text.replace(marker, marker + 'using TaleWorlds.Library;\n', 1)
+                  path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            '工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerRev10.cs' \
+            '工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerRev11.cs' \
+            '工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerNative.cs' \
+            '工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerNativeV5.cs'
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "fix: resolve terrain photographer compile errors"
+          git push origin HEAD:dev
