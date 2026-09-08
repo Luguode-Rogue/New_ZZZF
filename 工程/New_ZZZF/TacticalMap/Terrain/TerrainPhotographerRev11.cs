@@ -16,11 +16,11 @@ namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
     /// REV12: completely isolated terrain capture.
-    /// It creates its own Scene, Camera, RenderTarget and TableauView.
+    /// It creates its own Scene, Camera, Tableau RenderTarget and TableauView.
     /// It never registers Mission.Scene with ThumbnailCreatorView and never touches
     /// ThumbnailRenderRequest or the game's shared thumbnail callback pipeline.
-    /// The live Mission.Scene is used only as the source scene name for loading a
-    /// private copy of the same terrain scene. Agents are therefore not part of the photo.
+    /// The live Mission.Scene is used only to obtain the scene name and bake metadata.
+    /// Agents are therefore not part of the captured photo.
     /// </summary>
     public sealed class TerrainPhotographerRev11
     {
@@ -72,6 +72,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         private TableauView _tableauView;
 
         private int _waitFrames;
+        private bool _tableauPainted;
         private bool _saveIssued;
         private bool _failed;
         private string _savePath;
@@ -221,27 +222,24 @@ namespace New_ZZZF.TacticalMap.Terrain
 
             int width = PhotoWidth;
             int height = GetTargetHeight();
-            _renderTarget = Texture.CreateRenderTarget(
+            _tableauPainted = false;
+
+            _renderTarget = TableauView.AddTableau(
                 "TacticalMapTerrainPhotoREV12",
+                new RenderTargetComponent.TextureUpdateEventHandler(OnTableauPaintNeeded),
+                this,
                 width,
-                height,
-                true,
-                true,
-                false,
-                true);
+                height);
             if (_renderTarget == null)
-                throw new InvalidOperationException("Texture.CreateRenderTarget returned null.");
+                throw new InvalidOperationException("TableauView.AddTableau returned null.");
 
-            _tableauView = TableauView.CreateTableauView("TacticalMapTerrainPhotoViewREV12");
+            _tableauView = _renderTarget.TableauView;
             if (_tableauView == null)
-                throw new InvalidOperationException("TableauView.CreateTableauView returned null.");
+                throw new InvalidOperationException("RenderTarget.TableauView returned null.");
 
-            _tableauView.SetRenderTarget(_renderTarget);
             _tableauView.SetAutoDepthTargetCreation(true);
             _tableauView.SetScene(_photoScene);
             _tableauView.SetCamera(_photoCamera);
-            _tableauView.SetRenderOnDemand(false);
-            _tableauView.SetContinuousRendering(true);
             _tableauView.SetSceneUsesSkybox(false);
             _tableauView.SetSceneUsesShadows(false);
             _tableauView.SetRenderWithPostfx(false);
@@ -254,10 +252,16 @@ namespace New_ZZZF.TacticalMap.Terrain
                 " scene=" + _photoScene.Pointer + " view=" + _tableauView.Pointer);
         }
 
+        private void OnTableauPaintNeeded(Texture sender, EventArgs e)
+        {
+            if (_stage == Stage.WaitingRender && sender == _renderTarget)
+                _tableauPainted = true;
+        }
+
         private bool TickWaitingRender()
         {
             if (++_waitFrames > MaxWaitFrames)
-                return Fail("isolated tableau render timeout");
+                return Fail("isolated tableau render timeout; painted=" + _tableauPainted);
 
             if (_photoScene == null || _tableauView == null || _renderTarget == null)
                 return Fail("isolated render objects disappeared");
@@ -268,7 +272,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             try { _photoScene.Tick(0.1f); } catch { }
             try { _tableauView.SetDoNotRenderThisFrame(false); } catch { }
 
-            if (_waitFrames < WarmupFrames)
+            if (!_tableauPainted || _waitFrames < WarmupFrames)
                 return false;
 
             try
@@ -341,6 +345,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             _renderTarget = null;
             _photoCamera = null;
             _photoScene = null;
+            _tableauPainted = false;
         }
 
         private int GetTargetHeight()
@@ -482,6 +487,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             _cache = null;
             _watch = null;
             _waitFrames = 0;
+            _tableauPainted = false;
             _saveIssued = false;
             _failed = false;
             _savePath = null;
