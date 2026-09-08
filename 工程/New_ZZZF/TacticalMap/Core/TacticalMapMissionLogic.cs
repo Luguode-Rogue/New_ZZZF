@@ -115,8 +115,8 @@ namespace New_ZZZF.TacticalMap.Core
                                     " Baked=" + _controller.Cache.IsBaked +
                                     " FPS=" + (avgFrame > 0f ? (1f / avgFrame).ToString("0") : "?") +
                                     " avgFrame=" + (avgFrame * 1000f).ToString("0.0") + "ms" +
-                                    " worstFrame=" + (_worstFrame * 1000f).ToString("0") + "ms" +
-                                    " spikes250ms=" + _spikeFrames +
+                                    " worstFrame=" + (_worstFrame * 1000f).ToString("0") +
+                                    "ms spikes250ms=" + _spikeFrames +
                                     " | perf " + perf +
                                     " | " + SampleProcessCpu(5.0));
                 _fpsFrames = 0;
@@ -167,10 +167,7 @@ namespace New_ZZZF.TacticalMap.Core
             }
         }
 
-        /// <summary>
-        /// 拍照式底图统一走 TerrainPhotoV2。渲染对象由 TerrainPhotographer 在进程级静态字段持有，
-        /// 本 Mission 只负责驱动当前场景的拍摄状态机，禁止重新引入按战斗创建/销毁的旧路线。
-        /// </summary>
+        /// <summary>驱动原生 SceneView 拍照器。渲染器自身负责 Scene/Camera/RT 与 PNG 回读。</summary>
         private void TickPhotoCapture()
         {
             if (_controller == null || !_ready) return;
@@ -186,7 +183,7 @@ namespace New_ZZZF.TacticalMap.Core
             }
             catch (Exception ex)
             {
-                TacticalMapLog.Error("[PhotoV2] tick failed.", ex);
+                TacticalMapLog.Error("[PhotoNative] tick failed.", ex);
             }
             Diagnostics.TacticalMapPerf.Add(Diagnostics.TacticalMapPerf.PhotoTick,
                 System.Diagnostics.Stopwatch.GetTimestamp() - t0);
@@ -229,8 +226,8 @@ namespace New_ZZZF.TacticalMap.Core
             TacticalMapLog.Section("BATTLE #" + _thisBattleSeq + " END");
             long durMs = _battleWatch?.ElapsedMilliseconds ?? -1;
             string photoState = _photographer != null
-                ? "V2.IsCompleted=" + _photographer.IsCompleted + " Failed=" + _photographer.Failed
-                : "V2=null";
+                ? "Native.IsCompleted=" + _photographer.IsCompleted + " Failed=" + _photographer.Failed
+                : "Native=null";
             TacticalMapLog.Info("duration=" + durMs + "ms photo[" + photoState + "]");
             try { TacticalMapHtmlUi.Instance.DetachController(); }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.DetachController failed during mission end.", ex); }
@@ -252,7 +249,7 @@ namespace New_ZZZF.TacticalMap.Core
             _initialized = false;
             _heartbeatAccum = 0f;
             try { _photographer?.OnMissionEnd(); }
-            catch (Exception ex) { TacticalMapLog.Error("[PhotoV2] mission end failed.", ex); }
+            catch (Exception ex) { TacticalMapLog.Error("[PhotoNative] mission end failed.", ex); }
             _photographer = null;
             base.OnEndMission();
         }
