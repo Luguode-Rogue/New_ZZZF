@@ -6,20 +6,13 @@ using New_ZZZF.TacticalMap.Diagnostics;
 namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
-    /// CreateWithoutTexture dereferences the entity argument unconditionally.
-    /// REV11 intentionally has no Agent/entity, so supply a plain empty GameEntity
-    /// only for TacticalMap's terrain-photo request and retain it until mission end.
-    /// The same request is also clamped to a conservative native render-target size.
+    /// REV12 no longer creates a secondary Scene. This patch is retained only as a
+    /// defensive guard for legacy calls carrying the TacticalMap REV11 debug name.
     /// </summary>
     [HarmonyPatch(typeof(ThumbnailRenderRequest), "CreateWithoutTexture")]
     internal static class ThumbnailRenderRequestTacticalMapPatch
     {
-        private const string TacticalMapDebugName = "TacticalMapTerrainPhotoREV11";
-        private const int MaxNativeDimension = 2048;
-        private const int MinNativeDimension = 64;
-
-        private static GameEntity _photoAnchor;
-        private static Scene _photoAnchorScene;
+        private const string LegacyDebugName = "TacticalMapTerrainPhotoREV11";
 
         [HarmonyPrefix]
         private static void Prefix(
@@ -30,55 +23,29 @@ namespace New_ZZZF.TacticalMap.Terrain
             ref int __5)
         {
             if (scene == null ||
-                !string.Equals(debugName, TacticalMapDebugName, StringComparison.Ordinal))
+                !string.Equals(debugName, LegacyDebugName, StringComparison.Ordinal))
                 return;
 
             if (entity == null)
             {
-                if (_photoAnchor == null || _photoAnchorScene != scene)
+                entity = GameEntity.CreateEmpty(scene, false, false, false);
+                if (entity == null)
                 {
-                    _photoAnchor = GameEntity.CreateEmpty(scene, false, false, false);
-                    _photoAnchorScene = scene;
-
-                    if (_photoAnchor == null)
-                    {
-                        TacticalMapLog.Error(
-                            "[PhotoNative] REV=11 failed to create thumbnail anchor entity.", null);
-                        return;
-                    }
-
-                    TacticalMapLog.Info(
-                        "[PhotoNative] REV=11 created thumbnail anchor pointer=" +
-                        _photoAnchor.Pointer);
+                    TacticalMapLog.Error(
+                        "[PhotoNative] REV=12 failed to create legacy thumbnail guard entity.", null);
+                    return;
                 }
-
-                entity = _photoAnchor;
             }
 
-            int originalWidth = __4;
-            int originalHeight = __5;
-            int maxDimension = Math.Max(originalWidth, originalHeight);
-
-            if (maxDimension > MaxNativeDimension)
+            int maxDimension = Math.Max(__4, __5);
+            const int maxNativeDimension = 2048;
+            const int minNativeDimension = 64;
+            if (maxDimension > maxNativeDimension)
             {
-                double scale = (double)MaxNativeDimension / maxDimension;
-                __4 = Math.Max(MinNativeDimension, (int)Math.Round(originalWidth * scale));
-                __5 = Math.Max(MinNativeDimension, (int)Math.Round(originalHeight * scale));
-
-                TacticalMapLog.Info(
-                    "[PhotoNative] REV=11 clamped native request " +
-                    originalWidth + "x" + originalHeight +
-                    " -> " + __4 + "x" + __5 +
-                    " maxDimension=" + MaxNativeDimension);
+                double scale = (double)maxNativeDimension / maxDimension;
+                __4 = Math.Max(minNativeDimension, (int)Math.Round(__4 * scale));
+                __5 = Math.Max(minNativeDimension, (int)Math.Round(__5 * scale));
             }
-        }
-
-        [HarmonyPatch(typeof(TerrainPhotographerRev11), nameof(TerrainPhotographerRev11.OnMissionEnd))]
-        [HarmonyPostfix]
-        private static void ReleasePhotoAnchor()
-        {
-            _photoAnchor = null;
-            _photoAnchorScene = null;
         }
     }
 }
