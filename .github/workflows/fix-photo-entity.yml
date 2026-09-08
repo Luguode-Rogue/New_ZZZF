@@ -1,0 +1,85 @@
+name: Temporary photo entity fix
+
+on:
+  push:
+    branches: [dev]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Apply fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerRev11.cs')
+          text = p.read_text(encoding='utf-8')
+
+          old = '        private Scene _photoScene;\n'
+          new = old + '        private GameEntity _photoAnchor;\n'
+          if old not in text or '_photoAnchor' in text:
+              raise SystemExit('photoAnchor field precondition failed')
+          text = text.replace(old, new, 1)
+
+          old = '            _photoScene.Read(_mission.SceneName, ref initializationData, "");\n            _photoScene.ForceLoadResources(true);\n'
+          new = '''            _photoScene.Read(_mission.SceneName, ref initializationData, "");
+            _photoScene.ForceLoadResources(true);
+
+            _photoAnchor = GameEntity.CreateEmpty(_photoScene, false, false, false);
+            if (_photoAnchor == null)
+                throw new InvalidOperationException("GameEntity.CreateEmpty returned null for photo anchor.");
+'''
+          if old not in text:
+              raise SystemExit('scene initialization insertion point not found')
+          text = text.replace(old, new, 1)
+
+          old = '''            ThumbnailRenderRequest request = ThumbnailRenderRequest.CreateWithoutTexture(
+                _photoScene,
+                _camera,
+                null,
+'''
+          new = '''            if (_photoAnchor == null)
+                throw new InvalidOperationException("Photo anchor entity is unavailable.");
+
+            ThumbnailRenderRequest request = ThumbnailRenderRequest.CreateWithoutTexture(
+                _photoScene,
+                _camera,
+                _photoAnchor,
+'''
+          if old not in text:
+              raise SystemExit('request insertion point not found')
+          text = text.replace(old, new, 1)
+
+          old = '            _photoScene = null;\n'
+          new = '            _photoScene = null;\n            _photoAnchor = null;\n'
+          if old not in text:
+              raise SystemExit('mission cleanup insertion point not found')
+          text = text.replace(old, new, 1)
+
+          p.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '工程/New_ZZZF/TacticalMap/Terrain/TerrainPhotographerRev11.cs'
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git commit -m "fix: provide thumbnail render entity for photo scene"
+          git push origin HEAD:dev
