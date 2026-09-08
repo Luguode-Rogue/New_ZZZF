@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
@@ -15,10 +16,9 @@ using New_ZZZF.TacticalMap.Diagnostics;
 namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
-    /// REV12: no secondary Native Scene and no ThumbnailCreatorView.
-    /// Terrain is captured from the live Mission.Scene only.
-    /// The capture is an isolated high-altitude orthographic render request using the
-    /// existing live scene, then published as the TacticalMap terrain base texture.
+    /// REV12: no secondary Native Scene. Terrain is captured from live Mission.Scene.
+    /// ThumbnailCreatorView is used only as the native capture bridge. Its callback is
+    /// chained with the previous callback and restored after the mission ends.
     /// </summary>
     public sealed class TerrainPhotographerRev11
     {
@@ -61,10 +61,13 @@ namespace New_ZZZF.TacticalMap.Terrain
         private static ThumbnailCreatorView _thumbnailView;
         private static Camera _camera;
         private static bool _callbackInstalled;
+        private static MemberInfo _callbackMember;
+        private static Delegate _previousRenderCallback;
 
         private string _activeRenderId;
         private Texture _completedTarget;
         private bool _renderCallbackReceived;
+        private GameEntity _photoAnchor;
 
         private Stage _stage = Stage.Idle;
         private Mission _mission;
@@ -166,7 +169,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         public void OnMissionEnd()
         {
             StopPhotoRenderer();
-            CleanupFileOnly();
+            RestorePreviousRenderCallback();
             _stage = Stage.Idle;
             _mission = null;
             _cache = null;
@@ -175,6 +178,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             _completedTarget = null;
             _renderCallbackReceived = false;
             _activeRenderId = null;
+            _photoAnchor = null;
             TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " mission end; live-scene capture detached.");
         }
 
@@ -221,17 +225,18 @@ namespace New_ZZZF.TacticalMap.Terrain
 
             _thumbnailView.RegisterScene(_mission.Scene, false);
 
-            // The ThumbnailRenderRequest native wrapper requires a non-null entity in
-            // CreateWithoutTexture, but the request is still registered against the
-            // live Mission.Scene. Use a plain empty entity in the same live scene.
-            GameEntity anchor = GameEntity.CreateEmpty(_mission.Scene, false, false, false);
-            if (anchor == null)
+            _photoAnchor = GameEntity.CreateEmpty(_mission.Scene, false, false, false);
+            if (_photoAnchor == null)
                 throw new InvalidOperationException("GameEntity.CreateEmpty returned null for live-scene capture.");
+
+            TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
+                " anchor pointer=" + _photoAnchor.Pointer +
+                " target=" + PhotoWidth + "x" + GetTargetHeight());
 
             ThumbnailRenderRequest request = ThumbnailRenderRequest.CreateWithoutTexture(
                 _mission.Scene,
                 _camera,
-                anchor,
+                _photoAnchor,
                 _activeRenderId,
                 PhotoWidth,
                 GetTargetHeight(),
@@ -254,13 +259,19 @@ namespace New_ZZZF.TacticalMap.Terrain
 
             try { target.SetTextureAsAlwaysValid(); } catch { }
 
-            StopPhotoRenderer();
-
             TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
                 " render callback received from live Mission.Scene; saving=" + _savePath);
 
-            target.SaveToFile(_savePath, false);
-            _saveIssued = true;
+            try
+            {
+                target.SaveToFile(_savePath, false);
+                _saveIssued = true;
+            }
+            finally
+            {
+                StopPhotoRenderer();
+            }
+
             _stage = Stage.Reading;
             _waitFrames = 0;
             return false;
@@ -297,9 +308,75 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         private void InstallCallback()
         {
-            if (_callbackInstalled) return;
-            ThumbnailCreatorView.renderCallback = OnThumbnailRenderComplete;
-            _callbackInstalled = true;
+            if (_callbackInstalled)
+                return;
+
+            try
+            {
+                Type type = typeof(ThumbnailCreatorView);
+                BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+                FieldInfo field = type.GetField("renderCallback", flags);
+                PropertyInfo property = field == null ? type.GetProperty("renderCallback", flags) : null;
+
+                if (field == null && (property == null || !property.CanWrite))
+                    throw new MissingMemberException(type.FullName, "renderCallback");
+
+                Type callbackType = field != null ? field.FieldType : property.PropertyType;
+                Delegate previous = field != null
+                    ? field.GetValue(null) as Delegate
+                    : property.GetValue(null, null) as Delegate;
+
+                MethodInfo callbackMethod = typeof(TerrainPhotographerRev11).GetMethod(
+                    "OnThumbnailRenderComplete",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+                Delegate ours = Delegate.CreateDelegate(callbackType, callbackMethod);
+                Delegate combined = previous == null ? ours : Delegate.Combine(previous, ours);
+
+                if (field != null)
+                    field.SetValue(null, combined);
+                else
+                    property.SetValue(null, combined, null);
+
+                _previousRenderCallback = previous;
+                _callbackMember = field != null ? (MemberInfo)field : property;
+                _callbackInstalled = true;
+
+                TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " render callback chained.");
+            }
+            catch
+            {
+                _callbackInstalled = false;
+                _callbackMember = null;
+                _previousRenderCallback = null;
+                throw;
+            }
+        }
+
+        private static void RestorePreviousRenderCallback()
+        {
+            if (!_callbackInstalled || _callbackMember == null)
+                return;
+
+            try
+            {
+                FieldInfo field = _callbackMember as FieldInfo;
+                PropertyInfo property = _callbackMember as PropertyInfo;
+                if (field != null)
+                    field.SetValue(null, _previousRenderCallback);
+                else if (property != null && property.CanWrite)
+                    property.SetValue(null, _previousRenderCallback, null);
+                TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " render callback restored.");
+            }
+            catch (Exception ex)
+            {
+                TacticalMapLog.Error("[PhotoNative] REV=" + Revision + " failed to restore render callback.", ex);
+            }
+            finally
+            {
+                _callbackInstalled = false;
+                _callbackMember = null;
+                _previousRenderCallback = null;
+            }
         }
 
         private static void OnThumbnailRenderComplete(string renderId, Texture renderTarget)
@@ -334,6 +411,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             _activeRenderId = null;
             _renderCallbackReceived = false;
             _completedTarget = null;
+            _photoAnchor = null;
         }
 
         private int GetTargetHeight()
@@ -476,7 +554,6 @@ namespace New_ZZZF.TacticalMap.Terrain
         private void ResetMissionState()
         {
             StopPhotoRenderer();
-            CleanupFileOnly();
             _stage = Stage.Idle;
             _mission = null;
             _cache = null;
@@ -484,15 +561,6 @@ namespace New_ZZZF.TacticalMap.Terrain
             _waitFrames = 0;
             _saveIssued = false;
             _failed = false;
-            _savePath = null;
-            _stablePath = null;
-            _stableLength = -1;
-        }
-
-        private void CleanupFileOnly()
-        {
-            if (!string.IsNullOrEmpty(_savePath))
-                TryDelete(_savePath);
             _savePath = null;
             _stablePath = null;
             _stableLength = -1;
