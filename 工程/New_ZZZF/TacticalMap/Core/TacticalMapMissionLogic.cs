@@ -11,14 +11,14 @@ namespace New_ZZZF.TacticalMap.Core
 {
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
-        private const int PhotoRevision = 6;
+        private const int PhotoRevision = 7;
 
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
         private bool _initialized;
         private bool _ready;
         private float _heartbeatAccum;
-        private TerrainPhotographer _photographer;
+        private readonly TerrainPhotographerRev7 _photographer = TerrainPhotographerRev7.Instance;
         private int _fpsFrames;
         private float _fpsAccum;
         private float _worstFrame;
@@ -101,12 +101,6 @@ namespace New_ZZZF.TacticalMap.Core
             bool applied = false;
             try
             {
-                if (_photographer == null)
-                {
-                    _photographer = new TerrainPhotographer();
-                    TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " using SceneView/RenderTarget SaveFinalResultToDisk");
-                }
-
                 if (!_photographer.IsActive && !_photographer.IsCompleted && !_photographer.Failed)
                     _photographer.Start(Mission, _controller.Cache);
                 applied = _photographer.Tick();
@@ -162,8 +156,7 @@ namespace New_ZZZF.TacticalMap.Core
             catch { }
             try { CameraController.Instance?.Destroy(); } catch { }
             CameraController.Instance = null;
-            try { if (_photographer != null) _photographer.OnMissionEnd(); } catch { }
-            _photographer = null;
+            try { _photographer.OnMissionEnd(); } catch { }
             _missionScreen = null;
             _controller = null;
             _ready = false;
