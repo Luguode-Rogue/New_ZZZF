@@ -16,7 +16,7 @@ namespace New_ZZZF.TacticalMap.Core
         private bool _initialized;
         private bool _ready;
         private float _heartbeatAccum;
-        private TerrainPhotographerNative _photographer;
+        private TerrainPhotographerNativeV5 _photographer;
         private int _fpsFrames;
         private float _fpsAccum;
         private float _worstFrame;
@@ -99,7 +99,7 @@ namespace New_ZZZF.TacticalMap.Core
             bool applied = false;
             try
             {
-                _photographer = TerrainPhotographerNative.Instance;
+                _photographer = TerrainPhotographerNativeV5.Instance;
                 if (!_photographer.IsActive && !_photographer.IsCompleted && !_photographer.Failed)
                     _photographer.Start(Mission, _controller.Cache);
                 applied = _photographer.Tick();
@@ -155,7 +155,7 @@ namespace New_ZZZF.TacticalMap.Core
             catch { }
             try { CameraController.Instance?.Destroy(); } catch { }
             CameraController.Instance = null;
-            try { TerrainPhotographerNative.Instance.OnMissionEnd(); } catch { }
+            try { TerrainPhotographerNativeV5.Instance.OnMissionEnd(); } catch { }
             _photographer = null;
             _missionScreen = null;
             _controller = null;
