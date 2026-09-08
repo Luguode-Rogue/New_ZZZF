@@ -40,7 +40,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             public int Max;
         }
 
-        private const int PhotoRevision = 3;
+        private const int PhotoRevision = 4;
         private const int PhotoSize = 2048;
         private const int PublishSize = 1024;
         private const int CacheLimit = 8;
@@ -100,6 +100,8 @@ namespace New_ZZZF.TacticalMap.Terrain
                 _instanceSavePath = IoPath.Combine(IoPath.GetTempPath(),
                     "TMapPhotoNative_" + cache.BakeSignature + ".png");
                 TryDelete(_instanceSavePath);
+                _cache = cache;
+                _savePath = _instanceSavePath;
 
                 CreateMissionScene(mission);
                 EnsureObjects();
@@ -206,6 +208,11 @@ namespace New_ZZZF.TacticalMap.Terrain
             _instanceSavePath = null;
             _watch = null;
             _failed = false;
+            _cache = null;
+            _savePath = null;
+            _callbackSeen = false;
+            _saveIssued = false;
+            _nativeError = false;
             TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " mission resources released; singleton reset.");
         }
 
