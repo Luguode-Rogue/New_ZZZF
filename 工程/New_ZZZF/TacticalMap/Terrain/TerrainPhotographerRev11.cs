@@ -63,9 +63,9 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         private static ThumbnailCreatorView _thumbnailView;
         private static Camera _camera;
-        private static string _activeRenderId;
-        private static Texture _completedTarget;
-        private static bool _renderCallbackReceived;
+        private string _activeRenderId;
+        private Texture _completedTarget;
+        private bool _renderCallbackReceived;
         private static bool _callbackInstalled;
 
         private Stage _stage = Stage.Idle;
