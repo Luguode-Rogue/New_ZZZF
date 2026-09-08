@@ -11,12 +11,14 @@ namespace New_ZZZF.TacticalMap.Core
 {
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
+        private const int PhotoRevision = 6;
+
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
         private bool _initialized;
         private bool _ready;
         private float _heartbeatAccum;
-        private TerrainPhotographerNativeV5 _photographer;
+        private TerrainPhotographer _photographer;
         private int _fpsFrames;
         private float _fpsAccum;
         private float _worstFrame;
@@ -99,14 +101,19 @@ namespace New_ZZZF.TacticalMap.Core
             bool applied = false;
             try
             {
-                _photographer = TerrainPhotographerNativeV5.Instance;
+                if (_photographer == null)
+                {
+                    _photographer = new TerrainPhotographer();
+                    TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " using SceneView/RenderTarget SaveFinalResultToDisk");
+                }
+
                 if (!_photographer.IsActive && !_photographer.IsCompleted && !_photographer.Failed)
                     _photographer.Start(Mission, _controller.Cache);
                 applied = _photographer.Tick();
             }
             catch (Exception ex)
             {
-                TacticalMapLog.Error("[PhotoNative] tick failed.", ex);
+                TacticalMapLog.Error("[PhotoNative] REV=" + PhotoRevision + " tick failed.", ex);
             }
             Diagnostics.TacticalMapPerf.Add(Diagnostics.TacticalMapPerf.PhotoTick,
                 System.Diagnostics.Stopwatch.GetTimestamp() - t0);
@@ -155,7 +162,7 @@ namespace New_ZZZF.TacticalMap.Core
             catch { }
             try { CameraController.Instance?.Destroy(); } catch { }
             CameraController.Instance = null;
-            try { TerrainPhotographerNativeV5.Instance.OnMissionEnd(); } catch { }
+            try { if (_photographer != null) _photographer.OnMissionEnd(); } catch { }
             _photographer = null;
             _missionScreen = null;
             _controller = null;
