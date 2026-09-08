@@ -15,12 +15,11 @@ using New_ZZZF.TacticalMap.Diagnostics;
 namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
-    /// REV12: completely isolated terrain capture.
-    /// It creates its own Scene, Camera, Tableau RenderTarget and TableauView.
-    /// It never registers Mission.Scene with ThumbnailCreatorView and never touches
-    /// ThumbnailRenderRequest or the game's shared thumbnail callback pipeline.
-    /// The live Mission.Scene is used only to obtain the scene name and bake metadata.
-    /// Agents are therefore not part of the captured photo.
+    /// REV12: isolated terrain capture using the same SceneView + RenderTarget path
+    /// that was previously proven on the live mission scene, but with a private scene
+    /// loaded from Mission.SceneName. It never touches ThumbnailCreatorView,
+    /// ThumbnailRenderRequest, or the game's shared thumbnail callback pipeline.
+    /// Agents in the live Mission.Scene are therefore not rendered into the photo.
     /// </summary>
     public sealed class TerrainPhotographerRev11
     {
@@ -28,14 +27,16 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         private const int Revision = 12;
         private const int PhotoWidth = 1024;
-        private const int MaxWaitFrames = 600;
-        private const int WarmupFrames = 8;
+        private const int WarmupFrames = 30;
+        private const int CaptureFrames = 10;
+        private const int MaxWaitFrames = 1200;
         private const int MaxCacheEntries = 8;
 
         private enum Stage
         {
             Idle,
-            WaitingRender,
+            Warming,
+            Capturing,
             Reading,
             Done
         }
@@ -67,12 +68,14 @@ namespace New_ZZZF.TacticalMap.Terrain
         private Stopwatch _watch;
 
         private Scene _photoScene;
+        private SceneView _photoView;
         private Camera _photoCamera;
         private Texture _renderTarget;
-        private TableauView _tableauView;
+        private string _targetSizeKey;
 
         private int _waitFrames;
-        private bool _tableauPainted;
+        private int _settleFrames;
+        private int _captureFrames;
         private bool _saveIssued;
         private bool _failed;
         private string _savePath;
@@ -82,7 +85,15 @@ namespace New_ZZZF.TacticalMap.Terrain
         private TerrainPhotographerRev11() { }
 
         public bool IsCompleted { get { return _stage == Stage.Done; } }
-        public bool IsActive { get { return _stage == Stage.WaitingRender || _stage == Stage.Reading; } }
+        public bool IsActive
+        {
+            get
+            {
+                return _stage == Stage.Warming ||
+                       _stage == Stage.Capturing ||
+                       _stage == Stage.Reading;
+            }
+        }
         public bool Failed { get { return _failed; } }
 
         public void Start(Mission mission, TerrainCache cache)
@@ -111,7 +122,8 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 cache.ApplyPhotoPixels(cached.Rgba, cached.Width, cached.Height);
                 _stage = Stage.Done;
-                TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " cache hit signature=" + cache.BakeSignature);
+                TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
+                    " cache hit signature=" + cache.BakeSignature);
                 return;
             }
 
@@ -126,13 +138,20 @@ namespace New_ZZZF.TacticalMap.Terrain
 
                 CreatePrivateScene();
                 CreatePrivateRenderView();
+                ConfigurePrivateRenderView();
 
-                _stage = Stage.WaitingRender;
+                _stage = Stage.Warming;
+                _waitFrames = 0;
+                _settleFrames = 0;
+                _captureFrames = 0;
+
                 TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
                     " START isolatedScene=" + _photoScene.GetHashCode() +
                     " liveScene=" + mission.Scene.GetHashCode() +
                     " sceneName=" + mission.SceneName +
-                    " target=" + PhotoWidth + "x" + GetTargetHeight());
+                    " target=" + PhotoWidth + "x" + GetTargetHeight() +
+                    " viewReady=" + SafeReady() +
+                    " targetValid=" + SafeTargetValid());
             }
             catch (Exception ex)
             {
@@ -149,8 +168,10 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 switch (_stage)
                 {
-                    case Stage.WaitingRender:
-                        return TickWaitingRender();
+                    case Stage.Warming:
+                        return TickWarming();
+                    case Stage.Capturing:
+                        return TickCapturing();
                     case Stage.Reading:
                         return TickReading();
                     default:
@@ -177,6 +198,8 @@ namespace New_ZZZF.TacticalMap.Terrain
             _saveIssued = false;
             _failed = false;
             _waitFrames = 0;
+            _settleFrames = 0;
+            _captureFrames = 0;
             _watch = null;
             TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " mission end; isolated renderer destroyed.");
         }
@@ -198,11 +221,48 @@ namespace New_ZZZF.TacticalMap.Terrain
             _photoScene.Tick(0.1f);
 
             TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
-                " isolated scene loaded pointer=" + _photoScene.Pointer);
+                " isolated scene loaded pointer=" + _photoScene.Pointer +
+                " loadingFinished=" + SafeSceneLoadingFinished());
         }
 
         private void CreatePrivateRenderView()
         {
+            if (_photoView == null)
+                _photoView = SceneView.CreateSceneView();
+            if (_photoView == null)
+                throw new InvalidOperationException("SceneView.CreateSceneView returned null.");
+
+            try { _photoView.SetEnable(false); } catch { }
+            _photoView.SetScene(_photoScene);
+
+            int width = PhotoWidth;
+            int height = GetTargetHeight();
+            string key = width + "x" + height;
+
+            if (_renderTarget == null || _targetSizeKey != key)
+            {
+                if (_renderTarget != null)
+                {
+                    try { _renderTarget.Release(); } catch { }
+                }
+
+                _renderTarget = Texture.CreateRenderTarget(
+                    "TMapPhotoNative_REV" + Revision,
+                    width,
+                    height,
+                    false,
+                    false,
+                    false,
+                    true);
+
+                if (_renderTarget == null)
+                    throw new InvalidOperationException("Texture.CreateRenderTarget returned null.");
+                _targetSizeKey = key;
+            }
+
+            _renderTarget.SetTextureAsAlwaysValid();
+            _photoView.SetRenderTarget(_renderTarget);
+
             _photoCamera = Camera.CreateCamera();
             if (_photoCamera == null)
                 throw new InvalidOperationException("Camera.CreateCamera returned null.");
@@ -219,90 +279,87 @@ namespace New_ZZZF.TacticalMap.Terrain
                 new Vec3(centerX, centerY, cameraZ),
                 new Vec3(centerX, centerY, 0f),
                 new Vec3(0f, 1f, 0f));
-
-            int width = PhotoWidth;
-            int height = GetTargetHeight();
-            _tableauPainted = false;
-
-            _renderTarget = TableauView.AddTableau(
-                "TacticalMapTerrainPhotoREV12",
-                new RenderTargetComponent.TextureUpdateEventHandler(OnTableauPaintNeeded),
-                this,
-                width,
-                height);
-            if (_renderTarget == null)
-                throw new InvalidOperationException("TableauView.AddTableau returned null.");
-
-            _tableauView = _renderTarget.TableauView;
-            if (_tableauView == null)
-                throw new InvalidOperationException("RenderTarget.TableauView returned null.");
-
-            _tableauView.SetAutoDepthTargetCreation(true);
-            _tableauView.SetScene(_photoScene);
-            _tableauView.SetCamera(_photoCamera);
-            _tableauView.SetSceneUsesSkybox(false);
-            _tableauView.SetSceneUsesShadows(false);
-            _tableauView.SetRenderWithPostfx(false);
-            _tableauView.SetClearColor(0U);
-            _tableauView.SetDeleteAfterRendering(false);
-            _tableauView.SetContinuousRendering(true);
-            _tableauView.SetDoNotRenderThisFrame(false);
-            _tableauView.SetEnable(true);
-
-            TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
-                " isolated tableau created target=" + width + "x" + height +
-                " scene=" + _photoScene.Pointer + " view=" + _tableauView.Pointer);
+            _photoView.SetCamera(_photoCamera);
         }
 
-        private void OnTableauPaintNeeded(Texture sender, EventArgs e)
+        private void ConfigurePrivateRenderView()
         {
-            if (_stage == Stage.WaitingRender && sender == _renderTarget)
-            {
-                if (!_tableauPainted)
-                    TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " isolated tableau paint requested.");
-                _tableauPainted = true;
-            }
+            _photoView.SetScene(_photoScene);
+            _photoView.SetCamera(_photoCamera);
+            _photoView.SetRenderTarget(_renderTarget);
+            _photoView.SetRenderOnDemand(false);
+            _photoView.SetRenderWithPostfx(false);
+            _photoView.SetSceneUsesSkybox(true);
+            _photoView.SetSceneUsesShadows(true);
+            _photoView.SetSceneUsesContour(false);
+            _photoView.SetClearGbuffer(true);
+            _photoView.DoNotClear(false);
+            _photoView.SetClearAndDisableAfterSucessfullRender(false);
+            _photoView.SetDoQuickExposure(true);
+            _photoView.SetResolutionScaling(false);
+            _photoView.AddClearTask(false);
+            _photoView.SetEnable(true);
+            _renderTarget.SetTextureAsAlwaysValid();
         }
 
-        private bool TickWaitingRender()
+        private bool TickWarming()
         {
             if (++_waitFrames > MaxWaitFrames)
-                return Fail("isolated tableau render timeout; paintRequested=" + _tableauPainted);
+                return Fail("ReadyToRender timeout; ready=" + SafeReady() +
+                    " loadingFinished=" + SafeSceneLoadingFinished());
 
-            if (_photoScene == null || _tableauView == null || _renderTarget == null)
-                return Fail("isolated render objects disappeared");
-
-            // Do not gate the capture on Scene.IsLoadingFinished(). A manually created
-            // off-screen Scene can remain in that state even while its Tableau is being
-            // rendered. The render lifecycle is driven by the private TableauView itself.
             try { _photoScene.Tick(0.1f); } catch { }
-            try { _tableauView.SetDoNotRenderThisFrame(false); } catch { }
 
-            if (!_tableauPainted || _waitFrames < WarmupFrames)
+            if (!SafeReady())
                 return false;
 
-            if (!_saveIssued)
-            {
-                try
-                {
-                    _renderTarget.SetTextureAsAlwaysValid();
-                    _renderTarget.SaveToFile(_savePath, false);
-                    _saveIssued = true;
-                }
-                catch (Exception ex)
-                {
-                    return Fail("isolated render target save failed: " + ex.Message);
-                }
+            if (++_settleFrames < WarmupFrames)
+                return false;
 
-                _tableauView.SetContinuousRendering(false);
-                _tableauView.SetEnable(false);
+            _stage = Stage.Capturing;
+            _waitFrames = 0;
+            _captureFrames = 0;
+            TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
+                " view ready; capture window opened. sceneLoadingFinished=" +
+                SafeSceneLoadingFinished() +
+                " targetValid=" + SafeTargetValid());
+            return false;
+        }
+
+        private bool TickCapturing()
+        {
+            if (++_waitFrames > MaxWaitFrames)
+                return Fail("render timeout; captureFrames=" + _captureFrames);
+
+            try { _photoScene.Tick(0.1f); } catch { }
+            try { _photoView.SetDoNotRenderThisFrame(false); } catch { }
+
+            if (!SafeReady())
+                return false;
+
+            if (++_captureFrames < CaptureFrames)
+                return false;
+
+            if (_renderTarget == null || !SafeTargetValid())
+                return Fail("RenderTarget invalid before SaveToFile");
+
+            try
+            {
+                _renderTarget.SetTextureAsAlwaysValid();
                 TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
-                    " isolated render saved=" + _savePath +
-                    " warmup=" + _waitFrames +
-                    " paintRequested=" + _tableauPainted);
+                    " saving texture valid=" + SafeTargetValid() +
+                    " ready=" + SafeReady() +
+                    " loadingFinished=" + SafeSceneLoadingFinished() +
+                    " file=" + _savePath);
+                _renderTarget.SaveToFile(_savePath, false);
+                _saveIssued = true;
+            }
+            catch (Exception ex)
+            {
+                return Fail("SaveToFile failed: " + ex.Message);
             }
 
-            StopPrivateRenderer();
+            DisablePrivateView();
             _stage = Stage.Reading;
             _waitFrames = 0;
             return false;
@@ -337,14 +394,18 @@ namespace New_ZZZF.TacticalMap.Terrain
             return true;
         }
 
+        private void DisablePrivateView()
+        {
+            if (_photoView != null)
+            {
+                try { _photoView.SetEnable(false); } catch { }
+                try { _photoView.SetRenderOnDemand(false); } catch { }
+            }
+        }
+
         private void StopPrivateRenderer()
         {
-            if (_tableauView != null)
-            {
-                try { _tableauView.SetEnable(false); } catch { }
-                try { _tableauView.SetContinuousRendering(false); } catch { }
-                try { _tableauView.ClearAll(false, false); } catch { }
-            }
+            DisablePrivateView();
 
             if (_renderTarget != null)
             {
@@ -356,11 +417,18 @@ namespace New_ZZZF.TacticalMap.Terrain
                 try { _photoCamera.ReleaseCameraEntity(); } catch { }
             }
 
-            _tableauView = null;
+            if (_photoView != null)
+            {
+                try { _photoView.SetScene(null); } catch { }
+                try { _photoView.SetCamera(null); } catch { }
+                try { _photoView.SetRenderTarget(null); } catch { }
+            }
+
             _renderTarget = null;
             _photoCamera = null;
+            _photoView = null;
             _photoScene = null;
-            _tableauPainted = false;
+            _targetSizeKey = null;
         }
 
         private int GetTargetHeight()
@@ -484,6 +552,30 @@ namespace New_ZZZF.TacticalMap.Terrain
             };
         }
 
+        private bool SafeReady()
+        {
+            if (_photoView == null)
+                return false;
+            try { return _photoView.ReadyToRender(); }
+            catch { return false; }
+        }
+
+        private bool SafeTargetValid()
+        {
+            if (_renderTarget == null)
+                return false;
+            try { return _renderTarget.IsValid; }
+            catch { return false; }
+        }
+
+        private bool SafeSceneLoadingFinished()
+        {
+            if (_photoScene == null)
+                return false;
+            try { return _photoScene.IsLoadingFinished(); }
+            catch { return false; }
+        }
+
         private bool Fail(string reason)
         {
             _failed = true;
@@ -502,7 +594,8 @@ namespace New_ZZZF.TacticalMap.Terrain
             _cache = null;
             _watch = null;
             _waitFrames = 0;
-            _tableauPainted = false;
+            _settleFrames = 0;
+            _captureFrames = 0;
             _saveIssued = false;
             _failed = false;
             _savePath = null;
