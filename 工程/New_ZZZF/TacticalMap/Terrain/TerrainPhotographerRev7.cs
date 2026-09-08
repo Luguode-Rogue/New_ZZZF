@@ -14,12 +14,11 @@ using New_ZZZF.TacticalMap.Diagnostics;
 
 namespace New_ZZZF.TacticalMap.Terrain
 {
-    /// <summary>REV7: singleton owner + process-lived SceneView/Camera/RenderTarget.</summary>
     public sealed class TerrainPhotographerRev7
     {
         public static readonly TerrainPhotographerRev7 Instance = new TerrainPhotographerRev7();
 
-        private const int Revision = 7;
+        private const int Revision = 8;
         private const int PhotoSize = 2048;
         private const int PublishSize = 1024;
         private const int SettleFrames = 45;
@@ -50,7 +49,6 @@ namespace New_ZZZF.TacticalMap.Terrain
         private static readonly Dictionary<int, CachedPhoto> PhotoCache =
             new Dictionary<int, CachedPhoto>();
 
-        // These are intentionally process-lived. The Mission only changes the bound Scene.
         private static SceneView _view;
         private static Camera _camera;
         private static Texture _target;
@@ -114,6 +112,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     " START scene=" + mission.Scene.GetHashCode() +
                     " target=" + _target.Width + "x" + _target.Height +
                     " ready=" + SafeReady() +
+                    " sceneReady=" + SafeSceneReady() +
                     " valid=" + SafeValid() +
                     " isRT=" + SafeIsRT());
             }
@@ -140,8 +139,8 @@ namespace New_ZZZF.TacticalMap.Terrain
             }
             catch (Exception ex)
             {
-                TacticalMapLog.Error("[PhotoNative] REV=" + Revision + " tick failed.", ex);
                 _failed = true;
+                TacticalMapLog.Error("[PhotoNative] REV=" + Revision + " tick failed.", ex);
                 DisableView();
                 _stage = Stage.Idle;
                 return false;
@@ -178,7 +177,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             _exposeFrames = 0;
             TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
                 " view ready; sceneReady=" + SafeSceneReady() +
-                " settle=" + SettleFrames);
+                " expose=" + ExposeFrames + " settle=" + SettleFrames);
             return false;
         }
 
@@ -197,11 +196,14 @@ namespace New_ZZZF.TacticalMap.Terrain
                     return Fail("RT invalid before save");
 
                 _target.SetTextureAsAlwaysValid();
+                TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
+                    " pre-save valid=" + SafeValid() +
+                    " isRT=" + SafeIsRT() +
+                    " loaded=" + SafeLoaded());
                 _target.SaveToFile(_savePath);
                 _saveIssued = true;
                 TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
-                    " SaveToFile issued before disable; valid=" + SafeValid() +
-                    " isRT=" + SafeIsRT());
+                    " SaveToFile issued before disable: " + _savePath);
             }
 
             DisableView();
@@ -213,7 +215,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         private bool TickReading()
         {
             if (++_waitFrames > MaxWaitFrames)
-                return Fail("PNG timeout");
+                return Fail("PNG timeout; saveIssued=" + _saveIssued);
             if (!_saveIssued || string.IsNullOrEmpty(_savePath) || !File.Exists(_savePath))
                 return false;
 
@@ -245,12 +247,11 @@ namespace New_ZZZF.TacticalMap.Terrain
             if (_view == null)
                 throw new InvalidOperationException("CreateSceneView returned null.");
 
-            // Always disable before rebinding a Scene used by the previous Mission.
             try { _view.SetEnable(false); } catch { }
             _view.SetScene(scene);
 
             int width = PhotoSize;
-            int height = Math.Max(64, (int)Math.Round(PhotoSize * (double)_cache.WorldH / _cache.WorldW));
+            int height = Math.Max(64, (int)Math.Round(PhotoSize * (double)_cache.WorldH / Math.Max(1f, _cache.WorldW)));
             string key = width + "x" + height;
             if (_target == null || _targetSizeKey != key)
             {
@@ -258,14 +259,22 @@ namespace New_ZZZF.TacticalMap.Terrain
                 {
                     try { _target.Release(); } catch { }
                 }
-                _target = Texture.CreateRenderTarget("TMapPhotoNative_REV" + Revision,
-                    width, height, false, false, false, true);
+                _target = Texture.CreateRenderTarget(
+                    "TMapPhotoNative_REV" + Revision,
+                    width,
+                    height,
+                    false,
+                    false,
+                    false,
+                    true);
                 if (_target == null)
                     throw new InvalidOperationException("CreateRenderTarget returned null.");
                 _targetSizeKey = key;
             }
 
+            _target.SetTextureAsAlwaysValid();
             _view.SetRenderTarget(_target);
+
             if (_camera == null)
                 _camera = Camera.CreateCamera();
             if (_camera == null)
@@ -338,16 +347,16 @@ namespace New_ZZZF.TacticalMap.Terrain
                     byte[] output = ResizeAndOrient(raw, bmp.Width, bmp.Height);
                     if (PhotoCache.Count >= CacheLimit)
                         PhotoCache.Clear();
+                    int outH = Math.Max(1, (int)Math.Round(PublishSize * (double)_cache.WorldH / _cache.WorldW));
                     PhotoCache[_cache.BakeSignature] = new CachedPhoto
                     {
                         Rgba = output,
                         Width = PublishSize,
-                        Height = Math.Max(1, (int)Math.Round(PublishSize * (double)_cache.WorldH / _cache.WorldW)),
+                        Height = outH,
                         WorldW = _cache.WorldW,
                         WorldH = _cache.WorldH
                     };
-                    _cache.ApplyPhotoPixels(output, PhotoCache[_cache.BakeSignature].Width,
-                        PhotoCache[_cache.BakeSignature].Height);
+                    _cache.ApplyPhotoPixels(output, PublishSize, outH);
                     return true;
                 }
                 finally { bmp.UnlockBits(data); }
@@ -357,7 +366,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         private byte[] ResizeAndOrient(byte[] raw, int sourceW, int sourceH)
         {
             int outW = PublishSize;
-            int outH = Math.Max(1, (int)Math.Round(outW * (double)_cache.WorldH / _cache.WorldW));
+            int outH = Math.Max(1, (int)Math.Round(outW * (double)_cache.WorldH / Math.Max(1f, _cache.WorldW)));
             bool swap = TacticalSettings.Instance.PhotoMapSwapRedBlue;
             byte[] output = new byte[outW * outH * 4];
 
@@ -394,6 +403,49 @@ namespace New_ZZZF.TacticalMap.Terrain
             return output;
         }
 
+        private static PixelStats Analyze(byte[] raw)
+        {
+            long sum = 0;
+            double sum2 = 0;
+            int count = 0;
+            int nonBlack = 0;
+            int min = 255;
+            int max = 0;
+            for (int i = 0; i + 3 < raw.Length; i += 4)
+            {
+                int lum = (raw[i] * 299 + raw[i + 1] * 587 + raw[i + 2] * 114) / 1000;
+                sum += lum;
+                sum2 += (double)lum * lum;
+                if (lum >= 8) nonBlack++;
+                if (lum < min) min = lum;
+                if (lum > max) max = lum;
+                count++;
+            }
+            if (count == 0)
+                return new PixelStats();
+            double avg = (double)sum / count;
+            return new PixelStats
+            {
+                Average = avg,
+                Variance = Math.Max(0.0, sum2 / count - avg * avg),
+                NonBlack = (double)nonBlack / count,
+                Min = min,
+                Max = max
+            };
+        }
+
+        private static byte Blend(byte a, byte b, byte c, byte d, float tx, float ty)
+        {
+            float top = a + (b - a) * tx;
+            float bottom = c + (d - c) * tx;
+            return (byte)Math.Max(0, Math.Min(255, (int)(top + (bottom - top) * ty)));
+        }
+
+        private static int Clamp(int value, int min, int max)
+        {
+            return value < min ? min : (value > max ? max : value);
+        }
+
         private bool SafeReady()
         {
             try { return _view != null && _view.ReadyToRender(); }
@@ -418,6 +470,12 @@ namespace New_ZZZF.TacticalMap.Terrain
             catch { return false; }
         }
 
+        private bool SafeLoaded()
+        {
+            try { return _target != null && _target.IsLoaded(); }
+            catch { return false; }
+        }
+
         private void DisableView()
         {
             try { if (_view != null) _view.SetEnable(false); } catch { }
@@ -426,8 +484,10 @@ namespace New_ZZZF.TacticalMap.Terrain
         private bool Fail(string reason)
         {
             TacticalMapLog.Warn("[PhotoNative] REV=" + Revision +
-                " FAILED stage=" + _stage + " reason=" + reason +
-                " wait=" + _waitFrames + " settle=" + _settleFrames +
+                " FAILED stage=" + _stage +
+                " reason=" + reason +
+                " wait=" + _waitFrames +
+                " settle=" + _settleFrames +
                 " expose=" + _exposeFrames);
             _failed = true;
             DisableView();
@@ -450,49 +510,6 @@ namespace New_ZZZF.TacticalMap.Terrain
             _mission = null;
             _cache = null;
             _watch = null;
-        }
-
-        private static PixelStats Analyze(byte[] raw)
-        {
-            long sum = 0;
-            double sum2 = 0;
-            int count = 0;
-            int nonBlack = 0;
-            int min = 255;
-            int max = 0;
-            for (int i = 0; i + 3 < raw.Length; i += 4)
-            {
-                int lum = (raw[i] * 299 + raw[i + 1] * 587 + raw[i + 2] * 114) / 1000;
-                sum += lum;
-                sum2 += (double)lum * lum;
-                if (lum >= 8) nonBlack++;
-                if (lum < min) min = lum;
-                if (lum > max) max = lum;
-                count++;
-            }
-            if (count == 0) return new PixelStats();
-            double avg = (double)sum / count;
-            return new PixelStats
-            {
-                Average = avg,
-                Variance = Math.Max(0, sum2 / count - avg * avg),
-                NonBlack = (double)nonBlack / count,
-                Min = min,
-                Max = max
-            };
-        }
-
-        private static byte Blend(byte a, byte b, byte c, byte d, float tx, float ty)
-        {
-            float top = a + (b - a) * tx;
-            float bottom = c + (d - c) * tx;
-            float value = top + (bottom - top) * ty;
-            return (byte)Math.Max(0, Math.Min(255, (int)value));
-        }
-
-        private static int Clamp(int value, int min, int max)
-        {
-            return value < min ? min : (value > max ? max : value);
         }
 
         private static void TryDelete(string path)
