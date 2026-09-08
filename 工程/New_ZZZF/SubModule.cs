@@ -41,7 +41,7 @@ namespace New_ZZZF
         protected override void OnSubModuleLoad()
         {
             base.OnSubModuleLoad();
-            NewZZZFDiag.Load();   // 闪退排查：先读子系统开关（ModuleData/NewZZZF_Diag.xml）
+            NewZZZFDiag.Load();
             TacticalMapLog.Initialize();
             TacticalMapLog.Section("SUBMODULE LOAD");
             TacticalMapLog.Info("Assembly=" + typeof(SubModule).Assembly.Location);
@@ -122,7 +122,6 @@ namespace New_ZZZF
                 }
                 catch (Exception ex)
                 {
-                    // 一条补丁签名不符会中断 PatchAll 并使其余补丁（含缴械延迟补丁）全部失效
                     InformationManager.DisplayMessage(new InformationMessage(
                         "[New_ZZZF] Harmony 补丁应用失败: " + ex.Message, Colors.Red));
                 }
@@ -194,7 +193,6 @@ namespace New_ZZZF
             {
                 try { TacticalMapHtmlUi.Instance.Dispose(); }
                 catch (Exception ex) { TacticalMapLog.Error("TacticalMapHtmlUi.Dispose failed.", ex); }
-                // 正常关闭游戏时清空地图导出目录；闪退/卡死时文件保留作现场证据
                 try { PhotoMapDump.Cleanup(); }
                 catch (Exception ex) { TacticalMapLog.Error("PhotoMapDump.Cleanup failed.", ex); }
             }
@@ -263,11 +261,7 @@ namespace New_ZZZF
         protected override void OnApplicationTick(float dt)
         {
             base.OnApplicationTick(dt);
-            // 延迟缴械的统一执行点：每帧必跑、主线程、不依赖任何 Behavior 挂载或 Harmony 补丁。
-            // （Mark 发生在上一帧 Mission.Tick 的碰撞判定内，此处在其后的安全阶段执行 DropItem）
             DeferredDisarmExecutor.Execute(Mission.Current);
-            // 拍照渲染资源的战斗后延迟销毁（跨战斗驱动；内部无待销毁项时零开销）
-            TerrainPhotoCapture.ProcessPendingShutdown();
             if (NewZZZFDiag.CustomSkillHtmlUi)
                 CustomSkillHtmlUi.Instance.Tick(dt);
 
@@ -286,10 +280,6 @@ namespace New_ZZZF
             bool tacticalMapTogglePressed = tacticalMapToggleKeyDown && !_tacticalMapToggleKeyWasDown;
             _tacticalMapToggleKeyWasDown = tacticalMapToggleKeyDown;
 
-            // TacticalMap 的 N 键是 New_ZZZF 正式游戏热键。
-            // 使用 KeyDown 上升沿，避免 IsKeyPressed 被其他输入读取点消费导致切换失效。
-            // 去抖：模式切换瞬间键状态快照可能出现一帧 false 造成二次上升沿（打开即闪关），
-            // 切换后 250ms 内忽略新的上升沿。
             long nowMs = System.Diagnostics.Stopwatch.GetTimestamp() * 1000L / System.Diagnostics.Stopwatch.Frequency;
             if (tacticalMapTogglePressed && missionActive && !customVisible && nowMs >= _tacticalMapToggleIgnoreUntilMs)
             {
@@ -299,8 +289,6 @@ namespace New_ZZZF
                 TacticalMapLog.Info("TacticalMap mode after toggle: " + TacticalMapHtmlUi.Instance.Mode);
             }
 
-            // ESC 退出地图操作模式：直接轮询（见 TacticalMapNativeHotkeyFallback），
-            // 不再依赖 Harmony patch（原 patch 在实际运行中从未生效）。
             if (NewZZZFDiag.TacticalMap && missionActive)
                 TacticalMapNativeHotkeyFallback.Tick(customVisible);
 
@@ -318,7 +306,6 @@ namespace New_ZZZF
                     + " isMenuState=" + isMenuState);
             }
 
-            // 新 HTML 技能界面拥有全输入时，不处理 New_ZZZF 的其它全局热键。
             if (customVisible)
             {
                 if (mPressed || shiftDown)
@@ -336,7 +323,6 @@ namespace New_ZZZF
                 bool shiftMPressed = shiftDown && mPressed;
                 bool normalMPressed = !shiftDown && mPressed;
 
-                // M：新的 HTML 技能界面
                 if (normalMPressed && NewZZZFDiag.CustomSkillHtmlUi)
                 {
                     HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_ACCEPTED_OPEN_HTML");
@@ -346,7 +332,6 @@ namespace New_ZZZF
                     return;
                 }
 
-                // Shift+M：旧的 Gauntlet 技能界面
                 if (shiftMPressed && NewZZZFDiag.CustomSkillHtmlUi)
                 {
                     HtmlUiInputTraceLogger.Event("NEW_ZZZF_SHIFT_M_ACCEPTED_OPEN_GAUNTLET");
