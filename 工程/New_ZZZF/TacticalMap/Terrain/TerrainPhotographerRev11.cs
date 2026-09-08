@@ -29,7 +29,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         private const int Revision = 12;
         private const int PhotoWidth = 1024;
         private const int MaxWaitFrames = 600;
-        private const int WarmupFrames = 4;
+        private const int WarmupFrames = 8;
         private const int MaxCacheEntries = 8;
 
         private enum Stage
@@ -244,6 +244,8 @@ namespace New_ZZZF.TacticalMap.Terrain
             _tableauView.SetSceneUsesShadows(false);
             _tableauView.SetRenderWithPostfx(false);
             _tableauView.SetClearColor(0U);
+            _tableauView.SetDeleteAfterRendering(false);
+            _tableauView.SetContinuousRendering(true);
             _tableauView.SetDoNotRenderThisFrame(false);
             _tableauView.SetEnable(true);
 
@@ -255,42 +257,54 @@ namespace New_ZZZF.TacticalMap.Terrain
         private void OnTableauPaintNeeded(Texture sender, EventArgs e)
         {
             if (_stage == Stage.WaitingRender && sender == _renderTarget)
+            {
+                if (!_tableauPainted)
+                    TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " isolated tableau paint requested.");
                 _tableauPainted = true;
+            }
         }
 
         private bool TickWaitingRender()
         {
             if (++_waitFrames > MaxWaitFrames)
-                return Fail("isolated tableau render timeout; painted=" + _tableauPainted);
+                return Fail("isolated tableau render timeout; paintRequested=" + _tableauPainted);
 
             if (_photoScene == null || _tableauView == null || _renderTarget == null)
                 return Fail("isolated render objects disappeared");
 
-            if (!_photoScene.IsLoadingFinished())
-                return false;
-
+            // Do not gate the capture on Scene.IsLoadingFinished(). A manually created
+            // off-screen Scene can remain in that state even while its Tableau is being
+            // rendered. The render lifecycle is driven by the private TableauView itself.
             try { _photoScene.Tick(0.1f); } catch { }
             try { _tableauView.SetDoNotRenderThisFrame(false); } catch { }
 
             if (!_tableauPainted || _waitFrames < WarmupFrames)
                 return false;
 
-            try
+            if (!_saveIssued)
             {
-                _renderTarget.SetTextureAsAlwaysValid();
-                _renderTarget.SaveToFile(_savePath, false);
-                _saveIssued = true;
-            }
-            catch (Exception ex)
-            {
-                return Fail("isolated render target save failed: " + ex.Message);
+                try
+                {
+                    _renderTarget.SetTextureAsAlwaysValid();
+                    _renderTarget.SaveToFile(_savePath, false);
+                    _saveIssued = true;
+                }
+                catch (Exception ex)
+                {
+                    return Fail("isolated render target save failed: " + ex.Message);
+                }
+
+                _tableauView.SetContinuousRendering(false);
+                _tableauView.SetEnable(false);
+                TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
+                    " isolated render saved=" + _savePath +
+                    " warmup=" + _waitFrames +
+                    " paintRequested=" + _tableauPainted);
             }
 
             StopPrivateRenderer();
             _stage = Stage.Reading;
             _waitFrames = 0;
-            TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
-                " isolated render saved=" + _savePath);
             return false;
         }
 
@@ -328,6 +342,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             if (_tableauView != null)
             {
                 try { _tableauView.SetEnable(false); } catch { }
+                try { _tableauView.SetContinuousRendering(false); } catch { }
                 try { _tableauView.ClearAll(false, false); } catch { }
             }
 
