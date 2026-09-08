@@ -11,7 +11,7 @@ namespace New_ZZZF.TacticalMap.Core
 {
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
-        private const int PhotoRevision = 7;
+        private const int PhotoRevision = 8;
 
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
