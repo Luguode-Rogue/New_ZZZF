@@ -99,7 +99,7 @@ namespace New_ZZZF.TacticalMap.Core
             bool applied = false;
             try
             {
-                if (_photographer == null) _photographer = new TerrainPhotographerNative();
+                _photographer = TerrainPhotographerNative.Instance;
                 if (!_photographer.IsActive && !_photographer.IsCompleted && !_photographer.Failed)
                     _photographer.Start(Mission, _controller.Cache);
                 applied = _photographer.Tick();
@@ -155,7 +155,7 @@ namespace New_ZZZF.TacticalMap.Core
             catch { }
             try { CameraController.Instance?.Destroy(); } catch { }
             CameraController.Instance = null;
-            try { if (_photographer != null) _photographer.OnMissionEnd(); } catch { }
+            try { TerrainPhotographerNative.Instance.OnMissionEnd(); } catch { }
             _photographer = null;
             _missionScreen = null;
             _controller = null;
