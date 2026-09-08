@@ -18,15 +18,15 @@ namespace New_ZZZF.TacticalMap.Terrain
     {
         public static readonly TerrainPhotographerRev7 Instance = new TerrainPhotographerRev7();
 
-        private const int Revision = 8;
-        private const int PhotoSize = 2048;
-        private const int PublishSize = 1024;
-        private const int SettleFrames = 45;
-        private const int ExposeFrames = 15;
-        private const int MaxWaitFrames = 1800;
-        private const int CacheLimit = 8;
+        private const int Revision = 9;
+        private const int PhotoWidth = 2048;
+        private const int PublishWidth = 1024;
+        private const int SettleFrames = 30;
+        private const int CaptureFrames = 10;
+        private const int MaxWaitFrames = 1200;
+        private const int MaxCacheEntries = 8;
 
-        private enum Stage { Idle, Warming, Exposing, Reading, Done }
+        private enum Stage { Idle, Warming, Capturing, Reading, Done }
 
         private sealed class CachedPhoto
         {
@@ -60,7 +60,7 @@ namespace New_ZZZF.TacticalMap.Terrain
         private Stopwatch _watch;
         private int _waitFrames;
         private int _settleFrames;
-        private int _exposeFrames;
+        private int _captureFrames;
         private bool _saveIssued;
         private bool _failed;
         private string _savePath;
@@ -70,15 +70,23 @@ namespace New_ZZZF.TacticalMap.Terrain
         private TerrainPhotographerRev7() { }
 
         public bool IsCompleted { get { return _stage == Stage.Done; } }
+
         public bool IsActive
         {
-            get { return _stage == Stage.Warming || _stage == Stage.Exposing || _stage == Stage.Reading; }
+            get
+            {
+                return _stage == Stage.Warming ||
+                       _stage == Stage.Capturing ||
+                       _stage == Stage.Reading;
+            }
         }
+
         public bool Failed { get { return _failed; } }
 
         public void Start(Mission mission, TerrainCache cache)
         {
-            ResetState();
+            ResetMissionState();
+
             if (mission == null || mission.Scene == null || cache == null || !cache.IsBaked)
                 return;
 
@@ -89,12 +97,14 @@ namespace New_ZZZF.TacticalMap.Terrain
             CachedPhoto cached;
             if (PhotoCache.TryGetValue(cache.BakeSignature, out cached) &&
                 cached != null &&
+                cached.Rgba != null &&
                 Math.Abs(cached.WorldW - cache.WorldW) < 1f &&
                 Math.Abs(cached.WorldH - cache.WorldH) < 1f)
             {
                 cache.ApplyPhotoPixels(cached.Rgba, cached.Width, cached.Height);
                 _stage = Stage.Done;
-                TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " cache hit signature=" + cache.BakeSignature);
+                TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
+                    " cache hit signature=" + cache.BakeSignature);
                 return;
             }
 
@@ -112,9 +122,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     " START scene=" + mission.Scene.GetHashCode() +
                     " target=" + _target.Width + "x" + _target.Height +
                     " ready=" + SafeReady() +
-                    " sceneReady=" + SafeSceneReady() +
-                    " valid=" + SafeValid() +
-                    " isRT=" + SafeIsRT());
+                    " valid=" + SafeValid());
             }
             catch (Exception ex)
             {
@@ -131,10 +139,14 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 switch (_stage)
                 {
-                    case Stage.Warming: return TickWarming();
-                    case Stage.Exposing: return TickExposing();
-                    case Stage.Reading: return TickReading();
-                    default: return false;
+                    case Stage.Warming:
+                        return TickWarming();
+                    case Stage.Capturing:
+                        return TickCapturing();
+                    case Stage.Reading:
+                        return TickReading();
+                    default:
+                        return false;
                 }
             }
             catch (Exception ex)
@@ -150,63 +162,64 @@ namespace New_ZZZF.TacticalMap.Terrain
         public void OnMissionEnd()
         {
             DisableView();
+            CleanupFileOnly();
             _stage = Stage.Idle;
             _mission = null;
             _cache = null;
             _saveIssued = false;
-            _savePath = null;
-            _stablePath = null;
-            _stableLength = -1;
-            TacticalMapLog.Info("[PhotoNative] REV=" + Revision + " mission end; singleton renderer retained.");
+            _failed = false;
+            _nativeReady = false;
+            TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
+                " mission end; singleton renderer retained.");
         }
+
+        private bool _nativeReady;
 
         private bool TickWarming()
         {
             if (++_waitFrames > MaxWaitFrames)
                 return Fail("ReadyToRender timeout");
+
             if (!SafeReady())
             {
                 _settleFrames = 0;
                 return false;
             }
+
             if (++_settleFrames < SettleFrames)
                 return false;
 
-            _stage = Stage.Exposing;
+            _stage = Stage.Capturing;
             _waitFrames = 0;
-            _exposeFrames = 0;
+            _captureFrames = 0;
             TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
-                " view ready; sceneReady=" + SafeSceneReady() +
-                " expose=" + ExposeFrames + " settle=" + SettleFrames);
+                " view ready; capture window opened.");
             return false;
         }
 
-        private bool TickExposing()
+        private bool TickCapturing()
         {
             if (++_waitFrames > MaxWaitFrames)
                 return Fail("render timeout");
+
             if (!SafeReady())
                 return false;
-            if (++_exposeFrames < ExposeFrames)
+
+            if (++_captureFrames < CaptureFrames)
                 return false;
 
-            if (!_saveIssued)
-            {
-                if (_target == null || !SafeValid())
-                    return Fail("RT invalid before save");
+            if (_target == null || !SafeValid())
+                return Fail("RenderTarget invalid before SaveToFile");
 
-                _target.SetTextureAsAlwaysValid();
-                TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
-                    " pre-save valid=" + SafeValid() +
-                    " isRT=" + SafeIsRT() +
-                    " loaded=" + SafeLoaded());
-                _target.SaveToFile(_savePath);
-                _saveIssued = true;
-                TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
-                    " SaveToFile issued before disable: " + _savePath);
-            }
+            _target.SetTextureAsAlwaysValid();
+            TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
+                " saving texture valid=" + SafeValid() + " file=" + _savePath);
 
+            // Current Bannerlord build exposes SaveToFile(string, bool isRelativePath).
+            _target.SaveToFile(_savePath, false);
+            _saveIssued = true;
             DisableView();
+
             _stage = Stage.Reading;
             _waitFrames = 0;
             return false;
@@ -216,12 +229,14 @@ namespace New_ZZZF.TacticalMap.Terrain
         {
             if (++_waitFrames > MaxWaitFrames)
                 return Fail("PNG timeout; saveIssued=" + _saveIssued);
+
             if (!_saveIssued || string.IsNullOrEmpty(_savePath) || !File.Exists(_savePath))
                 return false;
 
             long length = new FileInfo(_savePath).Length;
             if (length <= 0)
                 return false;
+
             if (_stablePath != _savePath || _stableLength != length)
             {
                 _stablePath = _savePath;
@@ -241,24 +256,26 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         private void EnsureRenderObjects()
         {
-            Scene scene = _mission.Scene;
             if (_view == null)
                 _view = SceneView.CreateSceneView();
             if (_view == null)
-                throw new InvalidOperationException("CreateSceneView returned null.");
+                throw new InvalidOperationException("SceneView.CreateSceneView returned null.");
 
             try { _view.SetEnable(false); } catch { }
-            _view.SetScene(scene);
+            _view.SetScene(_mission.Scene);
 
-            int width = PhotoSize;
-            int height = Math.Max(64, (int)Math.Round(PhotoSize * (double)_cache.WorldH / Math.Max(1f, _cache.WorldW)));
+            int width = PhotoWidth;
+            int height = Math.Max(64,
+                (int)Math.Round(PhotoWidth * (double)_cache.WorldH / Math.Max(1f, _cache.WorldW)));
             string key = width + "x" + height;
+
             if (_target == null || _targetSizeKey != key)
             {
                 if (_target != null)
                 {
                     try { _target.Release(); } catch { }
                 }
+
                 _target = Texture.CreateRenderTarget(
                     "TMapPhotoNative_REV" + Revision,
                     width,
@@ -267,8 +284,9 @@ namespace New_ZZZF.TacticalMap.Terrain
                     false,
                     false,
                     true);
+
                 if (_target == null)
-                    throw new InvalidOperationException("CreateRenderTarget returned null.");
+                    throw new InvalidOperationException("Texture.CreateRenderTarget returned null.");
                 _targetSizeKey = key;
             }
 
@@ -278,31 +296,30 @@ namespace New_ZZZF.TacticalMap.Terrain
             if (_camera == null)
                 _camera = Camera.CreateCamera();
             if (_camera == null)
-                throw new InvalidOperationException("CreateCamera returned null.");
+                throw new InvalidOperationException("Camera.CreateCamera returned null.");
 
             float halfW = _cache.WorldW * 0.5f + 4f;
             float halfH = _cache.WorldH * 0.5f + 4f;
             float centerX = _cache.OriginX + _cache.WorldW * 0.5f;
             float centerY = _cache.OriginY + _cache.WorldH * 0.5f;
-            float camZ = _cache.MaxH + 300f;
-            float far = Math.Max(4000f, camZ - _cache.MinH + 512f);
+            float cameraZ = _cache.MaxH + 300f;
+            float far = Math.Max(4000f, cameraZ - _cache.MinH + 512f);
 
             _camera.SetViewVolume(false, -halfW, halfW, -halfH, halfH, 1f, far);
             _camera.LookAt(
-                new Vec3(centerX, centerY, camZ),
+                new Vec3(centerX, centerY, cameraZ),
                 new Vec3(centerX, centerY, 0f),
                 new Vec3(0f, 1f, 0f));
             _view.SetCamera(_camera);
+            _nativeReady = true;
         }
 
         private void ConfigureRenderState()
         {
             Scene scene = _mission.Scene;
-            scene.PreloadForRendering();
             scene.ForceLoadResources(true);
-            scene.CalculateEffectiveLighting();
-
-            _view.SetAutoDepthTargetCreation(true);
+            _view.SetScene(scene);
+            _view.SetCamera(_camera);
             _view.SetRenderTarget(_target);
             _view.SetRenderOnDemand(false);
             _view.SetRenderWithPostfx(false);
@@ -315,7 +332,6 @@ namespace New_ZZZF.TacticalMap.Terrain
             _view.SetDoQuickExposure(true);
             _view.SetResolutionScaling(false);
             _view.AddClearTask(false);
-            _view.SetDoNotRenderThisFrame(false);
             _view.SetEnable(true);
         }
 
@@ -324,14 +340,22 @@ namespace New_ZZZF.TacticalMap.Terrain
             using (Bitmap bmp = new Bitmap(path))
             {
                 Rectangle rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
-                BitmapData data = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                BitmapData data = bmp.LockBits(
+                    rect,
+                    ImageLockMode.ReadOnly,
+                    PixelFormat.Format32bppArgb);
                 try
                 {
                     int stride = Math.Abs(data.Stride);
                     byte[] raw = new byte[bmp.Width * bmp.Height * 4];
                     for (int y = 0; y < bmp.Height; y++)
-                        Marshal.Copy(IntPtr.Add(data.Scan0, y * stride), raw, y * bmp.Width * 4,
+                    {
+                        Marshal.Copy(
+                            IntPtr.Add(data.Scan0, y * stride),
+                            raw,
+                            y * bmp.Width * 4,
                             Math.Min(stride, bmp.Width * 4));
+                    }
 
                     PixelStats stats = Analyze(raw);
                     TacticalMapLog.Info("[PhotoNative] REV=" + Revision +
@@ -345,72 +369,77 @@ namespace New_ZZZF.TacticalMap.Terrain
                         return false;
 
                     byte[] output = ResizeAndOrient(raw, bmp.Width, bmp.Height);
-                    if (PhotoCache.Count >= CacheLimit)
+                    int outH = Math.Max(1,
+                        (int)Math.Round(PublishWidth * (double)_cache.WorldH /
+                        Math.Max(1f, _cache.WorldW)));
+
+                    if (PhotoCache.Count >= MaxCacheEntries)
                         PhotoCache.Clear();
-                    int outH = Math.Max(1, (int)Math.Round(PublishSize * (double)_cache.WorldH / _cache.WorldW));
+
                     PhotoCache[_cache.BakeSignature] = new CachedPhoto
                     {
                         Rgba = output,
-                        Width = PublishSize,
+                        Width = PublishWidth,
                         Height = outH,
                         WorldW = _cache.WorldW,
                         WorldH = _cache.WorldH
                     };
-                    _cache.ApplyPhotoPixels(output, PublishSize, outH);
+
+                    _cache.ApplyPhotoPixels(output, PublishWidth, outH);
                     return true;
                 }
-                finally { bmp.UnlockBits(data); }
+                finally
+                {
+                    bmp.UnlockBits(data);
+                }
             }
         }
 
         private byte[] ResizeAndOrient(byte[] raw, int sourceW, int sourceH)
         {
-            int outW = PublishSize;
-            int outH = Math.Max(1, (int)Math.Round(outW * (double)_cache.WorldH / Math.Max(1f, _cache.WorldW)));
-            bool swap = TacticalSettings.Instance.PhotoMapSwapRedBlue;
+            int outW = PublishWidth;
+            int outH = Math.Max(1,
+                (int)Math.Round(outW * (double)_cache.WorldH /
+                Math.Max(1f, _cache.WorldW)));
             byte[] output = new byte[outW * outH * 4];
+            bool swap = TacticalSettings.Instance.PhotoMapSwapRedBlue;
 
             for (int y = 0; y < outH; y++)
             {
                 float sy = (y + 0.5f) * sourceH / outH - 0.5f;
                 sy = sourceH - 1f - sy;
-                int y0 = Clamp((int)Math.Floor(sy), 0, sourceH - 1);
-                int y1 = Clamp(y0 + 1, 0, sourceH - 1);
-                float ty = sy - (float)Math.Floor(sy);
+                int iy = Clamp((int)Math.Round(sy), 0, sourceH - 1);
 
                 for (int x = 0; x < outW; x++)
                 {
                     float sx = (x + 0.5f) * sourceW / outW - 0.5f;
-                    int x0 = Clamp((int)Math.Floor(sx), 0, sourceW - 1);
-                    int x1 = Clamp(x0 + 1, 0, sourceW - 1);
-                    float tx = sx - (float)Math.Floor(sx);
+                    int ix = Clamp((int)Math.Round(sx), 0, sourceW - 1);
+                    int source = (iy * sourceW + ix) * 4;
+                    int dest = (y * outW + x) * 4;
 
-                    int a = (y0 * sourceW + x0) * 4;
-                    int b = (y0 * sourceW + x1) * 4;
-                    int c = (y1 * sourceW + x0) * 4;
-                    int d = (y1 * sourceW + x1) * 4;
-                    int o = (y * outW + x) * 4;
+                    byte r = raw[source];
+                    byte g = raw[source + 1];
+                    byte b = raw[source + 2];
 
-                    byte r = Blend(raw[a], raw[b], raw[c], raw[d], tx, ty);
-                    byte g = Blend(raw[a + 1], raw[b + 1], raw[c + 1], raw[d + 1], tx, ty);
-                    byte bl = Blend(raw[a + 2], raw[b + 2], raw[c + 2], raw[d + 2], tx, ty);
-                    output[o] = swap ? bl : r;
-                    output[o + 1] = g;
-                    output[o + 2] = swap ? r : bl;
-                    output[o + 3] = 255;
+                    output[dest] = swap ? b : r;
+                    output[dest + 1] = g;
+                    output[dest + 2] = swap ? r : b;
+                    output[dest + 3] = 255;
                 }
             }
+
             return output;
         }
 
         private static PixelStats Analyze(byte[] raw)
         {
             long sum = 0;
-            double sum2 = 0;
+            double sum2 = 0.0;
             int count = 0;
             int nonBlack = 0;
             int min = 255;
             int max = 0;
+
             for (int i = 0; i + 3 < raw.Length; i += 4)
             {
                 int lum = (raw[i] * 299 + raw[i + 1] * 587 + raw[i + 2] * 114) / 1000;
@@ -421,24 +450,80 @@ namespace New_ZZZF.TacticalMap.Terrain
                 if (lum > max) max = lum;
                 count++;
             }
+
             if (count == 0)
                 return new PixelStats();
-            double avg = (double)sum / count;
+
+            double average = (double)sum / count;
             return new PixelStats
             {
-                Average = avg,
-                Variance = Math.Max(0.0, sum2 / count - avg * avg),
+                Average = average,
+                Variance = Math.Max(0.0, sum2 / count - average * average),
                 NonBlack = (double)nonBlack / count,
                 Min = min,
                 Max = max
             };
         }
 
-        private static byte Blend(byte a, byte b, byte c, byte d, float tx, float ty)
+        private bool SafeReady()
         {
-            float top = a + (b - a) * tx;
-            float bottom = c + (d - c) * tx;
-            return (byte)Math.Max(0, Math.Min(255, (int)(top + (bottom - top) * ty)));
+            if (!_nativeReady || _view == null)
+                return false;
+            try { return _view.ReadyToRender(); }
+            catch { return false; }
+        }
+
+        private bool SafeValid()
+        {
+            if (_target == null)
+                return false;
+            try { return _target.IsValid; }
+            catch { return false; }
+        }
+
+        private void DisableView()
+        {
+            if (_view == null)
+                return;
+            try { _view.SetEnable(false); } catch { }
+            try { _view.SetRenderOnDemand(true); } catch { }
+        }
+
+        private void CleanupFileOnly()
+        {
+            TryDelete(_savePath);
+            _savePath = null;
+            _stablePath = null;
+            _stableLength = -1;
+        }
+
+        private bool Fail(string reason)
+        {
+            _failed = true;
+            TacticalMapLog.Warn("[PhotoNative] REV=" + Revision +
+                " FAILED: " + reason +
+                " stage=" + _stage +
+                " saveIssued=" + _saveIssued);
+            DisableView();
+            CleanupFileOnly();
+            _stage = Stage.Idle;
+            return false;
+        }
+
+        private void ResetMissionState()
+        {
+            DisableView();
+            CleanupFileOnly();
+            _stage = Stage.Idle;
+            _mission = null;
+            _cache = null;
+            _watch = null;
+            _waitFrames = 0;
+            _settleFrames = 0;
+            _captureFrames = 0;
+            _saveIssued = false;
+            _failed = false;
+            _nativeReady = false;
         }
 
         private static int Clamp(int value, int min, int max)
@@ -446,76 +531,11 @@ namespace New_ZZZF.TacticalMap.Terrain
             return value < min ? min : (value > max ? max : value);
         }
 
-        private bool SafeReady()
-        {
-            try { return _view != null && _view.ReadyToRender(); }
-            catch { return false; }
-        }
-
-        private bool SafeSceneReady()
-        {
-            try { return _view != null && _view.CheckSceneReadyToRender(); }
-            catch { return false; }
-        }
-
-        private bool SafeValid()
-        {
-            try { return _target != null && _target.IsValid; }
-            catch { return false; }
-        }
-
-        private bool SafeIsRT()
-        {
-            try { return _target != null && _target.IsRenderTarget; }
-            catch { return false; }
-        }
-
-        private bool SafeLoaded()
-        {
-            try { return _target != null && _target.IsLoaded(); }
-            catch { return false; }
-        }
-
-        private void DisableView()
-        {
-            try { if (_view != null) _view.SetEnable(false); } catch { }
-        }
-
-        private bool Fail(string reason)
-        {
-            TacticalMapLog.Warn("[PhotoNative] REV=" + Revision +
-                " FAILED stage=" + _stage +
-                " reason=" + reason +
-                " wait=" + _waitFrames +
-                " settle=" + _settleFrames +
-                " expose=" + _exposeFrames);
-            _failed = true;
-            DisableView();
-            _stage = Stage.Idle;
-            return false;
-        }
-
-        private void ResetState()
-        {
-            DisableView();
-            _stage = Stage.Idle;
-            _waitFrames = 0;
-            _settleFrames = 0;
-            _exposeFrames = 0;
-            _saveIssued = false;
-            _failed = false;
-            _savePath = null;
-            _stablePath = null;
-            _stableLength = -1;
-            _mission = null;
-            _cache = null;
-            _watch = null;
-        }
-
         private static void TryDelete(string path)
         {
-            if (string.IsNullOrEmpty(path)) return;
-            try { if (File.Exists(path)) File.Delete(path); } catch { }
+            if (string.IsNullOrEmpty(path))
+                return;
+            try { File.Delete(path); } catch { }
         }
     }
 }
