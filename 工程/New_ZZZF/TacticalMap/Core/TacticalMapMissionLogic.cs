@@ -11,14 +11,14 @@ namespace New_ZZZF.TacticalMap.Core
 {
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
-        private const int PhotoRevision = 8;
+        private const int PhotoRevision = 10;
 
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
         private bool _initialized;
         private bool _ready;
         private float _heartbeatAccum;
-        private readonly TerrainPhotographerRev7 _photographer = TerrainPhotographerRev7.Instance;
+        private readonly TerrainPhotographerRev10 _photographer = TerrainPhotographerRev10.Instance;
         private int _fpsFrames;
         private float _fpsAccum;
         private float _worstFrame;
