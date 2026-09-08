@@ -15,12 +15,12 @@ namespace New_ZZZF.TacticalMap.Terrain
 {
     /// <summary>
     /// Real terrain photo capture.
-    /// Native path: Mission.Scene -> TableauView.AddTableau -> TextureUpdateEventHandler -> Texture.SaveToFile.
-    /// The texture-update callback is the render completion signal; no SceneView final-result export is used.
+    /// The photographer object is a process-wide singleton, but every mission owns a fresh
+    /// Scene/Texture/Camera set. Native handles are never carried from one battle to another.
     /// </summary>
     public sealed class TerrainPhotographerNative
     {
-        private enum Stage { Idle, WaitingCallback, WaitingFile, Done }
+        private enum Stage { Idle, LoadingScene, WaitingCallback, WaitingFile, Done }
 
         private sealed class CachedPhoto
         {
@@ -40,22 +40,27 @@ namespace New_ZZZF.TacticalMap.Terrain
             public int Max;
         }
 
+        private const int PhotoRevision = 2;
         private const int PhotoSize = 2048;
         private const int PublishSize = 1024;
         private const int CacheLimit = 8;
         private const int MaxWaitFrames = 1800;
 
+        private static readonly TerrainPhotographerNative _instance = new TerrainPhotographerNative();
         private static readonly Dictionary<int, CachedPhoto> PhotoCache = new Dictionary<int, CachedPhoto>();
-        private static Texture _texture;
-        private static TableauView _view;
-        private static Camera _camera;
-        private static string _sizeKey;
-        private static Scene _scene;
-        private static TerrainCache _cache;
-        private static string _savePath;
-        private static bool _callbackSeen;
-        private static bool _saveIssued;
-        private static bool _nativeError;
+
+        public static TerrainPhotographerNative Instance { get { return _instance; } }
+
+        private Texture _texture;
+        private TableauView _view;
+        private Camera _camera;
+        private Scene _scene;
+        private TerrainCache _cache;
+        private string _savePath;
+        private string _sizeKey;
+        private bool _callbackSeen;
+        private bool _saveIssued;
+        private bool _nativeError;
 
         private Stage _stage = Stage.Idle;
         private int _waitFrames;
@@ -64,8 +69,10 @@ namespace New_ZZZF.TacticalMap.Terrain
         private TerrainCache _instanceCache;
         private bool _failed;
 
+        private TerrainPhotographerNative() { }
+
         public bool IsCompleted { get { return _stage == Stage.Done; } }
-        public bool IsActive { get { return _stage == Stage.WaitingCallback || _stage == Stage.WaitingFile; } }
+        public bool IsActive { get { return _stage == Stage.LoadingScene || _stage == Stage.WaitingCallback || _stage == Stage.WaitingFile; } }
         public bool Failed { get { return _failed; } }
 
         public void Start(Mission mission, TerrainCache cache)
@@ -84,7 +91,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 cache.ApplyPhotoPixels(cached.Rgba, cached.Width, cached.Height);
                 _stage = Stage.Done;
-                TacticalMapLog.Info("[PhotoNative] cache hit signature=" + cache.BakeSignature);
+                TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " cache hit signature=" + cache.BakeSignature);
                 return;
             }
 
@@ -94,19 +101,14 @@ namespace New_ZZZF.TacticalMap.Terrain
                     "TMapPhotoNative_" + cache.BakeSignature + ".png");
                 TryDelete(_instanceSavePath);
 
-                _scene = mission.Scene;
-                _cache = cache;
-                _savePath = _instanceSavePath;
-                _callbackSeen = false;
-                _saveIssued = false;
-                _nativeError = false;
-
+                CreateMissionScene(mission);
                 EnsureObjects();
-                Configure();
-                _view.SetEnable(true);
-                _stage = Stage.WaitingCallback;
 
-                TacticalMapLog.Info("[PhotoNative] START scene=" + _scene.GetHashCode()
+                _stage = Stage.LoadingScene;
+                TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision
+                    + " START sourceScene=" + mission.Scene.GetHashCode()
+                    + " photoScene=" + _scene.GetHashCode()
+                    + " sceneName=" + (mission.SceneName ?? "")
                     + " world=" + cache.WorldW.ToString("0.0") + "x" + cache.WorldH.ToString("0.0")
                     + " target=" + PhotoSize + "x" + GetPhotoHeight(cache)
                     + " path=" + _instanceSavePath);
@@ -115,13 +117,39 @@ namespace New_ZZZF.TacticalMap.Terrain
             {
                 _failed = true;
                 _stage = Stage.Idle;
-                TacticalMapLog.Error("[PhotoNative] START failed.", ex);
-                Disable();
+                TacticalMapLog.Error("[PhotoNative] REV=" + PhotoRevision + " START failed.", ex);
+                ReleaseNativeResources();
             }
         }
 
         public bool Tick()
         {
+            if (_stage == Stage.LoadingScene)
+            {
+                if (_scene == null)
+                    return Fail("photo scene is null while loading", true);
+
+                if (++_waitFrames > MaxWaitFrames)
+                    return Fail("photo scene loading timeout", true);
+
+                try
+                {
+                    if (!_scene.IsLoadingFinished())
+                        return false;
+
+                    Configure();
+                    _view.SetEnable(true);
+                    _stage = Stage.WaitingCallback;
+                    _waitFrames = 0;
+                    TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " photo scene loaded; tableau enabled.");
+                }
+                catch (Exception ex)
+                {
+                    return Fail("photo scene render setup failed: " + ex.GetType().Name, true);
+                }
+                return false;
+            }
+
             if (_stage == Stage.WaitingCallback)
             {
                 if (++_waitFrames > MaxWaitFrames)
@@ -134,7 +162,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     return Fail("callback arrived but SaveToFile was not issued", true);
                 _stage = Stage.WaitingFile;
                 _waitFrames = 0;
-                TacticalMapLog.Info("[PhotoNative] render callback confirmed; waiting for PNG.");
+                TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " render callback confirmed; waiting for PNG.");
                 return false;
             }
 
@@ -156,7 +184,7 @@ namespace New_ZZZF.TacticalMap.Terrain
 
                     TryDelete(_instanceSavePath);
                     _stage = Stage.Done;
-                    TacticalMapLog.Info("[PhotoNative] DONE elapsed=" +
+                    TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " DONE elapsed=" +
                         (_watch == null ? -1 : _watch.ElapsedMilliseconds) + "ms");
                     return true;
                 }
@@ -171,16 +199,45 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         public void OnMissionEnd()
         {
-            Disable();
+            ReleaseNativeResources();
             _stage = Stage.Idle;
-            if (ReferenceEquals(_cache, _instanceCache))
-            {
-                _cache = null;
-                _scene = null;
-                _savePath = null;
-            }
+            _waitFrames = 0;
             _instanceCache = null;
             _instanceSavePath = null;
+            _watch = null;
+            _failed = false;
+            TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " mission resources released; singleton reset.");
+        }
+
+        private void CreateMissionScene(Mission mission)
+        {
+            ReleaseNativeResources();
+
+            // Keep the offscreen renderer out of the live Mission.Scene. Re-entering a battle
+            // must never leave the Tableau pointing at a scene owned by the previous Mission.
+            _scene = Scene.CreateNewScene(false, false);
+            if (_scene == null)
+                throw new InvalidOperationException("CreateNewScene returned null");
+
+            _scene.SetOwnerThread();
+            _scene.Read(mission.SceneName);
+
+            if (!string.IsNullOrEmpty(mission.SceneLevels))
+            {
+                var levels = new List<string>();
+                string[] parts = mission.SceneLevels.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    string level = parts[i].Trim();
+                    if (level.Length > 0) levels.Add(level);
+                }
+                if (levels.Count > 0)
+                    _scene.SetActiveVisibilityLevels(levels);
+            }
+
+            _scene.SetDefaultLighting();
+            _scene.CalculateEffectiveLighting();
+            _scene.ForceLoadResources(true);
         }
 
         private void EnsureObjects()
@@ -189,13 +246,15 @@ namespace New_ZZZF.TacticalMap.Terrain
             int h = GetPhotoHeight(_instanceCache);
             string key = w + "x" + h;
 
+            // A tableau is always bound to the current singleton session. Recreate it when
+            // the resolution changes or when the previous native handle has been released.
             if (_texture == null || _sizeKey != key || _texture.TableauView == null)
             {
-                Disable();
+                ReleaseTableauOnly();
                 _texture = TableauView.AddTableau(
                     "TMapTerrainPhoto",
                     new RenderTargetComponent.TextureUpdateEventHandler(OnTextureUpdated),
-                    null,
+                    _scene,
                     w,
                     h);
                 if (_texture == null || _texture.TableauView == null)
@@ -210,6 +269,8 @@ namespace New_ZZZF.TacticalMap.Terrain
 
             if (_camera == null)
                 _camera = Camera.CreateCamera();
+            if (_camera == null)
+                throw new InvalidOperationException("CreateCamera returned null");
 
             _view.SetEnable(false);
             _view.SetScene(_scene);
@@ -228,7 +289,6 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         private void Configure()
         {
-            _scene.ForceLoadResources(true);
             _view.SetScene(_scene);
             _view.SetCamera(_camera);
             _view.SetSceneUsesSkybox(true);
@@ -243,19 +303,16 @@ namespace New_ZZZF.TacticalMap.Terrain
             _view.SetContinuousRendering(true);
         }
 
-        private static void OnTextureUpdated(Texture sender, EventArgs e)
+        private void OnTextureUpdated(Texture sender, EventArgs e)
         {
             try
             {
-                if (sender == null || sender.TableauView == null || _scene == null || _cache == null)
+                // Ignore callbacks from a texture belonging to an older mission/session.
+                if (sender == null || !ReferenceEquals(sender, _texture) || _view == null || _scene == null || _cache == null)
                     return;
 
-                TableauView v = sender.TableauView;
-                v.SetScene(_scene);
-                v.SetCamera(_camera);
                 _callbackSeen = true;
-
-                TacticalMapLog.Info("[PhotoNative] TEXTURE UPDATE callback scene=" + _scene.GetHashCode());
+                TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " TEXTURE UPDATE callback photoScene=" + _scene.GetHashCode());
 
                 if (!_saveIssued && !string.IsNullOrEmpty(_savePath))
                 {
@@ -263,21 +320,21 @@ namespace New_ZZZF.TacticalMap.Terrain
                     {
                         sender.SaveToFile(_savePath, false);
                         _saveIssued = true;
-                        v.SetContinuousRendering(false);
-                        v.SetEnable(false);
-                        TacticalMapLog.Info("[PhotoNative] CALLBACK SaveToFile issued: " + _savePath);
+                        _view.SetContinuousRendering(false);
+                        _view.SetEnable(false);
+                        TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " CALLBACK SaveToFile issued: " + _savePath);
                     }
                     catch (Exception ex)
                     {
                         _nativeError = true;
-                        TacticalMapLog.Error("[PhotoNative] CALLBACK SaveToFile failed.", ex);
+                        TacticalMapLog.Error("[PhotoNative] REV=" + PhotoRevision + " CALLBACK SaveToFile failed.", ex);
                     }
                 }
             }
             catch (Exception ex)
             {
                 _nativeError = true;
-                TacticalMapLog.Error("[PhotoNative] CALLBACK failed.", ex);
+                TacticalMapLog.Error("[PhotoNative] REV=" + PhotoRevision + " CALLBACK failed.", ex);
             }
         }
 
@@ -298,7 +355,7 @@ namespace New_ZZZF.TacticalMap.Terrain
                     }
 
                     PixelStats s = Analyze(raw);
-                    TacticalMapLog.Info("[PhotoNative] PNG=" + bmp.Width + "x" + bmp.Height
+                    TacticalMapLog.Info("[PhotoNative] REV=" + PhotoRevision + " PNG=" + bmp.Width + "x" + bmp.Height
                         + " avg=" + s.Avg.ToString("0.0")
                         + " variance=" + s.Variance.ToString("0.0")
                         + " nonBlack=" + (s.NonBlack * 100.0).ToString("0.0") + "%"
@@ -407,18 +464,25 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         private void Reset()
         {
-            Disable();
+            // A reset is only allowed to tear down resources belonging to the current singleton
+            // session; it never creates or retains native handles across missions.
+            ReleaseNativeResources();
             _stage = Stage.Idle;
             _waitFrames = 0;
             _instanceSavePath = null;
             _instanceCache = null;
             _watch = null;
             _failed = false;
+            _callbackSeen = false;
+            _saveIssued = false;
+            _nativeError = false;
+            _savePath = null;
+            _cache = null;
         }
 
         private bool Fail(string reason, bool disable)
         {
-            TacticalMapLog.Warn("[PhotoNative] FAILED: " + reason
+            TacticalMapLog.Warn("[PhotoNative] REV=" + PhotoRevision + " FAILED: " + reason
                 + " | callback=" + _callbackSeen + " save=" + _saveIssued
                 + " wait=" + _waitFrames);
             if (disable) Disable();
@@ -427,7 +491,7 @@ namespace New_ZZZF.TacticalMap.Terrain
             return false;
         }
 
-        private static void Disable()
+        private void Disable()
         {
             try
             {
@@ -438,6 +502,46 @@ namespace New_ZZZF.TacticalMap.Terrain
                 }
             }
             catch { }
+        }
+
+        private void ReleaseTableauOnly()
+        {
+            try
+            {
+                if (_view != null)
+                {
+                    _view.SetContinuousRendering(false);
+                    _view.SetEnable(false);
+                }
+            }
+            catch { }
+
+            try { if (_texture != null) _texture.Release(); } catch { }
+            _texture = null;
+            _view = null;
+            _sizeKey = null;
+        }
+
+        private void ReleaseNativeResources()
+        {
+            Disable();
+            ReleaseTableauOnly();
+
+            try
+            {
+                if (_camera != null)
+                    _camera.ReleaseCamera();
+            }
+            catch { }
+            _camera = null;
+
+            try
+            {
+                if (_scene != null)
+                    _scene.ClearAll();
+            }
+            catch { }
+            _scene = null;
         }
 
         private static int GetPhotoHeight(TerrainCache cache)
