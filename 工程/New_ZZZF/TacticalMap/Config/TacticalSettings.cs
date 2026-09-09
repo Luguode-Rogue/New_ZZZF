@@ -25,20 +25,20 @@ namespace New_ZZZF.TacticalMap.Config
         public float UpdateInterval = 0.2f;
 
         /// <summary>
-        /// 拍照式底图统一使用 TerrainPhotoV2。
-        /// SceneView / RenderTarget / Camera 必须进程级复用，禁止重新引入按战斗创建/销毁的旧路线。
+        /// 拍照式底图统一使用开放世界瓦片路线。
+        /// 禁止重新引入独立 SceneView、RenderTarget、Tableau 或整场单图路线。
         /// </summary>
         public bool TerrainPhotoV2 = true;
 
         /// <summary>
         /// TerrainCache 的旧字段引用兼容层。
-        /// 这里只是配置别名，不会恢复旧版 TerrainPhotoCapture 渲染器；实际开关仍由 TerrainPhotoV2 控制。
+        /// 这里只是配置别名；实际开关仍由 TerrainPhotoV2 控制。
         /// </summary>
         public bool PhotoMap => TerrainPhotoV2;
 
         /// <summary>
         /// GDI+ Format32bppArgb 的 LockBits 内存布局为 BGRA；拍照 PNG 回读必须交换 R/B，
-        /// 才能恢复 TerrainPhotographer 内部统一使用的 RGBA 布局。
+        /// 才能恢复瓦片底图内部统一使用的 RGBA 布局。
         /// </summary>
         public bool PhotoMapSwapRedBlue = true;
 

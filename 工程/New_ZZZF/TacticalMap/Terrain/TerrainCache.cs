@@ -7,7 +7,6 @@ using System.Runtime.ExceptionServices;
 using System.Security;
 using TaleWorlds.Engine;
 using TaleWorlds.Library;
-using TaleWorlds.MountAndBlade;
 using New_ZZZF.TacticalMap.Core;
 using New_ZZZF.TacticalMap.Diagnostics;
 
@@ -84,7 +83,7 @@ namespace New_ZZZF.TacticalMap.Terrain
 
         [HandleProcessCorruptedStateExceptions]
         [SecurityCritical]
-        public bool TryBake(Scene scene, Mission mission = null)
+        public bool TryBake(Scene scene)
         {
             var watch = Stopwatch.StartNew();
             _scene = scene;
@@ -124,23 +123,6 @@ namespace New_ZZZF.TacticalMap.Terrain
                 {
                     battleMin = Vec2.Zero;
                     battleMax = new Vec2(fullWorldW, fullWorldH);
-                }
-
-                if (TryComputeBattleFocus(mission, battleMin, battleMax, out Vec2 engagementCenter,
-                    out Vec2 attackerCenter, out Vec2 defenderCenter, out string focusSource,
-                    out int attackerCount, out int defenderCount))
-                {
-                    float battleWidth = battleMax.X - battleMin.X;
-                    float battleHeight = battleMax.Y - battleMin.Y;
-                    battleMin = new Vec2(engagementCenter.X - battleWidth * 0.5f,
-                        engagementCenter.Y - battleHeight * 0.5f);
-                    battleMax = new Vec2(engagementCenter.X + battleWidth * 0.5f,
-                        engagementCenter.Y + battleHeight * 0.5f);
-                    TacticalMapLog.Info("Battle bounds recentered on native battle focus. source=" + focusSource +
-                        " attacker=" +
-                        attackerCenter.X + "," + attackerCenter.Y + "(" + attackerCount + ")" +
-                        " defender=" + defenderCenter.X + "," + defenderCenter.Y + "(" + defenderCount + ")" +
-                        " center=" + engagementCenter.X + "," + engagementCenter.Y);
                 }
 
                 int res = Math.Max(1, _settings.BakeResolution);
@@ -434,62 +416,22 @@ namespace New_ZZZF.TacticalMap.Terrain
             int softCount = scene.GetSoftBoundaryVertexCount();
             if (softCount > 0)
             {
-                var vertices = new List<Vec2>(softCount);
                 float minX = float.MaxValue, minY = float.MaxValue;
                 float maxX = float.MinValue, maxY = float.MinValue;
                 for (int i = 0; i < softCount; i++)
                 {
                     Vec2 v = scene.GetSoftBoundaryVertex(i);
-                    vertices.Add(v);
                     if (v.X < minX) minX = v.X;
                     if (v.Y < minY) minY = v.Y;
                     if (v.X > maxX) maxX = v.X;
                     if (v.Y > maxY) maxY = v.Y;
                 }
-
-                // An irregular or curved battlefield can have its AABB midpoint outside the
-                // playable polygon (coastal scenes are a common example). Use the polygon's
-                // area centroid as the visual/map centre, then create symmetric extents around
-                // it so the complete boundary still fits and every map layer remains aligned.
-                double crossSum = 0.0;
-                double centroidXSum = 0.0;
-                double centroidYSum = 0.0;
-                for (int i = 0; i < vertices.Count; i++)
-                {
-                    Vec2 a = vertices[i];
-                    Vec2 b = vertices[(i + 1) % vertices.Count];
-                    double cross = (double)a.X * b.Y - (double)b.X * a.Y;
-                    crossSum += cross;
-                    centroidXSum += (a.X + b.X) * cross;
-                    centroidYSum += (a.Y + b.Y) * cross;
-                }
-
-                float centerX;
-                float centerY;
-                if (Math.Abs(crossSum) > 0.001)
-                {
-                    centerX = (float)(centroidXSum / (3.0 * crossSum));
-                    centerY = (float)(centroidYSum / (3.0 * crossSum));
-                }
-                else
-                {
-                    centerX = (minX + maxX) * 0.5f;
-                    centerY = (minY + maxY) * 0.5f;
-                }
-
-                float halfW = 1f;
-                float halfH = 1f;
-                foreach (Vec2 v in vertices)
-                {
-                    halfW = Math.Max(halfW, Math.Abs(v.X - centerX));
-                    halfH = Math.Max(halfH, Math.Abs(v.Y - centerY));
-                }
-                halfW *= 1.1f;
-                halfH *= 1.1f;
-                min = new Vec2(centerX - halfW, centerY - halfH);
-                max = new Vec2(centerX + halfW, centerY + halfH);
-                TacticalMapLog.Info("Battle bounds from soft-boundary centroid. vertices=" + softCount +
-                    " centroid=" + centerX + "," + centerY +
+                float marginX = (maxX - minX) * 0.1f;
+                float marginY = (maxY - minY) * 0.1f;
+                min = new Vec2(minX - marginX, minY - marginY);
+                max = new Vec2(maxX + marginX, maxY + marginY);
+                TacticalMapLog.Info("Battle bounds from soft-boundary AABB. vertices=" + softCount +
+                    " raw=" + minX + "," + minY + ".." + maxX + "," + maxY +
                     " bounds=" + min.X + "," + min.Y + ".." + max.X + "," + max.Y);
                 return true;
             }
@@ -505,105 +447,6 @@ namespace New_ZZZF.TacticalMap.Terrain
             min = Vec2.Zero;
             max = Vec2.Zero;
             return false;
-        }
-
-        private static bool TryComputeBattleFocus(Mission mission, Vec2 battleMin, Vec2 battleMax,
-            out Vec2 center,
-            out Vec2 attackerCenter, out Vec2 defenderCenter,
-            out string source,
-            out int attackerCount, out int defenderCount)
-        {
-            center = Vec2.Zero;
-            attackerCenter = Vec2.Zero;
-            defenderCenter = Vec2.Zero;
-            source = null;
-            attackerCount = 0;
-            defenderCount = 0;
-            if (mission == null || mission.AttackerTeam == null || mission.DefenderTeam == null)
-                return false;
-
-            // MissionScreen uses DeploymentPlan.GetZoomFocusFrame for its native tactical/deployment
-            // camera whenever the scene has no authored strategy camera. The midpoint of both teams'
-            // native focus frames is therefore the engine-owned centre of the active battlefield.
-            IMissionDeploymentPlan deploymentPlan = mission.DeploymentPlan;
-            if (deploymentPlan != null)
-            {
-                try
-                {
-                    if (deploymentPlan.IsPlanMade(mission.AttackerTeam) &&
-                        deploymentPlan.IsPlanMade(mission.DefenderTeam))
-                    {
-                        attackerCenter = deploymentPlan.GetZoomFocusFrame(mission.AttackerTeam).origin.AsVec2;
-                        defenderCenter = deploymentPlan.GetZoomFocusFrame(mission.DefenderTeam).origin.AsVec2;
-                        center = (attackerCenter + defenderCenter) * 0.5f;
-                        if (IsUsableBattleFocus(mission, attackerCenter, battleMin, battleMax) &&
-                            IsUsableBattleFocus(mission, defenderCenter, battleMin, battleMax) &&
-                            IsUsableBattleFocus(mission, center, battleMin, battleMax))
-                        {
-                            source = "DeploymentPlan.GetZoomFocusFrame";
-                            return true;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    TacticalMapLog.Warn("Native deployment zoom focus unavailable: " +
-                        ex.GetType().Name + ": " + ex.Message);
-                }
-
-                try
-                {
-                    attackerCenter = deploymentPlan.GetDeploymentZoneFrame(mission.AttackerTeam).origin.AsVec2;
-                    defenderCenter = deploymentPlan.GetDeploymentZoneFrame(mission.DefenderTeam).origin.AsVec2;
-                    center = (attackerCenter + defenderCenter) * 0.5f;
-                    if (IsUsableBattleFocus(mission, attackerCenter, battleMin, battleMax) &&
-                        IsUsableBattleFocus(mission, defenderCenter, battleMin, battleMax) &&
-                        IsUsableBattleFocus(mission, center, battleMin, battleMax))
-                    {
-                        source = "DeploymentPlan.GetDeploymentZoneFrame";
-                        return true;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    TacticalMapLog.Warn("Native deployment zone focus unavailable: " +
-                        ex.GetType().Name + ": " + ex.Message);
-                }
-            }
-
-            foreach (Agent agent in mission.AllAgents)
-            {
-                if (agent == null || !agent.IsHuman || !agent.IsActive() || agent.Team == null)
-                    continue;
-                Vec2 position = agent.Position.AsVec2;
-                if (agent.Team == mission.AttackerTeam)
-                {
-                    attackerCenter += position;
-                    attackerCount++;
-                }
-                else if (agent.Team == mission.DefenderTeam)
-                {
-                    defenderCenter += position;
-                    defenderCount++;
-                }
-            }
-
-            if (attackerCount == 0 || defenderCount == 0) return false;
-            attackerCenter *= 1f / attackerCount;
-            defenderCenter *= 1f / defenderCount;
-            center = (attackerCenter + defenderCenter) * 0.5f;
-            if (!IsUsableBattleFocus(mission, center, battleMin, battleMax)) return false;
-            source = "active-agent fallback";
-            return true;
-        }
-
-        private static bool IsUsableBattleFocus(Mission mission, Vec2 point, Vec2 battleMin, Vec2 battleMax)
-        {
-            if (!point.IsValid || point.X < battleMin.X || point.X > battleMax.X ||
-                point.Y < battleMin.Y || point.Y > battleMax.Y)
-                return false;
-            try { return mission.IsPositionInsideBoundaries(point); }
-            catch { return true; }
         }
 
         private void BuildBaseRGBA()

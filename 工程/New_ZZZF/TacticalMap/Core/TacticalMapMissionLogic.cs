@@ -11,7 +11,7 @@ namespace New_ZZZF.TacticalMap.Core
 {
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
-        private const int PhotoRevision = 27;
+        private const int PhotoRevision = 40;
 
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
@@ -19,7 +19,7 @@ namespace New_ZZZF.TacticalMap.Core
         private bool _ready;
         private bool _photoPublished;
         private float _heartbeatAccum;
-        private readonly TerrainPhotographerRev20 _photographer = TerrainPhotographerRev20.Instance;
+        private readonly SinglePhotoProofProbe _photographer = SinglePhotoProofProbe.Instance;
         private int _fpsFrames;
         private float _fpsAccum;
         private float _worstFrame;
@@ -72,7 +72,7 @@ namespace New_ZZZF.TacticalMap.Core
             _controller.SetVisible(_missionScreen, true);
             _controller.Tick(Mission, _missionScreen, dt);
             TacticalMapHtmlUi.Instance.Tick(dt);
-            TickPhotoCapture();
+            TickPhotoCapture(dt);
 
             float frame = Math.Max(0f, dt);
             _fpsFrames++;
@@ -125,10 +125,10 @@ namespace New_ZZZF.TacticalMap.Core
         private void InitializeController()
         {
             if (_initialized) return;
-            _initialized = true;
             if (Mission == null) return;
             if (!FeatureGate.Enabled || !MissionSceneGuard.IsTacticalMapSupported(Mission))
             {
+                _initialized = true;
                 _ready = false;
                 return;
             }
@@ -136,6 +136,7 @@ namespace New_ZZZF.TacticalMap.Core
             {
                 _controller = new TacticalMapController(Mission);
                 _ready = _controller.Initialize(Mission);
+                _initialized = true;
                 if (_ready)
                 {
                     SceneObstacleMap.Rebuild(_controller.Cache, Mission.Scene);
@@ -144,6 +145,7 @@ namespace New_ZZZF.TacticalMap.Core
             }
             catch (Exception ex)
             {
+                _initialized = true;
                 _ready = false;
                 TacticalMapLog.Error("Controller initialization failed.", ex);
             }
