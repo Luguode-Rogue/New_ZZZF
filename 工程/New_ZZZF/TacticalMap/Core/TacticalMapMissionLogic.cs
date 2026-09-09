@@ -11,14 +11,15 @@ namespace New_ZZZF.TacticalMap.Core
 {
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
-        private const int PhotoRevision = 12;
+        private const int PhotoRevision = 27;
 
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
         private bool _initialized;
         private bool _ready;
+        private bool _photoPublished;
         private float _heartbeatAccum;
-        private readonly TerrainPhotographerRev11 _photographer = TerrainPhotographerRev11.Instance;
+        private readonly TerrainPhotographerRev20 _photographer = TerrainPhotographerRev20.Instance;
         private int _fpsFrames;
         private float _fpsAccum;
         private float _worstFrame;
@@ -94,7 +95,7 @@ namespace New_ZZZF.TacticalMap.Core
             }
         }
 
-        private void TickPhotoCapture()
+        private void TickPhotoCapture(float dt)
         {
             if (_controller == null || !_ready) return;
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -102,8 +103,11 @@ namespace New_ZZZF.TacticalMap.Core
             try
             {
                 if (!_photographer.IsActive && !_photographer.IsCompleted && !_photographer.Failed)
-                    _photographer.Start(Mission, _controller.Cache);
+                    _photographer.Start(Mission, _controller.Cache, _missionScreen);
+                bool wasCompleted = _photographer.IsCompleted;
                 applied = _photographer.Tick();
+                if (wasCompleted && _controller.Cache.PhotoBaseRGBA != null && !_photoPublished)
+                    applied = true;
             }
             catch (Exception ex)
             {
@@ -111,7 +115,11 @@ namespace New_ZZZF.TacticalMap.Core
             }
             Diagnostics.TacticalMapPerf.Add(Diagnostics.TacticalMapPerf.PhotoTick,
                 System.Diagnostics.Stopwatch.GetTimestamp() - t0);
-            if (applied) TacticalMapHtmlUi.Instance.PublishState(true);
+            if (applied)
+            {
+                TacticalMapHtmlUi.Instance.PublishState(true);
+                _photoPublished = true;
+            }
         }
 
         private void InitializeController()
@@ -161,6 +169,7 @@ namespace New_ZZZF.TacticalMap.Core
             _controller = null;
             _ready = false;
             _initialized = false;
+            _photoPublished = false;
             _heartbeatAccum = 0f;
             base.OnEndMission();
         }

@@ -57,7 +57,7 @@ namespace New_ZZZF.TacticalMap.Core
         public bool Initialize(Mission mission)
         {
             if (mission == null || mission.Scene == null) return false;
-            if (!_cache.TryBake(mission.Scene)) return false;
+            if (!_cache.TryBake(mission.Scene, mission)) return false;
 
             // Use the game's actual AI navigation surface as the authoritative walkability layer.
             _navigationMap.Build(mission.Scene);

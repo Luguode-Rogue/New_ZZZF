@@ -32,6 +32,7 @@ namespace New_ZZZF.BattleHud
         private string _surfaceId;
         private bool _registered;
         private bool _shown;
+        private bool _captureSuspended;
         private float _publishAccum;
         private string _lastSignature;
 
@@ -75,7 +76,7 @@ namespace New_ZZZF.BattleHud
         /// <summary>战斗开始（由 BattleHudMissionLogic 驱动）。</summary>
         public void OnMissionStarted()
         {
-            if (!_registered || !HtmlUiService.IsReady || _shown) return;
+            if (_captureSuspended || !_registered || !HtmlUiService.IsReady || _shown) return;
             try
             {
                 if (HtmlUiService.Surfaces.Show(_surfaceId))
@@ -109,9 +110,33 @@ namespace New_ZZZF.BattleHud
             }
         }
 
+        public void SetCaptureSuspended(bool suspended)
+        {
+            if (_captureSuspended == suspended) return;
+            _captureSuspended = suspended;
+            if (suspended)
+            {
+                if (!_registered || !HtmlUiService.IsReady || !_shown) return;
+                try
+                {
+                    HtmlUiService.Surfaces.Hide(_surfaceId);
+                    _shown = false;
+                }
+                catch (Exception ex)
+                {
+                    TacticalMapLog.Error("[BattleHud] Capture hide failed.", ex);
+                }
+            }
+            else
+            {
+                OnMissionStarted();
+            }
+        }
+
         /// <summary>由 BattleHudMissionLogic.OnMissionTick 每帧驱动；内部 10Hz 节流。</summary>
         public void Tick(float dt)
         {
+            if (_captureSuspended) return;
             if (!_shown || !_registered || !HtmlUiService.IsReady) return;
 
             _publishAccum += Math.Max(0f, dt);

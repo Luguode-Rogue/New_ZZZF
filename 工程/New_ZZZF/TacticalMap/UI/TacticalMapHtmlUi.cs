@@ -32,6 +32,7 @@ namespace New_ZZZF.TacticalMap.UI
         private TacticalMapController _controller;
         private bool _registered;
         private bool _pageOpened;
+        private bool _captureSuspended;
         private float _publishAccum;
         private string _lastRuntimeSignature;
         private int _lastTerrainSignature;
@@ -186,9 +187,30 @@ namespace New_ZZZF.TacticalMap.UI
             try { HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden); } catch { }
         }
 
+        public void SetCaptureSuspended(bool suspended)
+        {
+            if (_captureSuspended == suspended) return;
+            _captureSuspended = suspended;
+            if (suspended)
+            {
+                try
+                {
+                    if (_pageOpened && _registered && HtmlUiService.IsReady)
+                        HtmlUiService.Pages.Close(_pageId);
+                }
+                catch (Exception ex) { TacticalMapLog.Error("TacticalMap capture hide failed.", ex); }
+                _pageOpened = false;
+                try { HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden); } catch { }
+            }
+            else if (_controller != null && _registered && HtmlUiService.IsReady)
+            {
+                OpenForMission();
+            }
+        }
+
         private void OpenForMission()
         {
-            if (_controller == null || !_registered || !HtmlUiService.IsReady || _pageOpened) return;
+            if (_captureSuspended || _controller == null || !_registered || !HtmlUiService.IsReady || _pageOpened) return;
             try
             {
                 if (!HtmlUiService.Pages.Open(_pageId)) return;
@@ -206,6 +228,7 @@ namespace New_ZZZF.TacticalMap.UI
 
         public void Tick(float dt)
         {
+            if (_captureSuspended) return;
             if (_controller == null) return;
             if (!_pageOpened && _registered && HtmlUiService.IsReady) OpenForMission();
             if (!_pageOpened) return;
