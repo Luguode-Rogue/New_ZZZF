@@ -42,6 +42,24 @@ namespace New_ZZZF.TacticalMap.Config
         /// </summary>
         public bool PhotoMapSwapRedBlue = true;
 
+        /// <summary>
+        /// 全地图瓦片拍摄（TerrainPhotoTileCapture）：单瓦片目标边长（米，指南北向）。
+        /// 越小 → 瓦片越多、细节越高、拍摄越久。默认 140m（典型战斗约 4×7=28 张）。
+        /// </summary>
+        public float PhotoTileWorldHeight = 140f;
+
+        /// <summary>
+        /// 瓦片视野相对格子的外扩比例（0~0.45）。相邻瓦片重叠区按羽化权重取
+        /// 离格心更近者，吸收地形高度差造成的接缝错位。
+        /// </summary>
+        public float PhotoTileOverlap = 0.15f;
+
+        /// <summary>合成底图长边像素上限（行 0 = 南、列 0 = 西，等比世界边界）。3072 ≈ 3.4px/m。</summary>
+        public int PhotoBufferMaxDim = 3072;
+
+        /// <summary>拍摄期间隐藏全部 Agent 视觉体，避免部队被烤进底图（结束时恢复）。</summary>
+        public bool HideAgentsInPhoto = true;
+
         public float CliffSlopeThreshold = 0.45f;
         public float CliffHeightJump = 1.6f;
         public float WaterHeightFraction = 0.05f;

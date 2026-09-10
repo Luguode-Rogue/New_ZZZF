@@ -97,8 +97,10 @@ namespace New_ZZZF.TacticalMap.Core
 
             if (inside)
             {
-                float u = (cursor.X - canvasLeft) / (float)canvasWidth;
-                float v = (cursor.Y - canvasTop) / (float)canvasHeight;
+                // 屏幕比例 → C# UV：与 tactical-map.js 的 screenU/screenV 互为逆运算
+                // （显示约定：北在上、东在右）。
+                float u = 1f - (cursor.X - canvasLeft) / (float)canvasWidth;
+                float v = 1f - (cursor.Y - canvasTop) / (float)canvasHeight;
 
                 if (leftDown && !_leftWasDown)
                 {

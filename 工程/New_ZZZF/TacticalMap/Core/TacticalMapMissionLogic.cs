@@ -11,7 +11,7 @@ namespace New_ZZZF.TacticalMap.Core
 {
     public sealed class TacticalMapMissionLogic : MissionLogic
     {
-        private const int PhotoRevision = 40;
+        private const int PhotoRevision = 52;
 
         private TacticalMapController _controller;
         private MissionScreen _missionScreen;
@@ -19,7 +19,9 @@ namespace New_ZZZF.TacticalMap.Core
         private bool _ready;
         private bool _photoPublished;
         private float _heartbeatAccum;
-        private readonly SinglePhotoProofProbe _photographer = SinglePhotoProofProbe.Instance;
+        // REV=50：生产版瓦片拍摄（全地图）。REV=40 的 SinglePhotoProofProbe 保留作为
+        // 已验证参照实现，不再由 MissionLogic 驱动。
+        private readonly Terrain.TerrainPhotoTileCapture _photographer = Terrain.TerrainPhotoTileCapture.Instance;
         private int _fpsFrames;
         private float _fpsAccum;
         private float _worstFrame;
@@ -98,6 +100,8 @@ namespace New_ZZZF.TacticalMap.Core
         private void TickPhotoCapture(float dt)
         {
             if (_controller == null || !_ready) return;
+            // 非拍照模式（全量烘焙路径）已有彩色底图，无需瓦片拍摄
+            if (!TacticalSettings.Instance.PhotoMap) return;
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
             bool applied = false;
             try

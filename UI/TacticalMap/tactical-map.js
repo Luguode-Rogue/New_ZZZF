@@ -91,12 +91,27 @@
     }
   }
 
+  // 显示朝向约定（2026-09-10 统一）：地图显示"北在上、东在右"——与拍照底图
+  // （PhotoMapDump 写出的 PNG 行 0 = 北）一致。
+  // C# WorldToUV 给的是 u=1-东西比例（西=1）、v=南北比例（南=0），
+  // 因此屏幕坐标要取 (1-u, 1-v)；朝向向量是世界坐标，东为 +x、北为 +y，
+  // 屏幕上 x 同向、y 反向（canvas y 向下）。
+  // 历史实现是"南在上、西在右"（整体旋转 180°），与底图差一个垂直翻转，
+  // 表现为地形与部队位置对不上——已统一为北在上。
   function screenU(mapU) {
-    return Number(mapU || 0);
+    return 1 - Number(mapU || 0);
+  }
+
+  function screenV(mapV) {
+    return 1 - Number(mapV || 0);
   }
 
   function screenFacingU(mapFacingU) {
-    return -Number(mapFacingU || 0);
+    return Number(mapFacingU || 0);
+  }
+
+  function screenFacingV(mapFacingV) {
+    return -Number(mapFacingV || 0);
   }
 
   function scheduleRender() {
@@ -244,7 +259,7 @@
       '<div class="detail-row"><span>编号</span><span>' + escapeHtml(f.name || '-') + '</span></div>' +
       '<div class="detail-row"><span>人数</span><span>' + Number(f.count || 0) + '</span></div>' +
       '<div class="detail-row"><span>位置</span><span>' + Number(f.u || 0).toFixed(3) + ', ' + Number(f.v || 0).toFixed(3) + '</span></div>' +
-      '<div class="detail-row"><span>指向</span><span>' + screenFacingU(f.facingU).toFixed(2) + ', ' + Number(f.facingV || 0).toFixed(2) + '</span></div>' +
+      '<div class="detail-row"><span>指向</span><span>' + screenFacingU(f.facingU).toFixed(2) + ', ' + screenFacingV(f.facingV).toFixed(2) + '</span></div>' +
       '<div class="detail-row"><span>当前命令点</span><span>' + orderText + '</span></div>';
   }
 
@@ -255,24 +270,21 @@
       // 拍照黑窗期：用 NavMesh 可行区域叠加层兜底提供地形参考
       if (navMeshCanvas) {
         ctx.save();
-        ctx.translate(x + w, y);
-        ctx.scale(-1, 1);
         ctx.globalAlpha = 0.58;
-        ctx.drawImage(navMeshCanvas, 0, 0, w, h);
+        ctx.drawImage(navMeshCanvas, x, y, w, h);
         ctx.restore();
       }
       return;
     }
+    // 底图 PNG 行 0 = 北、列 0 = 西，与"北在上、东在右"一致，直接绘制、不再镜像
     ctx.save();
-    ctx.translate(x + w, y);
-    ctx.scale(-1, 1);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(terrainCanvas, 0, 0, w, h);
+    ctx.drawImage(terrainCanvas, x, y, w, h);
     // 有真实地形照片后不再叠加 NavMesh 层（红边界污染照片画面）
 
     if (tacticalCanvas && staticState?.enableRisk) {
       ctx.globalAlpha = 0.46;
-      ctx.drawImage(tacticalCanvas, 0, 0, w, h);
+      ctx.drawImage(tacticalCanvas, x, y, w, h);
     }
     ctx.restore();
     ctx.strokeStyle = 'rgba(225,205,140,.70)';
@@ -317,7 +329,7 @@
     const s = runtimeState;
     if (!s) return;
     (s.formations || []).forEach((f, index) => {
-      const px = x + screenU(f.u) * w, py = y + f.v * h;
+      const px = x + screenU(f.u) * w, py = y + screenV(f.v) * h;
       const selected = index === selectedFormation;
       const stroke = f.enemy ? '#ff4c4c' : '#4ade80';
 
@@ -326,7 +338,7 @@
           px,
           py,
           x + screenU(f.orderU) * w,
-          y + f.orderV * h,
+          y + screenV(f.orderV) * h,
           selected ? '#ffe69a' : stroke);
       }
 
@@ -337,27 +349,27 @@
       ctx.fillStyle = selected ? '#ffe69a' : '#f4f6f7';
       ctx.font = selected ? 'bold 10px Segoe UI, Arial' : '10px Segoe UI, Arial';
       if (f.name) ctx.fillText(f.name, px + size + 3, py + 3);
-      drawArrow(px, py, screenFacingU(f.facingU), Number(f.facingV || 0), size + 5, selected ? '#ffe69a' : stroke, 1.2);
+      drawArrow(px, py, screenFacingU(f.facingU), screenFacingV(f.facingV), size + 5, selected ? '#ffe69a' : stroke, 1.2);
     });
 
     (s.agents || []).forEach(agent => {
-      const px = x + screenU(agent.u) * w, py = y + agent.v * h;
+      const px = x + screenU(agent.u) * w, py = y + screenV(agent.v) * h;
       ctx.fillStyle = agent.neutral ? '#b8bec4' : (agent.player ? '#28dbea' : '#ff3030');
       ctx.beginPath(); ctx.arc(px, py, 2.2, 0, Math.PI * 2); ctx.fill();
     });
 
     if (s.cameraTarget) {
-      const px = x + screenU(s.cameraTarget.u) * w, py = y + s.cameraTarget.v * h;
+      const px = x + screenU(s.cameraTarget.u) * w, py = y + screenV(s.cameraTarget.v) * h;
       ctx.save(); ctx.translate(px, py); ctx.rotate(Math.PI / 4);
       ctx.fillStyle = '#ff9d32'; ctx.fillRect(-6, -6, 12, 12); ctx.restore();
     }
 
     if (s.player) {
-      const px = x + screenU(s.player.u) * w, py = y + s.player.v * h;
+      const px = x + screenU(s.player.u) * w, py = y + screenV(s.player.v) * h;
       ctx.strokeStyle = '#28dbea'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = '#ffd43b'; ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
-      drawArrow(px, py, screenFacingU(s.player.facingU), Number(s.player.facingV || 0), 18, '#ffd43b', 1.5);
+      drawArrow(px, py, screenFacingU(s.player.facingU), screenFacingV(s.player.facingV), 18, '#ffd43b', 1.5);
     }
   }
 
@@ -401,14 +413,15 @@
     }
   }
 
+  // 屏幕坐标 → C# 的 UV（WorldToUV 约定：u=1-东西比例，v=南北比例），
+  // 与 screenU/screenV 互为逆运算，保证点击落点与显示位置一致。
   function getUv(event) {
     const rect = canvas.getBoundingClientRect();
     const m = mapRect();
     if (m.w <= 0 || m.h <= 0) return { u: 0, v: 0 };
-    return {
-      u: Math.min(1, Math.max(0, (event.clientX - rect.left - m.x) / m.w)),
-      v: Math.min(1, Math.max(0, (event.clientY - rect.top - m.y) / m.h))
-    };
+    const sx = Math.min(1, Math.max(0, (event.clientX - rect.left - m.x) / m.w));
+    const sy = Math.min(1, Math.max(0, (event.clientY - rect.top - m.y) / m.h));
+    return { u: 1 - sx, v: 1 - sy };
   }
 
   canvas.addEventListener('contextmenu', event => {
