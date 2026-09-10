@@ -18,6 +18,8 @@ mono_crash.*
 
 # Build results
 [Dd]ebug/
+!New_ZZZF/EquipmentAffixSystem/Debug/
+!New_ZZZF/EquipmentAffixSystem/Debug/AffixLifecycleDebugLog.cs
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
