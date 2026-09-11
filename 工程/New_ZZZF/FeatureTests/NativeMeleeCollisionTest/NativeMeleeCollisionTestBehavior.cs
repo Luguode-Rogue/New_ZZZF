@@ -14,7 +14,7 @@ namespace New_ZZZF.FeatureTests.NativeMeleeCollisionTest
         private bool _pendingTestHit;
         private float _pendingUntil;
 
-        public override MissionBehaviorType BehaviorType => MissionBehaviorType.Logic;
+        public override MissionBehaviorType BehaviorType => MissionBehaviorType.Other;
 
         public Agent.EventControlFlag OnCollectPlayerEventControlFlags()
         {
