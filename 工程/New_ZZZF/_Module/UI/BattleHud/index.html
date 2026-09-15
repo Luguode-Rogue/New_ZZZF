@@ -17,7 +17,9 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 body{pointer-events:none;user-select:none}
 #hud{position:fixed;inset:0;pointer-events:none}
 #hud.hidden{display:none}
-#vitals{position:absolute;right:16px;top:409px;width:400px;padding:10px 12px;border:1px solid var(--line);
+/* 右侧 HUD 统一容器：资源条在上，技能栏紧接其下，严格同宽。 */
+#rightHud{position:absolute;right:16px;top:409px;width:400px}
+#vitals{position:relative;width:100%;padding:10px 12px;border:1px solid var(--line);
   border-radius:10px;background:var(--panel);box-shadow:0 6px 24px rgba(0,0,0,.45)}
 .bar{position:relative;height:16px;margin-top:7px;border-radius:8px;background:rgba(0,0,0,.55);overflow:hidden;border:1px solid rgba(255,255,255,.06)}
 .bar:first-child{margin-top:0}
@@ -32,12 +34,12 @@ body{pointer-events:none;user-select:none}
 .badge.off{display:none}
 #gcdBadge{color:#ffd98a}
 
-/* 左下：原版血量条下侧；第一排四法术，第二排主/副/被动/战技。 */
-#skillbar{position:absolute;left:42px;bottom:18px;
-  display:grid;grid-template-columns:repeat(4,56px);grid-template-rows:repeat(2,56px);gap:6px;
+/* 资源条正下方：第一排四法术，第二排主/副/被动/战技。 */
+#skillbar{position:relative;width:100%;margin-top:8px;
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,56px);gap:6px;
   padding:8px 9px;border:1px solid var(--line);border-radius:11px;background:var(--panel);
   box-shadow:0 6px 24px rgba(0,0,0,.45)}
-.skill{position:relative;width:56px;height:56px;border:1px solid rgba(211,174,92,.25);border-radius:9px;
+.skill{position:relative;width:100%;height:56px;border:1px solid rgba(211,174,92,.25);border-radius:9px;
   background:rgba(8,6,4,.72);overflow:hidden}
 .skill.selected{border-color:var(--gold);box-shadow:0 0 0 1px rgba(232,195,110,.55),0 0 10px rgba(232,195,110,.25)}
 .skill .cdFill{position:absolute;left:0;right:0;bottom:0;height:0%;background:rgba(10,8,5,.78);
@@ -58,16 +60,18 @@ body{pointer-events:none;user-select:none}
 </head>
 <body>
 <div id="hud" class="hidden">
-  <div id="vitals">
-    <div class="bar stam"><div class="fill" id="stamFill"></div><div class="label"><span>耐力</span><span id="stamText"></span></div></div>
-    <div class="bar mana"><div class="fill" id="manaFill"></div><div class="label"><span>法力</span><span id="manaText"></span></div></div>
-    <div id="badges">
-      <span class="badge off" id="shieldBadge"></span>
-      <span class="badge off" id="livesBadge"></span>
-      <span class="badge off" id="gcdBadge">公共冷却</span>
+  <div id="rightHud">
+    <div id="vitals">
+      <div class="bar stam"><div class="fill" id="stamFill"></div><div class="label"><span>耐力</span><span id="stamText"></span></div></div>
+      <div class="bar mana"><div class="fill" id="manaFill"></div><div class="label"><span>法力</span><span id="manaText"></span></div></div>
+      <div id="badges">
+        <span class="badge off" id="shieldBadge"></span>
+        <span class="badge off" id="livesBadge"></span>
+        <span class="badge off" id="gcdBadge">公共冷却</span>
+      </div>
     </div>
+    <div id="skillbar"></div>
   </div>
-  <div id="skillbar"></div>
 </div>
 <script>
 (() => {
