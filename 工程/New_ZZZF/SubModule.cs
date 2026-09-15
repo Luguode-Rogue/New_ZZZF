@@ -182,8 +182,6 @@ namespace New_ZZZF
             if (NewZZZFDiag.BattleHud)
                 mission.AddMissionBehavior(new BattleHudMissionLogic());
 
-            // Feature test: Q triggers a native right-side melee attack.
-            mission.AddMissionBehavior(new FeatureTests.NativeMeleeCollisionTest.NativeMeleeCollisionTestBehavior());
         }
 
         protected override void OnSubModuleUnloaded()
