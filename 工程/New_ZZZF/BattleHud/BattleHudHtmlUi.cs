@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using BannerlordHtmlUI;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using New_ZZZF.TacticalMap.Diagnostics;
 
 namespace New_ZZZF.BattleHud
@@ -11,11 +10,11 @@ namespace New_ZZZF.BattleHud
     /// <summary>
     /// 战斗内 HTML HUD（耐力/法力/技能冷却等）。
     ///
-    /// 这是框架上第一个真正的 Surface 消费者：
-    ///  - 以 Surface（而非 Page）注册，声明 CoexistWithPage=true，因此 TacticalMap Page 打开时
-    ///    不会被 PageDominant 策略抑制，反而由 HtmlUiCoexistHost 直接挂载进地图页面文档；
-    ///  - Passive 输入需求，绝不参与输入聚合与屏蔽；
-    ///  - 由 BattleHudMissionLogic 随 Mission 生命周期 Show/Hide，10Hz 推送 + 签名去重。
+    /// 刷新策略：
+    ///  - AgentSkillComponent 在“HUD 可见值”发生变化时发 HudStateChanged；
+    ///  - 本类只把事件合并为 dirty 标记，并在 MissionTick 最多发布一次；
+    ///  - 不再固定 10Hz 轮询/序列化完整状态；
+    ///  - CD/GCD 以 0.1 秒、资源/护盾以整数为显示粒度，避免每帧浮点变化跨 HTMLUI 桥。
     /// </summary>
     public sealed class BattleHudHtmlUi : IDisposable
     {
@@ -23,7 +22,6 @@ namespace New_ZZZF.BattleHud
         private const string SurfaceName = "battlehud";
         private const string ContentRootName = "ui";
         private const string StateKey = "battleHud";
-        private const float PublishIntervalSeconds = 0.10f;
 
         private static readonly Lazy<BattleHudHtmlUi> _instance =
             new Lazy<BattleHudHtmlUi>(() => new BattleHudHtmlUi());
@@ -33,8 +31,9 @@ namespace New_ZZZF.BattleHud
         private bool _registered;
         private bool _shown;
         private bool _captureSuspended;
-        private float _publishAccum;
+        private bool _dirty = true;
         private string _lastSignature;
+        private AgentSkillComponent _boundComponent;
 
         public static BattleHudHtmlUi Instance => _instance.Value;
 
@@ -49,7 +48,6 @@ namespace New_ZZZF.BattleHud
         {
             if (_registered || !HtmlUiService.IsReady) return;
 
-            // 与 TacticalMapHtmlUi 相同的模块 UI 根推导：<模块根>\UI
             string assemblyDir = Path.GetDirectoryName(typeof(BattleHudHtmlUi).Assembly.Location) ?? ".";
             DirectoryInfo binDir = Directory.GetParent(assemblyDir);
             DirectoryInfo moduleDir = binDir == null ? null : Directory.GetParent(binDir.FullName);
@@ -73,7 +71,6 @@ namespace New_ZZZF.BattleHud
             TacticalMapLog.Info("[BattleHud] Surface registered. Root=" + uiRoot);
         }
 
-        /// <summary>战斗开始（由 BattleHudMissionLogic 驱动）。</summary>
         public void OnMissionStarted()
         {
             if (_captureSuspended || !_registered || !HtmlUiService.IsReady || _shown) return;
@@ -83,6 +80,8 @@ namespace New_ZZZF.BattleHud
                 {
                     _shown = true;
                     _lastSignature = null;
+                    _dirty = true;
+                    EnsureBoundComponent();
                     TacticalMapLog.Info("[BattleHud] Surface shown for mission.");
                     PublishState(true);
                 }
@@ -93,14 +92,23 @@ namespace New_ZZZF.BattleHud
             }
         }
 
-        /// <summary>战斗结束（由 BattleHudMissionLogic 驱动）。</summary>
         public void OnMissionEnded()
         {
-            if (!_registered || !HtmlUiService.IsReady || !_shown) return;
+            UnbindComponent();
+
+            if (!_registered || !HtmlUiService.IsReady || !_shown)
+            {
+                _shown = false;
+                _dirty = true;
+                _lastSignature = null;
+                return;
+            }
+
             try
             {
                 HtmlUiService.Surfaces.Hide(_surfaceId);
                 _shown = false;
+                _dirty = true;
                 _lastSignature = null;
                 TacticalMapLog.Info("[BattleHud] Surface hidden after mission.");
             }
@@ -114,13 +122,16 @@ namespace New_ZZZF.BattleHud
         {
             if (_captureSuspended == suspended) return;
             _captureSuspended = suspended;
+
             if (suspended)
             {
+                UnbindComponent();
                 if (!_registered || !HtmlUiService.IsReady || !_shown) return;
                 try
                 {
                     HtmlUiService.Surfaces.Hide(_surfaceId);
                     _shown = false;
+                    _dirty = true;
                 }
                 catch (Exception ex)
                 {
@@ -133,73 +144,106 @@ namespace New_ZZZF.BattleHud
             }
         }
 
-        /// <summary>由 BattleHudMissionLogic.OnMissionTick 每帧驱动；内部 10Hz 节流。</summary>
+        /// <summary>
+        /// MissionTick 只负责主角组件绑定检查与 dirty 合并发布，不做定时轮询。
+        /// </summary>
         public void Tick(float dt)
         {
-            if (_captureSuspended) return;
-            if (!_shown || !_registered || !HtmlUiService.IsReady) return;
+            _ = dt;
+            if (_captureSuspended || !_shown || !_registered || !HtmlUiService.IsReady) return;
 
-            _publishAccum += Math.Max(0f, dt);
-            if (_publishAccum < PublishIntervalSeconds) return;
-            _publishAccum = 0f;
-            PublishState(false);
+            EnsureBoundComponent();
+            if (_dirty)
+                PublishState(false);
+        }
+
+        private void EnsureBoundComponent()
+        {
+            AgentSkillComponent next = null;
+            var agent = TaleWorlds.MountAndBlade.Agent.Main;
+            if (agent != null && agent.IsActive())
+                SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out next);
+
+            if (ReferenceEquals(next, _boundComponent))
+                return;
+
+            UnbindComponent();
+            _boundComponent = next;
+            if (_boundComponent != null)
+                _boundComponent.HudStateChanged += OnHudStateChanged;
+
+            _dirty = true;
+        }
+
+        private void UnbindComponent()
+        {
+            if (_boundComponent != null)
+                _boundComponent.HudStateChanged -= OnHudStateChanged;
+            _boundComponent = null;
+        }
+
+        private void OnHudStateChanged(AgentSkillComponent component)
+        {
+            if (ReferenceEquals(component, _boundComponent))
+                _dirty = true;
         }
 
         private void PublishState(bool force)
         {
             if (!_shown || !_registered || _scope == null) return;
+            if (!force && !_dirty) return;
+
             try
             {
-                object state = BuildState();
+                object state = BuildState(_boundComponent);
                 string signature = JsonConvert.SerializeObject(state, Formatting.None);
-                if (!force && string.Equals(signature, _lastSignature, StringComparison.Ordinal)) return;
+                _dirty = false;
+
+                if (!force && string.Equals(signature, _lastSignature, StringComparison.Ordinal))
+                    return;
+
                 _lastSignature = signature;
                 _scope.SetState(StateKey, state);
             }
             catch (Exception ex)
             {
+                _dirty = true;
                 TacticalMapLog.Error("[BattleHud] State publish failed.", ex);
             }
         }
 
-        private static object BuildState()
+        private static object BuildState(AgentSkillComponent comp)
         {
-            var agent = TaleWorlds.MountAndBlade.Agent.Main;
-            AgentSkillComponent comp = null;
-            if (agent != null && agent.IsActive())
-                SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out comp);
-
             if (comp == null)
             {
                 return new
                 {
                     available = false,
-                    stamina = 0f,
-                    mana = 0f,
+                    stamina = 0,
+                    mana = 0,
                     gcd = 0f,
-                    shield = 0f,
+                    shield = 0,
                     lives = 0,
                     selectedSpellSlot = 0,
                     skills = Array.Empty<object>()
                 };
             }
 
-            // 全量 8 槽：空槽也上报（empty=true），前端固定布局显示"空"。
-            var skills = new List<object>();
+            var skills = new List<object>(8);
+            for (int i = 0; i < comp.SpellSlots.Length; i++)
+                AddSlot(skills, "spell" + i, comp.SpellSlots[i], comp, selected: i == comp.SelectedSpellSlot);
             AddSlot(skills, "main", comp.MainActiveSkill, comp, selected: false);
             AddSlot(skills, "sub", comp.SubActiveSkill, comp, selected: false);
             AddSlot(skills, "passive", comp.PassiveSkill, comp, selected: false);
             AddSlot(skills, "combat", comp.CombatArtSkill, comp, selected: false);
-            for (int i = 0; i < comp.SpellSlots.Length; i++)
-                AddSlot(skills, "spell" + i, comp.SpellSlots[i], comp, selected: i == comp.SelectedSpellSlot);
 
             return new
             {
                 available = true,
-                stamina = comp._currentStamina,
-                mana = comp._currentMana,
-                gcd = comp._globalCooldownTimer,
-                shield = comp._shieldStrength,
+                stamina = QuantizeWhole(comp._currentStamina),
+                mana = QuantizeWhole(comp._currentMana),
+                gcd = QuantizeTenths(comp._globalCooldownTimer),
+                shield = QuantizeWhole(comp._shieldStrength),
                 lives = comp._lifeResurgenceCount,
                 selectedSpellSlot = comp.SelectedSpellSlot,
                 skills
@@ -210,18 +254,32 @@ namespace New_ZZZF.BattleHud
         {
             if (skill == null || string.Equals(skill.SkillID, "NullSkill", StringComparison.OrdinalIgnoreCase))
             {
-                list.Add(new { slot, empty = true, id = string.Empty, name = string.Empty, cd = 0f, cdMax = 0f, cost = 0f, mana = false, selected, passive = false });
+                list.Add(new
+                {
+                    slot,
+                    empty = true,
+                    id = string.Empty,
+                    name = string.Empty,
+                    cd = 0f,
+                    cdMax = 0f,
+                    cost = 0f,
+                    mana = false,
+                    selected,
+                    passive = false
+                });
                 return;
             }
 
-            // 与 TryActivateSkill 的资源扣除保持一致：法术系耗法力，其余耗耐力。
             bool costsMana = skill.Type == SPSkillType.Spell
                 || skill.Type == SPSkillType.Passive_Spell
-                || skill.Type == SPSkillType.CombatArt_Spell;
+                || skill.Type == SPSkillType.CombatArt_Spell
+                || skill.Type == SPSkillType.Spell_CombatArt;
 
             float cdRemaining = 0f;
             if (comp._cooldownTimers.TryGetValue(skill, out float timer) && timer > 0f)
-                cdRemaining = timer;
+                cdRemaining = QuantizeTenths(timer);
+
+            bool isPassive = skill.Type == SPSkillType.Passive || skill.Type == SPSkillType.Passive_Spell;
 
             list.Add(new
             {
@@ -234,23 +292,39 @@ namespace New_ZZZF.BattleHud
                 cost = skill.ResourceCost,
                 mana = costsMana,
                 selected,
-                passive = skill.Type == SPSkillType.Passive
+                passive = isPassive
             });
+        }
+
+        private static int QuantizeWhole(float value)
+        {
+            if (value <= 0f) return 0;
+            return (int)Math.Floor(value + 0.5f);
+        }
+
+        private static float QuantizeTenths(float value)
+        {
+            if (value <= 0f) return 0f;
+            return (float)(Math.Ceiling((value - 0.0001f) * 10f) / 10.0);
         }
 
         public void Dispose()
         {
+            UnbindComponent();
             try
             {
                 if (_shown && _registered && HtmlUiService.IsReady)
                     HtmlUiService.Surfaces.Hide(_surfaceId);
             }
             catch { }
+
             try { _scope?.Dispose(); } catch { }
             _scope = null;
             _registered = false;
             _shown = false;
+            _dirty = true;
             _surfaceId = null;
+            _lastSignature = null;
         }
     }
 }

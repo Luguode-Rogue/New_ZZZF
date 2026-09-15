@@ -14,8 +14,8 @@
   <HeroChange>true</HeroChange>
   <!-- 词缀系统（MissionBehavior + CampaignBehavior + Ctrl+F5~F9）-->
   <Affix>true</Affix>
-  <!-- 兵种状态浮窗 Behavior-->
-  <AgentStatusView>true</AgentStatusView>
+  <!-- 战斗 HTML HUD（耐力/法力/技能冷却/技能槽）-->
+  <BattleHud>true</BattleHud>
   <!-- Harmony PatchAll（全部 [HarmonyPatch] 补丁，含 NewDamageModel）-->
   <HarmonyPatchAll>true</HarmonyPatchAll>
   <!-- 技能注册加载（true/SkillFactory/SkillConfig + L 键热重载）-->

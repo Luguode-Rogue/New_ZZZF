@@ -179,8 +179,6 @@ namespace New_ZZZF
             }
             if (NewZZZFDiag.Affix)
                 mission.AddMissionBehavior(new AffixMissionBehavior());
-            if (NewZZZFDiag.AgentStatusView)
-                mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
             if (NewZZZFDiag.BattleHud)
                 mission.AddMissionBehavior(new BattleHudMissionLogic());
 

@@ -32,12 +32,96 @@ namespace New_ZZZF
         private bool CombatArtFlag { get; set; } = false;// 是否处于战技准备状态
 
         //------------------------ 资源与状态 ------------------------
-        public float _currentMana = 100f;       // 当前法力值
-        public float _currentStamina = 100f;    // 当前耐力值
-        public float _globalCooldownTimer = 0f; // 公共CD计时器（仅法术）
+        private float _currentManaValue = 100f;
+        private float _currentStaminaValue = 100f;
+        private float _globalCooldownTimerValue = 0f;
+        private float _shieldStrengthValue = 0f;
+        private int _lifeResurgenceCountValue = 0;
+
+        /// <summary>
+        /// HUD 只在可见值发生变化时收到通知。资源/护盾按整数显示，CD/GCD 按 0.1 秒显示，
+        /// 避免每帧浮点变化触发 HTMLUI 跨进程状态同步。
+        /// </summary>
+        public event Action<AgentSkillComponent> HudStateChanged;
+
+        public float _currentMana
+        {
+            get => _currentManaValue;
+            set
+            {
+                int oldBucket = ToHudWholeBucket(_currentManaValue);
+                _currentManaValue = value;
+                if (oldBucket != ToHudWholeBucket(value))
+                    NotifyHudStateChanged();
+            }
+        }
+
+        public float _currentStamina
+        {
+            get => _currentStaminaValue;
+            set
+            {
+                int oldBucket = ToHudWholeBucket(_currentStaminaValue);
+                _currentStaminaValue = value;
+                if (oldBucket != ToHudWholeBucket(value))
+                    NotifyHudStateChanged();
+            }
+        }
+
+        public float _globalCooldownTimer
+        {
+            get => _globalCooldownTimerValue;
+            set
+            {
+                int oldBucket = ToHudTenthsBucket(_globalCooldownTimerValue);
+                _globalCooldownTimerValue = value;
+                if (oldBucket != ToHudTenthsBucket(value))
+                    NotifyHudStateChanged();
+            }
+        }
+
         public bool _isInCombatArtState;        // 是否处于战技准备状态
-        public float _shieldStrength = 0f; //护盾值
-        public int _lifeResurgenceCount = 0;//剩余复活次数
+
+        public float _shieldStrength
+        {
+            get => _shieldStrengthValue;
+            set
+            {
+                int oldBucket = ToHudWholeBucket(_shieldStrengthValue);
+                _shieldStrengthValue = value;
+                if (oldBucket != ToHudWholeBucket(value))
+                    NotifyHudStateChanged();
+            }
+        }
+
+        public int _lifeResurgenceCount
+        {
+            get => _lifeResurgenceCountValue;
+            set
+            {
+                if (_lifeResurgenceCountValue == value)
+                    return;
+                _lifeResurgenceCountValue = value;
+                NotifyHudStateChanged();
+            }
+        }
+
+        private static int ToHudWholeBucket(float value)
+        {
+            if (value <= 0f) return 0;
+            return (int)Math.Floor(value + 0.5f);
+        }
+
+        private static int ToHudTenthsBucket(float value)
+        {
+            if (value <= 0f) return 0;
+            return (int)Math.Ceiling((value - 0.0001f) * 10f);
+        }
+
+        private void NotifyHudStateChanged()
+        {
+            HudStateChanged?.Invoke(this);
+        }
 
         public int _beHitCount = 0;//受击次数记录
         public float _beHitTime = 0f;//受击间隔记录
@@ -66,6 +150,7 @@ namespace New_ZZZF
 
         // 冷却计时器（Key: 技能实例, Value: 剩余冷却时间）
         public readonly Dictionary<SkillBase, float> _cooldownTimers = new Dictionary<SkillBase, float>();
+        private readonly List<SkillBase> _cooldownKeysScratch = new List<SkillBase>();
 
         public AgentSkillComponent(Agent agent) : base(agent)
         {
@@ -108,6 +193,9 @@ namespace New_ZZZF
                 PassiveSkill.OnEquip(Agent);
                 Debug.Print($"[被动] {PassiveSkill.SkillID} 已生效");
             }
+
+            // 槽位初始化完成后一次性通知 HUD；HTML 端只在技能结构变化时重建 DOM。
+            NotifyHudStateChanged();
         }
 
         /// <summary>
@@ -128,8 +216,8 @@ namespace New_ZZZF
         /// </summary>
         public void CoolDownTick(float dt)
         {
-            _currentStamina += dt;
-            _currentMana += dt;
+            _currentStamina = MathF.Clamp(_currentStamina + dt, 0f, 100f);
+            _currentMana = MathF.Clamp(_currentMana + dt, 0f, 100f);
             _beHitTime -= dt;
             if (_beHitTime <= 0)
             {
@@ -165,13 +253,13 @@ namespace New_ZZZF
             {
                 if (scrollDelta > 0)
                 {
-                    _selectedSpellSlot = (_selectedSpellSlot + 1) % 4;
+                    SetSelectedSpellSlot((_selectedSpellSlot + 1) % 4);
                     if (SpellSlots[_selectedSpellSlot].SkillID != "NullSkill")
                         Script.SysOut(SpellSlots[_selectedSpellSlot].SkillID, Agent);
                 }
                 else if (scrollDelta < 0)
                 {
-                    _selectedSpellSlot = (_selectedSpellSlot - 1 + 4) % 4;
+                    SetSelectedSpellSlot((_selectedSpellSlot - 1 + 4) % 4);
                     if (SpellSlots[_selectedSpellSlot].SkillID != "NullSkill")
                         Script.SysOut(SpellSlots[_selectedSpellSlot].SkillID, Agent);
                 }
@@ -209,6 +297,15 @@ namespace New_ZZZF
         /// <summary>当前选中的法术栏位（0-3），供 HUD 等只读展示使用。</summary>
         public int SelectedSpellSlot => _selectedSpellSlot;
 
+        private void SetSelectedSpellSlot(int slot)
+        {
+            slot = (slot % 4 + 4) % 4;
+            if (_selectedSpellSlot == slot)
+                return;
+            _selectedSpellSlot = slot;
+            NotifyHudStateChanged();
+        }
+
 
         /// <summary>
         /// 尝试激活技能（核心逻辑）
@@ -234,6 +331,7 @@ namespace New_ZZZF
                     _currentStamina = Math.Max(0, _currentStamina - skill.ResourceCost);
                 }
                 _cooldownTimers[skill] = skill.Cooldown;
+                NotifyHudStateChanged();
 
 
                 // 触发公共CD（仅法术）
@@ -286,39 +384,54 @@ namespace New_ZZZF
         /// <param name="skillType"></param>
         public void UpdateCooldowns(float dt, SPSkillType skillType = SPSkillType.None)
         {
-            List<SkillBase> expiredSkills = new List<SkillBase>();
-            // 使用临时变量来存储剩余时间，避免直接修改字典
-            var timersToUpdate = new Dictionary<SkillBase, float>(_cooldownTimers);
+            if (_cooldownTimers.Count == 0)
+                return;
 
-            foreach (var entry in timersToUpdate)
+            // 复用 key 缓冲区，避免英雄每帧 new Dictionary 复制整个冷却表。
+            _cooldownKeysScratch.Clear();
+            foreach (SkillBase skill in _cooldownTimers.Keys)
+                _cooldownKeysScratch.Add(skill);
+
+            bool hudChanged = false;
+            foreach (SkillBase skill in _cooldownKeysScratch)
             {
-                bool matchedType = ((entry.Key.Type == SPSkillType.Spell || entry.Key.Type == SPSkillType.Spell_CombatArt) && skillType == SPSkillType.Spell) ||
-                    (entry.Key.Type == SPSkillType.MainActive && skillType == SPSkillType.MainActive) ||
-                    (entry.Key.Type == SPSkillType.SubActive && skillType == SPSkillType.SubActive) ||
-                    ((entry.Key.Type == SPSkillType.Passive || entry.Key.Type == SPSkillType.Passive_Spell) && skillType == SPSkillType.Passive);
-                if (skillType == SPSkillType.None || matchedType)
-                {
-                    float remainingTime = entry.Value - dt;
-                    if (remainingTime <= 0)
-                    {
-                        expiredSkills.Add(entry.Key);
-                        _cooldownTimers.Remove(entry.Key); // 直接在这里移除，因为我们使用的是副本
-                    }
-                    else
-                    {
-                        _cooldownTimers[entry.Key] = remainingTime; // 更新剩余时间
-                    }
-                }
+                if (!_cooldownTimers.TryGetValue(skill, out float oldRemaining))
+                    continue;
 
+                bool matchedType = ((skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt) && skillType == SPSkillType.Spell) ||
+                    (skill.Type == SPSkillType.MainActive && skillType == SPSkillType.MainActive) ||
+                    (skill.Type == SPSkillType.SubActive && skillType == SPSkillType.SubActive) ||
+                    ((skill.Type == SPSkillType.Passive || skill.Type == SPSkillType.Passive_Spell) && skillType == SPSkillType.Passive);
+
+                if (skillType != SPSkillType.None && !matchedType)
+                    continue;
+
+                float newRemaining = oldRemaining - dt;
+                int oldBucket = ToHudTenthsBucket(oldRemaining);
+
+                if (newRemaining <= 0f)
+                {
+                    _cooldownTimers.Remove(skill);
+                    if (oldBucket != 0)
+                        hudChanged = true;
+                }
+                else
+                {
+                    _cooldownTimers[skill] = newRemaining;
+                    if (oldBucket != ToHudTenthsBucket(newRemaining))
+                        hudChanged = true;
+                }
             }
+
+            if (hudChanged)
+                NotifyHudStateChanged();
         }
 
         private void UpdateGlobalCooldown(float dt)
         {
-            if (_globalCooldownTimer > 0)
+            if (_globalCooldownTimer > 0f)
             {
-                //Script.SysOut(_globalCooldownTimer.ToString(),this.AgentInstance);
-                _globalCooldownTimer -= dt;
+                _globalCooldownTimer = Math.Max(0f, _globalCooldownTimer - dt);
             }
         }
         /// <summary>

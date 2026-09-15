@@ -36,9 +36,6 @@ namespace New_ZZZF
         /// <summary>Affix 词缀系统：AffixMissionBehavior + AffixCampaignBehavior + Ctrl+F5~F9 调试热键</summary>
         public static bool Affix = true;
 
-        /// <summary>NewZZZF_MissionAgentStatusView（兵种状态浮窗）</summary>
-        public static bool AgentStatusView = true;
-
         /// <summary>BattleHudHtmlUi（战斗 HTML HUD：耐力/法力/技能冷却 Surface）</summary>
         public static bool BattleHud = true;
 
@@ -131,8 +128,6 @@ namespace New_ZZZF
                         new XElement("HeroChange", HeroChange.ToString().ToLowerInvariant()),
                         new XComment(" 词缀系统（MissionBehavior + CampaignBehavior + Ctrl+F5~F9）"),
                         new XElement("Affix", Affix.ToString().ToLowerInvariant()),
-                        new XComment(" 兵种状态浮窗 Behavior"),
-                        new XElement("AgentStatusView", AgentStatusView.ToString().ToLowerInvariant()),
                         new XComment(" 战斗 HTML HUD（耐力/法力/技能冷却 Surface）"),
                         new XElement("BattleHud", BattleHud.ToString().ToLowerInvariant()),
                         new XComment(" Harmony PatchAll（全部 [HarmonyPatch] 补丁，含 NewDamageModel）"),
@@ -161,7 +156,6 @@ namespace New_ZZZF
             if (TryParseBool(root.Element("MountedSlashCamera")?.Value, out v)) MountedSlashCamera = v;
             if (TryParseBool(root.Element("HeroChange")?.Value, out v)) HeroChange = v;
             if (TryParseBool(root.Element("Affix")?.Value, out v)) Affix = v;
-            if (TryParseBool(root.Element("AgentStatusView")?.Value, out v)) AgentStatusView = v;
             if (TryParseBool(root.Element("BattleHud")?.Value, out v)) BattleHud = v;
             if (TryParseBool(root.Element("HarmonyPatchAll")?.Value, out v)) HarmonyPatchAll = v;
             if (TryParseBool(root.Element("SkillRegistry")?.Value, out v)) SkillRegistry = v;
