@@ -186,8 +186,6 @@ namespace New_ZZZF
             if (NewZZZFDiag.BattleHud)
                 mission.AddMissionBehavior(new BattleHudMissionLogic());
 
-            // 旧功能测试已完成使命，保留源码但停止注册，避免 Q 键继续触发测试攻击。
-            // mission.AddMissionBehavior(new FeatureTests.NativeMeleeCollisionTest.NativeMeleeCollisionTestBehavior());
         }
 
         protected override void OnSubModuleUnloaded()

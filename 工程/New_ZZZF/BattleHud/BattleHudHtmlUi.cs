@@ -14,7 +14,8 @@ namespace New_ZZZF.BattleHud
     ///  - AgentSkillComponent 在“HUD 可见值”发生变化时发 HudStateChanged；
     ///  - 本类只把事件合并为 dirty 标记，并在 MissionTick 最多发布一次；
     ///  - 不再固定 10Hz 轮询/序列化完整状态；
-    ///  - CD/GCD 以 0.1 秒、资源/护盾以整数为显示粒度，避免每帧浮点变化跨 HTMLUI 桥。
+    ///  - 技能 CD/GCD 只在开始、结束或主动延长时跨桥同步，倒计时由 HTML 本地绘制；
+    ///  - 资源/护盾按整数变化通知，避免每帧浮点变化跨 HTMLUI 桥。
     /// </summary>
     public sealed class BattleHudHtmlUi : IDisposable
     {

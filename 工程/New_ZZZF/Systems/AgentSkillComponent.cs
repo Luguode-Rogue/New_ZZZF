@@ -74,13 +74,17 @@ namespace New_ZZZF
             get => _globalCooldownTimerValue;
             set
             {
-                if (ToHudTenthsBucket(_globalCooldownTimerValue) == ToHudTenthsBucket(value))
-                {
-                    _globalCooldownTimerValue = value;
-                    return;
-                }
-                _globalCooldownTimerValue = value;
-                NotifyHudStateChanged();
+                float oldValue = _globalCooldownTimerValue;
+                float newValue = value > 0f ? value : 0f;
+                _globalCooldownTimerValue = newValue;
+
+                // GCD 倒计时由 HTML 本地显示。这里只在开始、结束或被主动延长时通知，
+                // 避免倒计时期间每 0.1 秒跨 HTMLUI 桥刷新整份 HUD 状态。
+                bool wasActive = oldValue > 0.0001f;
+                bool isActive = newValue > 0.0001f;
+                bool extended = isActive && newValue > oldValue + 0.05f;
+                if (wasActive != isActive || extended)
+                    NotifyHudStateChanged();
             }
         }
         public bool _isInCombatArtState;        // 是否处于战技准备状态
@@ -144,11 +148,6 @@ namespace New_ZZZF
         private static int ToHudWholeBucket(float value)
         {
             return value <= 0f ? 0 : (int)Math.Floor(value + 0.5f);
-        }
-
-        private static int ToHudTenthsBucket(float value)
-        {
-            return value <= 0f ? 0 : (int)Math.Ceiling((value - 0.0001f) * 10f);
         }
 
         private void NotifyHudStateChanged()
@@ -237,8 +236,10 @@ namespace New_ZZZF
         /// </summary>
         public void CoolDownTick(float dt)
         {
-            _currentStamina += dt;
-            _currentMana += dt;
+            if (_currentStamina < 100f)
+                _currentStamina = TaleWorlds.Library.MathF.Clamp(_currentStamina + dt, 0f, 100f);
+            if (_currentMana < 100f)
+                _currentMana = TaleWorlds.Library.MathF.Clamp(_currentMana + dt, 0f, 100f);
             _beHitTime -= dt;
             if (_beHitTime <= 0)
             {
@@ -474,28 +475,35 @@ namespace New_ZZZF
             foreach (SkillBase key in _cooldownTimers.Keys)
                 _cooldownKeysScratch.Add(key);
 
-            bool hudChanged = false;
+            bool anyCooldownFinished = false;
             for (int i = 0; i < _cooldownKeysScratch.Count; i++)
             {
                 SkillBase key = _cooldownKeysScratch[i];
                 if (!_cooldownTimers.TryGetValue(key, out float value))
                     continue;
+
                 bool matchedType = ((key.Type == SPSkillType.Spell || key.Type == SPSkillType.Spell_CombatArt) && skillType == SPSkillType.Spell) ||
                     (key.Type == SPSkillType.MainActive && skillType == SPSkillType.MainActive) ||
                     (key.Type == SPSkillType.SubActive && skillType == SPSkillType.SubActive) ||
                     ((key.Type == SPSkillType.Passive || key.Type == SPSkillType.Passive_Spell) && skillType == SPSkillType.Passive);
-                if (skillType == SPSkillType.None || matchedType)
+
+                if (skillType != SPSkillType.None && !matchedType)
+                    continue;
+
+                float remainingTime = value - dt;
+                if (remainingTime <= 0f)
                 {
-                    float remainingTime = value - dt;
-                    if (ToHudTenthsBucket(value) != ToHudTenthsBucket(remainingTime))
-                        hudChanged = true;
-                    if (remainingTime <= 0)
-                        _cooldownTimers.Remove(key);
-                    else
-                        _cooldownTimers[key] = remainingTime;
+                    _cooldownTimers.Remove(key);
+                    anyCooldownFinished = true;
+                }
+                else
+                {
+                    _cooldownTimers[key] = remainingTime;
                 }
             }
-            if (hudChanged)
+
+            // 冷却中的视觉倒计时由 HTML 本地完成；C# 只在冷却真正结束时再同步一次。
+            if (anyCooldownFinished)
                 NotifyHudStateChanged();
         }
 

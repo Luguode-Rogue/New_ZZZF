@@ -86,7 +86,86 @@ body{pointer-events:none;user-select:none}
   const LAYOUT = ['spell0','spell1','spell2','spell3','main','sub','passive','combat'];
   let skillsBySlot = {};
   let lastStructureSig = '';
+  let latestState = null;
+  let countdownInterval = 0;
+  const localCooldowns = new Map();
+  let localGcd = { remaining: 0, max: 0, stamp: 0 };
   const fmt = v => Math.round(Number(v) || 0);
+  const nowMs = () => (window.performance && typeof window.performance.now === 'function')
+    ? window.performance.now()
+    : Date.now();
+
+  function remainingOf(timer, now) {
+    if (!timer || timer.remaining <= 0) return 0;
+    return Math.max(0, timer.remaining - (now - timer.stamp) / 1000);
+  }
+
+  function syncLocalCountdowns(state) {
+    const now = nowMs();
+    const seen = new Set();
+
+    for (const s of (state.skills || [])) {
+      seen.add(s.slot);
+      const cd = Math.max(0, Number(s.cd) || 0);
+      if (cd > 0.001) {
+        localCooldowns.set(s.slot, { remaining: cd, stamp: now });
+      } else {
+        localCooldowns.delete(s.slot);
+      }
+    }
+
+    for (const slot of Array.from(localCooldowns.keys())) {
+      if (!seen.has(slot)) localCooldowns.delete(slot);
+    }
+
+    const gcd = Math.max(0, Number(state.gcd) || 0);
+    if (gcd > 0.001) {
+      const oldRemaining = remainingOf(localGcd, now);
+      const continuing = oldRemaining > 0.001;
+      localGcd = {
+        remaining: gcd,
+        max: continuing ? Math.max(localGcd.max, gcd) : gcd,
+        stamp: now
+      };
+    } else {
+      localGcd = { remaining: 0, max: 0, stamp: now };
+    }
+
+    updateCountdownLoop();
+  }
+
+  function hasActiveCountdown(now) {
+    if (remainingOf(localGcd, now) > 0.001) return true;
+    for (const timer of localCooldowns.values()) {
+      if (remainingOf(timer, now) > 0.001) return true;
+    }
+    return false;
+  }
+
+  function updateCountdownLoop() {
+    const active = hasActiveCountdown(nowMs());
+    if (active && !countdownInterval) {
+      countdownInterval = window.setInterval(() => {
+        if (!latestState || !latestState.available) {
+          window.clearInterval(countdownInterval);
+          countdownInterval = 0;
+          return;
+        }
+
+        const now = nowMs();
+        updateSkillCells(latestState, now);
+        updateGcdBadge(now);
+
+        if (!hasActiveCountdown(now)) {
+          window.clearInterval(countdownInterval);
+          countdownInterval = 0;
+        }
+      }, 100);
+    } else if (!active && countdownInterval) {
+      window.clearInterval(countdownInterval);
+      countdownInterval = 0;
+    }
+  }
 
   function renderBar(fillId, textId, cur, max) {
     const pct = max > 0 ? Math.max(0, Math.min(100, (Number(cur) / max) * 100)) : 0;
@@ -127,8 +206,10 @@ body{pointer-events:none;user-select:none}
     }
   }
 
-  function updateSkillCells(state) {
-    const gcd = Number(state.gcd) > 0.01;
+  function updateSkillCells(state, now) {
+    now = now || nowMs();
+    const gcdRemaining = remainingOf(localGcd, now);
+    const gcd = gcdRemaining > 0.01;
     const cells = skillbar.querySelectorAll('.skill');
 
     for (const cell of cells) {
@@ -158,9 +239,10 @@ body{pointer-events:none;user-select:none}
         continue;
       }
 
-      const cd = Math.max(0, Number(s.cd) || 0);
+      const cd = remainingOf(localCooldowns.get(s.slot), now);
       const cdMax = Math.max(0.01, Number(s.cdMax) || 0.01);
-      const gcdRatio = (gcd && s.mana) ? Math.min(1, Number(state.gcd) / 2) : 0;
+      const gcdMax = Math.max(0.01, Number(localGcd.max) || 0.01);
+      const gcdRatio = (gcd && s.mana) ? Math.min(1, gcdRemaining / gcdMax) : 0;
       const ratio = Math.max(cd > 0 ? cd / cdMax : 0, gcdRatio);
 
       fill.style.height = Math.min(100, ratio * 100) + '%';
@@ -172,13 +254,23 @@ body{pointer-events:none;user-select:none}
     }
   }
 
+  function updateGcdBadge(now) {
+    const gcdOn = remainingOf(localGcd, now || nowMs()) > 0.01;
+    document.getElementById('gcdBadge').classList.toggle('off', !gcdOn);
+  }
+
   function render(state) {
+    latestState = state;
     if (!state || !state.available) {
+      localCooldowns.clear();
+      localGcd = { remaining: 0, max: 0, stamp: nowMs() };
+      updateCountdownLoop();
       hud.classList.add('hidden');
       return;
     }
 
     hud.classList.remove('hidden');
+    syncLocalCountdowns(state);
     renderBar('stamFill', 'stamText', state.stamina, 100);
     renderBar('manaFill', 'manaText', state.mana, 100);
 
@@ -192,10 +284,10 @@ body{pointer-events:none;user-select:none}
     livesBadge.classList.toggle('off', lives <= 0);
     livesBadge.textContent = '复活 ' + lives;
 
-    document.getElementById('gcdBadge').classList.toggle('off', Number(state.gcd) <= 0.01);
-
     renderSkillBar(state.skills);
-    updateSkillCells(state);
+    const now = nowMs();
+    updateSkillCells(state, now);
+    updateGcdBadge(now);
   }
 
   app.state.subscribe('battleHud', render);
