@@ -1,0 +1,29 @@
+Compatibility 目录功能说明
+
+本目录用于处理 New_ZZZF 与当前 Bannerlord API 之间的签名差异，让较旧的调用方式可以继续编译和运行。
+
+当前文件：
+Bannerlord150Compatibility.cs
+
+主要兼容内容：
+
+1. PerkHelper
+   - 兼容骑砍新版 PerkHelper 增加 BattleEnvironment 参数后的调用方式。
+   - 旧调用会自动使用 BattleEnvironment.Any。
+   - 当前主要被以下代码使用：
+     - Systems/NewDamageModel.cs
+     - Systems/WoW_DefaultPartySpeedCalculatingModel.cs
+
+2. MobileParty.HasPerk
+   - 兼容新版 HasPerk 需要 out Hero 参数的变化。
+   - 让旧的 mobileParty.HasPerk(perk, bool) 调用仍可使用。
+   - 当前主要被 Systems/WoW_DefaultPartySpeedCalculatingModel.cs 使用。
+
+3. MenuContext.OpenTroopSelection
+   - 兼容部队选择界面 OpenTroopSelection 参数变化。
+   - 当前主要被 Systems/HeroChangeCampaignBehavior.cs 使用。
+
+注意：
+- 这里不是独立玩法系统，也不是测试代码。
+- 在上述调用点全部改成当前 Bannerlord 原生 API 之前，不要直接删除 Compatibility 目录。
+- 后续如果完成 API 迁移，可以删除这些兼容包装，并同步删除本说明文件。
