@@ -216,8 +216,8 @@ namespace New_ZZZF
         /// </summary>
         public void CoolDownTick(float dt)
         {
-            _currentStamina = MathF.Clamp(_currentStamina + dt, 0f, 100f);
-            _currentMana = MathF.Clamp(_currentMana + dt, 0f, 100f);
+            _currentStamina = TaleWorlds.Library.MathF.Clamp(_currentStamina + dt, 0f, 100f);
+            _currentMana = TaleWorlds.Library.MathF.Clamp(_currentMana + dt, 0f, 100f);
             _beHitTime -= dt;
             if (_beHitTime <= 0)
             {

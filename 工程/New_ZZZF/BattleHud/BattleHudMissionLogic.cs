@@ -6,7 +6,7 @@ namespace New_ZZZF.BattleHud
 {
     /// <summary>
     /// 随 Mission 生命周期驱动的战斗 HUD MissionLogic：
-    /// 开战 Show Surface、每帧 Tick（内部 10Hz 节流）、终局 Hide。
+    /// 开战 Show Surface、每帧 Tick（仅合并并发布来源事件标记的 dirty 状态）、终局 Hide。
     /// </summary>
     public sealed class BattleHudMissionLogic : MissionLogic
     {
