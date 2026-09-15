@@ -11,6 +11,9 @@ using TaleWorlds.MountAndBlade.View.MissionViews;
 using TaleWorlds.MountAndBlade.View.Screens;
 using TaleWorlds.ScreenSystem;
 
+// 旧 Rush/RushToAgentBuff 实现保留供追溯。活动实现位于
+// Skills/SubActive/ChongCiZhan.cs 与 Systems/Movement/RushMovementMissionLogic.cs。
+#if false
 namespace New_ZZZF
 {
     internal class Rush : SkillBase
@@ -148,4 +151,4 @@ namespace New_ZZZF
         }
     }
 }
-
+#endif

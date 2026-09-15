@@ -45,7 +45,8 @@ namespace New_ZZZF
                 {"NaGouCiFu",new NaGouCiFu() },
                 {"JianQiCiFu",new JianQiCiFu() },
                 {"HuHuanFengBao",new HuHuanFengBao() },
-                {"ZhaoHuan",new ZhaoHuan半成品() },
+                {"ZhanShiHuHuan",new ZhanShiHuHuan() },
+                {"SheShouFuJi",new SheShouFuJi() },
                 {"HuoYanTuXi",new HuoYanTuXi() },
                 {"XieEZuZhou",new XieEZuZhou() },
                 {"DaDiJianTa",new DaDiJianTa() },
@@ -61,7 +62,7 @@ namespace New_ZZZF
             
                 //// 副主动技能
                 { "BaseZhanJi", new BaseZhanJi() },
-                { "Rush", new Rush() },             // Rush
+                { "ChongCiZhan", new ChongCiZhan() },
                 {"MagicShoot",new MagicShoot() },
 
                 {"HouYueSheJi",new HouYueSheJi() },
@@ -69,6 +70,7 @@ namespace New_ZZZF
                 //// 被动技能
 
                 {"ShengZhuangWuBu",new ShengZhuangWuBu() },
+                {"QiangLiZhaoHuan",new QiangLiZhaoHuan() },
                 //// 法术
                 { "Fireball", new FireballSkill() },               // 火球术
                 { "lingmashaodi", new lingmashaodi() },               // 

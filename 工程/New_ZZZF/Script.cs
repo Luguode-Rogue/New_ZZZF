@@ -656,18 +656,21 @@ namespace New_ZZZF
                 // EquipmentIndex转MissionWeapon
                 MissionWeapon mainHandEquipmentElement = agent.Equipment[mainHandIndex];
                 // 获取主手装备元素的修正后的导弹速度
-                float baseSpeed = -1;
+                // 优先采用原生射击回调记录到的实际弹速；角色尚未射过第一箭时，
+                // 直接使用当前武器面板弹速，不能让魔法射击依赖一次预热射击。
+                float baseSpeed = mainHandEquipmentElement.CurrentUsageItem.IsRangedWeapon
+                    ? mainHandEquipmentElement.GetModifiedMissileSpeedForCurrentUsage()
+                    : -1f;
                 SkillSystemBehavior.WoW_AgentMissileSpeedData.TryGetValue(agent.Index, out var list);
-                if (list == null)
+                if (list != null)
                 {
-                    SysOut("无弹道速度记录，需要进行一次射击", agent);
-                    return false;
-                }
-                foreach (AgentMissileSpeedData item in list)
-                {
-                    if (item.Weapon.Item.Id == mainHandEquipmentElement.Item.Id)
+                    foreach (AgentMissileSpeedData item in list)
                     {
-                        baseSpeed = item.MissileSpeed;
+                        if (item.Weapon.Item.Id == mainHandEquipmentElement.Item.Id)
+                        {
+                            baseSpeed = item.MissileSpeed;
+                            break;
+                        }
                     }
                 }
                 //if(baseSpeed == -1)
@@ -683,6 +686,11 @@ namespace New_ZZZF
                 Vec3 headPosition = agent.GetEyeGlobalPosition();
 
                 int index = Script.FireProjectileFromAgentWithWeaponAtPosition(agent, agent.Equipment[mainHandIndex], mainHandEquipmentElement, headPosition, mat3.f, baseSpeed);
+                if (index <= 0)
+                {
+                    SysOut("投射物创建失败", agent);
+                    return false;
+                }
                 return true;
             }
             else
@@ -942,6 +950,142 @@ namespace New_ZZZF
             SysOut(2, agent);
             return 0;
         }
+
+        /// <summary>
+        /// 对一个已经选定的目标进行低开销预判射击。不会扫描或排序任务中的 Agent；
+        /// 只读取当前武器、当前目标速度，并进行固定两次提前量修正。
+        /// </summary>
+        public static bool TryShootAtAgentLowCost(Agent shooter, Agent target, bool useHighArc)
+        {
+            if (!TryPrepareLowCostShot(shooter, target, useHighArc,
+                    out MissionWeapon shotWeapon, out MissionWeapon ammoWeapon,
+                    out Vec3 start, out Vec3 shotDirection, out float missileSpeed))
+                return false;
+
+            return FireProjectileFromAgentWithWeaponAtPosition(
+                shooter, shotWeapon, ammoWeapon, start,
+                shotDirection.NormalizedCopy(), missileSpeed) > 0;
+        }
+
+        /// <summary>
+        /// AI 施法前的纯检查：必须确实持有弹药，并能以当前武器弹速解出到当前
+        /// 目标的弹道。不会创建投射物、遍历战场或修改 Agent 状态。
+        /// </summary>
+        public static bool CanShootAtAgentLowCost(Agent shooter, Agent target, bool useHighArc)
+        {
+            return TryPrepareLowCostShot(shooter, target, useHighArc,
+                out _, out _, out _, out _, out _);
+        }
+
+        private static bool TryPrepareLowCostShot(
+            Agent shooter,
+            Agent target,
+            bool useHighArc,
+            out MissionWeapon shotWeapon,
+            out MissionWeapon ammoWeapon,
+            out Vec3 start,
+            out Vec3 shotDirection,
+            out float missileSpeed)
+        {
+            shotWeapon = MissionWeapon.Invalid;
+            ammoWeapon = MissionWeapon.Invalid;
+            start = Vec3.Invalid;
+            shotDirection = Vec3.Invalid;
+            missileSpeed = -1f;
+            if (shooter == null || target == null || shooter.Equipment == null ||
+                !shooter.IsActive() || !target.IsActive() || target.Health <= 0f ||
+                shooter == target || !shooter.IsEnemyOf(target))
+                return false;
+
+            EquipmentIndex weaponIndex = shooter.GetPrimaryWieldedItemIndex();
+            if (weaponIndex == EquipmentIndex.None)
+                return false;
+            shotWeapon = shooter.Equipment[weaponIndex];
+            if (shotWeapon.IsEmpty || shotWeapon.CurrentUsageItem == null ||
+                !shotWeapon.CurrentUsageItem.IsRangedWeapon)
+                return false;
+
+            missileSpeed = shotWeapon.GetModifiedMissileSpeedForCurrentUsage();
+            if (SkillSystemBehavior.WoW_AgentMissileSpeedData.TryGetValue(shooter.Index, out var speeds) &&
+                speeds != null)
+            {
+                for (int i = 0; i < speeds.Count; i++)
+                {
+                    AgentMissileSpeedData speedData = speeds[i];
+                    if (speedData.Weapon.Item.Id == shotWeapon.Item.Id)
+                    {
+                        missileSpeed = speedData.MissileSpeed;
+                        break;
+                    }
+                }
+            }
+            if (missileSpeed <= 0.01f)
+                return false;
+
+            if (!TryGetActualAmmoWeapon(shooter, shotWeapon, out ammoWeapon))
+                return false;
+
+            start = shooter.GetEyeGlobalPosition();
+            Vec3 targetVelocity = target.MovementVelocity.ToVec3();
+            if (SkillSystemBehavior.ActiveComponents.TryGetValue(
+                    target.Index, out AgentSkillComponent component) && component?.Speed != null &&
+                component.Speed.speed.IsValid && component.Speed.speed.LengthSquared <= 2500f)
+                targetVelocity = component.Speed.speed;
+
+            Vec3 targetEye = target.GetEyeGlobalPosition();
+            Vec3 predicted = targetEye;
+            for (int i = 0; i < 2; i++)
+            {
+                shotDirection = CalculateProjectileFiringSolution(
+                    start, predicted, missileSpeed, 9.81f, useHighArc);
+                if (!shotDirection.IsValid || shotDirection.LengthSquared < 0.01f)
+                    return false;
+                float horizontalSpeed = missileSpeed * shotDirection.AsVec2.Length;
+                if (horizontalSpeed <= 0.01f)
+                    return false;
+                float flightTime = (predicted - start).AsVec2.Length / horizontalSpeed;
+                if (float.IsNaN(flightTime) || float.IsInfinity(flightTime) || flightTime > 15f)
+                    return false;
+                predicted = targetEye + targetVelocity * flightTime;
+            }
+            return true;
+        }
+
+        private static bool TryGetActualAmmoWeapon(
+            Agent shooter, MissionWeapon shotWeapon, out MissionWeapon ammoWeapon)
+        {
+            ammoWeapon = MissionWeapon.Invalid;
+            WeaponComponentData usage = shotWeapon.CurrentUsageItem;
+            if (usage == null)
+                return false;
+
+            // 投矛、飞斧等消耗品本身就是投射物。
+            if (usage.IsConsumable)
+            {
+                if (shotWeapon.Amount <= 0)
+                    return false;
+                ammoWeapon = shotWeapon;
+                return true;
+            }
+
+            WeaponClass ammoClass = usage.AmmoClass;
+            if (ammoClass == WeaponClass.Undefined)
+                return false;
+            for (EquipmentIndex index = EquipmentIndex.WeaponItemBeginSlot;
+                 index < EquipmentIndex.NumAllWeaponSlots; index++)
+            {
+                MissionWeapon candidate = shooter.Equipment[index];
+                if (candidate.IsEmpty || candidate.Amount <= 0 ||
+                    candidate.CurrentUsageItem == null)
+                    continue;
+                if (candidate.CurrentUsageItem.WeaponClass == ammoClass)
+                {
+                    ammoWeapon = candidate;
+                    return true;
+                }
+            }
+            return false;
+        }
         /// <summary>
         /// 自瞄弹道计算，任意位置射击某目标vagent
         /// </summary>
@@ -1015,7 +1159,11 @@ namespace New_ZZZF
         /// <returns></returns>
         public static int FireProjectileFromAgentWithWeaponAtPosition(Agent shotAgent, MissionWeapon ShotWeapon, MissionWeapon AmmoWeapon, Vec3 StartPos, Vec3 StartDirOrEndPos, float MissileRealSpeed = -1)
         {
-            return 0;
+            if (shotAgent == null || shotAgent.Mission == null || ShotWeapon.IsEmpty ||
+                ShotWeapon.CurrentUsageItem == null || AmmoWeapon.IsEmpty ||
+                AmmoWeapon.CurrentUsageItem == null || !StartPos.IsValid || !StartDirOrEndPos.IsValid)
+                return 0;
+
             //需要设定一个缺省值，避免传入的物品是近战武器，从而无法获取弹药速度
             //首先是根据传递进来的ShotWeapon获取AddCustomMissile需要的missile的speed属性，如果传递进来一个近战武器，则固定使用30的速度，差不多是投矛的弹速。
             ////更新：两个speed知道怎么回事了，投射物真实速度是在OnAgentShootMissile里 进行获取，然后进行记录，再在这里使用
@@ -1103,6 +1251,12 @@ namespace New_ZZZF
         /// <returns></returns>
         public static Vec3 CalculateProjectileFiringSolution(Vec3 start, Vec3 end, float speed, float gravity)
         {
+            return CalculateProjectileFiringSolution(start, end, speed, gravity, false);
+        }
+
+        public static Vec3 CalculateProjectileFiringSolution(
+            Vec3 start, Vec3 end, float speed, float gravity, bool useHighArc)
+        {
             // 计算水平距离
             Vec2 horizontalDistance = new Vec2(end.x - start.x, end.y - start.y);
             float horizontalRange = horizontalDistance.Length;
@@ -1124,7 +1278,9 @@ namespace New_ZZZF
             float sqrtValue = (float)Math.Sqrt(sqrtTerm);
 
             // 取两个可能的解中较小的一个（较高的一个将是较大的发射角）
-            float angle = (float)Math.Atan2(speedSquared - sqrtValue, gravity * horizontalRange);
+            float angle = (float)Math.Atan2(
+                speedSquared + (useHighArc ? sqrtValue : -sqrtValue),
+                gravity * horizontalRange);
 
             // 将发射角转换为方向向量
             Vec3 firingSolution = new Vec3(horizontalDistance.x, horizontalDistance.y, 0);

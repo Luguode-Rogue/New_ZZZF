@@ -102,8 +102,24 @@ namespace New_ZZZF
         /// 物品说明-技能说明
         /// </summary>
         public TextObject Description { get; set; } 
+        /// <summary>最近一次 Activate 返回 false 时的可读原因，供战场 Display 输出。</summary>
+        public string LastActivationFailureReason { get; protected set; }
+
+        public void ResetActivationFailureReason()
+        {
+            LastActivationFailureReason = null;
+        }
+
+        protected bool FailActivation(string reason)
+        {
+            LastActivationFailureReason = reason;
+            return false;
+        }
+
         /// <summary>技能是否有效（默认可用；组合法术可重写为“至少一个投射物”）。</summary>
         public virtual bool IsValid => true;
+        /// <summary>是否允许在原生攻击、瞄准等动作进行期间发动。默认关闭。</summary>
+        public virtual bool CanActivateWhilePerformingAction => false;
         // ========== 核心方法 ==========
         /// <summary>
         /// 激活技能的主逻辑（必须由子类实现）

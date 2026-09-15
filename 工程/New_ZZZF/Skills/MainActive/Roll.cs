@@ -46,7 +46,10 @@ namespace New_ZZZF
         
         public override bool Activate(Agent agent)
         {
-            if (agent.MountAgent == null && !SkillSystemBehavior.WoW_AgentRushPos.ContainsKey(agent.Index))
+            RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
+            if (movement == null)
+                return FailActivation("当前任务未加载强制移动管理器。");
+            if (agent.MountAgent == null && !movement.IsRushing(agent))
             {
                 Vec3 vec3 = Vec3.Invalid;
                 float f = 0f;
@@ -123,35 +126,19 @@ namespace New_ZZZF
                 //射线检测阻挡物
                 Mission.Current.Scene.RayCastForClosestEntityOrTerrain(agent.GetEyeGlobalPosition(), agent.Position + Script.MultiplyVectorByScalar(lookR.f, 7), out f, out vec3);
                 //如果没有阻挡物但是距离过远或者射线检测没有碰撞
-                if (f < 7)
+                Vec3 destination = f < 7f
+                    ? vec3
+                    : agent.Position + Script.MultiplyVectorByScalar(lookR.f, 7f);
+                RushMovementOptions options = new RushMovementOptions
                 {
-
-                    SkillSystemBehavior.WoW_AgentRushPos.Add(agent.Index, vec3);
-                    // 每次创建新的状态实例
-                    List<AgentBuff> newStates = new List<AgentBuff>
-                            {
-                                new RushToPosBuff(1.25f, 0f, agent), // 新实例
-                            };
-                    foreach (var state in newStates)
-                    {
-                        state.TargetAgent = agent;
-                        agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                    }
-                }
-                else
-                {
-                    SkillSystemBehavior.WoW_AgentRushPos.Add(agent.Index, agent.Position + Script.MultiplyVectorByScalar(lookR.f, 7));
-                    // 每次创建新的状态实例
-                    List<AgentBuff> newStates = new List<AgentBuff>
-                            {
-                                new RushToPosBuff(1.25f, 0f, agent), // 新实例
-                            };
-                    foreach (var state in newStates)
-                    {
-                        state.TargetAgent = agent;
-                        agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                    }
-                }
+                    Duration = 1.25f,
+                    StopDistance = 0.35f,
+                    SpeedLimit = 15f,
+                    SpeedLimitIsMultiplier = false,
+                    AllowMounted = false
+                };
+                if (!movement.TryRushToPosition(agent, destination, options, out string failureReason))
+                    return FailActivation(failureReason ?? "翻滚目标地点不可到达。");
                 agent.SetActionChannel(0, ActionIndexCache.Create("act_horse_fall_roll"));
                 agent.SetCurrentActionProgress(0, 0.3f);
                 agent.SetCurrentActionSpeed(0, 2f);
@@ -165,6 +152,8 @@ namespace New_ZZZF
            return skillBase.Activate(agent);
         }
     }
+    // 旧 RushToPosBuff 保留供追溯，但新 RushMovementMissionLogic 已完全接管其职责。
+#if false
     public class RushToPosBuff : AgentBuff
     {
         public float speed;
@@ -173,7 +162,7 @@ namespace New_ZZZF
         {
             StateId = "RushToPosBuff";
             Duration = duration;
-            speed = speed;
+            this.speed = speed;
             SourceAgent = source;
             _timeSinceLastTick = 0; // 新增初始化
         }
@@ -201,4 +190,5 @@ namespace New_ZZZF
             
         }
     }
+#endif
 }

@@ -78,6 +78,9 @@ namespace New_ZZZF
             }
             if ((vimagent.GetEyeGlobalPosition() - agent.GetEyeGlobalPosition()).Length > 10)
             {
+                agent.SetTargetAgent(vimagent);
+                // 旧的玩家锁定反射保留但停用；新的结束回调会安全恢复目标锁定。
+#if false
                 MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
                 MissionMainAgentController missionMainAgentController = missionScreen.Mission.GetMissionBehavior<MissionMainAgentController>();
 
@@ -97,22 +100,32 @@ namespace New_ZZZF
 
                 // 调用私有 setter 方法
                 setMethod.Invoke(missionMainAgentController, new object[] { vimagent });
-                if (!SkillSystemBehavior.WoW_AgentRushAgent.ContainsKey(agent.Index))
-                { 
-                    SkillSystemBehavior.WoW_AgentRushAgent.Add(agent.Index, vimagent);
-                    // 每次创建新的状态实例
-                    newStates = new List<AgentBuff>{ new RushToAgentBuff(0.75f, 0f, agent),};
-                    foreach (var state in newStates)
+#endif
+                RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
+                if (movement == null)
+                    return FailActivation("当前任务未加载强制移动管理器。");
+                RushMovementOptions movementOptions = new RushMovementOptions
+                {
+                    Duration = 0.75f,
+                    StopDistance = 1.5f,
+                    SpeedLimit = 30.2f,
+                    SpeedLimitIsMultiplier = false,
+                    AllowMounted = true,
+                    OnEnded = (mover, target, reason) =>
                     {
-                        state.TargetAgent = vimagent;
-                        agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
+                        if (mover != null && mover.IsActive() && target != null && target.IsActive())
+                            FinishShadowStep(mover, target);
                     }
-                }
+                };
+                if (!movement.TryRushToAgent(agent, vimagent, movementOptions, out string failureReason))
+                    return FailActivation(failureReason ?? "无法接近暗影步目标。");
                 return true;
             }
             else
             {
-                agent.TeleportToPosition(vimagent.GetEyeGlobalPosition() + Script.MultiplyVectorByScalar(vimagent.LookDirection, -2f));
+                FinishShadowStep(agent, vimagent);
+                // 旧重复锁定反射保留但停用；FinishShadowStep 已完成同一职责并带空值保护。
+#if false
                 MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
                 MissionMainAgentController missionMainAgentController= missionScreen.Mission.GetMissionBehavior<MissionMainAgentController>();
                 
@@ -132,24 +145,41 @@ namespace New_ZZZF
 
                 // 调用私有 setter 方法
                 setMethod.Invoke(missionMainAgentController, new object[] { vimagent });
+#endif
 
                 return true;
             }
             return false;
         }
 
+        private static void FinishShadowStep(Agent agent, Agent target)
+        {
+            agent.TeleportToPosition(target.GetEyeGlobalPosition() +
+                                     Script.MultiplyVectorByScalar(target.LookDirection, -2f));
+            agent.SetTargetAgent(target);
+            if (!agent.IsMainAgent)
+                return;
+
+            MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
+            MissionMainAgentController controller = missionScreen?.Mission?
+                .GetMissionBehavior<MissionMainAgentController>();
+            PropertyInfo lockedAgentProperty = typeof(MissionMainAgentController)
+                .GetProperty("LockedAgent", BindingFlags.Public | BindingFlags.Instance);
+            MethodInfo setMethod = lockedAgentProperty?.GetSetMethod(true);
+            if (controller != null && setMethod != null)
+                setMethod.Invoke(controller, new object[] { target });
+        }
+
     }
     public class 暗影步增伤 : AgentBuff
     {
         private float _damagePerSecond;
-        private float _timeSinceLastTick;
         public 暗影步增伤(float duration, float dps, Agent source)
         {
             StateId = "暗影步增伤";
             Duration = duration;
             _damagePerSecond = 0;
             SourceAgent = source;
-            _timeSinceLastTick = 0; // 新增初始化
         }
 
         public override void OnApply(Agent agent)
@@ -158,16 +188,6 @@ namespace New_ZZZF
 
         public override void OnUpdate(Agent agent, float dt)
         {
-            // 累积伤害时间
-            _timeSinceLastTick += dt;
-
-            // 每秒触发一次伤害
-            if (_timeSinceLastTick >= 1f)
-            {
-                InformationManager.DisplayMessage(new InformationMessage("暗影步增伤"));
-
-                _timeSinceLastTick -= 1f; // 重置计时器
-            }
         }
 
         public override void OnRemove(Agent agent)

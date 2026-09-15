@@ -174,17 +174,21 @@ namespace New_ZZZF
             }
             else
             {
-                if (!SkillSystemBehavior.WoW_AgentRushPos.ContainsKey(agent.Index))
+                RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
+                if (movement == null)
+                    return FailActivation("当前任务未加载强制移动管理器。");
+                Vec3 rushDestination = agent.GetEyeGlobalPosition() +
+                                       Script.MultiplyVectorByScalar(agent.LookDirection.AsVec2.ToVec3(), 10f);
+                RushMovementOptions movementOptions = new RushMovementOptions
                 {
-                    SkillSystemBehavior.WoW_AgentRushPos.Add(agent.Index, agent.GetEyeGlobalPosition()+Script.MultiplyVectorByScalar(agent.LookDirection.AsVec2.ToVec3(),10));
-                    // 每次创建新的状态实例
-                    newStates = new List<AgentBuff> { new RushToPosBuff(1.75f, 0f, agent)};
-                    foreach (var state in newStates)
-                    {
-                        state.TargetAgent = agent;
-                        agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                    }
-                }
+                    Duration = 1.75f,
+                    StopDistance = 0.5f,
+                    SpeedLimit = 15f,
+                    SpeedLimitIsMultiplier = false,
+                    AllowMounted = true
+                };
+                if (!movement.TryRushToPosition(agent, rushDestination, movementOptions, out string failureReason))
+                    return FailActivation(failureReason ?? "突袭目标地点不可到达。");
                 if (agent != null)
                 {
 

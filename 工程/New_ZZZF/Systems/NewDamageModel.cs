@@ -700,6 +700,34 @@ namespace New_ZZZF
 
     public class WOW_CustomBattleAgentStatCalculateModel : CustomBattleAgentStatCalculateModel
     {
+#if false
+        // 仅提高 Max 不会推动人物达到目标速度；由安全连续位移实现替代。
+        public override void UpdateAgentStats(
+            Agent agent,
+            AgentDrivenProperties agentDrivenProperties)
+        {
+            base.UpdateAgentStats(agent, agentDrivenProperties);
+            if (agent != null && agent.IsHuman &&
+                RushMovementMissionLogic.IsOnFootChongCiZhanRush(agent))
+            {
+                agentDrivenProperties.MaxSpeedMultiplier = 5f;
+                agentDrivenProperties.CombatMaxSpeedMultiplier = 5f;
+            }
+        }
+#endif
+        public override void UpdateAgentStats(
+            Agent agent,
+            AgentDrivenProperties agentDrivenProperties)
+        {
+            base.UpdateAgentStats(agent, agentDrivenProperties);
+            if (agent != null && agent.IsHuman &&
+                RushMovementMissionLogic.IsMountedChongCiZhanCharge(agent))
+            {
+                agentDrivenProperties.MountSpeed *= 2f;
+                agentDrivenProperties.MountDashAccelerationMultiplier *= 2f;
+            }
+        }
+
         public override float GetWeaponDamageMultiplier(
             Agent agent,
             WeaponComponentData weapon)
@@ -712,6 +740,20 @@ namespace New_ZZZF
 
     public class WOW_SandboxAgentApplyDamageModel : SandboxAgentApplyDamageModel
     {
+        public override bool DecideAgentKnockedDownByBlow(
+            Agent attackerAgent,
+            Agent victimAgent,
+            in AttackCollisionData collisionData,
+            WeaponComponentData attackerWeapon,
+            in Blow blow)
+        {
+            if (RushMovementMissionLogic.ShouldForceHorseChargeKnockDown(
+                attackerAgent, victimAgent, in collisionData))
+                return true;
+            return base.DecideAgentKnockedDownByBlow(
+                attackerAgent, victimAgent, in collisionData, attackerWeapon, in blow);
+        }
+
         public override bool DecideCrushedThrough(
             Agent attackerAgent,
             Agent defenderAgent,
@@ -766,6 +808,20 @@ namespace New_ZZZF
 
     public class WOW_CustomAgentApplyDamageModel : CustomAgentApplyDamageModel
     {
+        public override bool DecideAgentKnockedDownByBlow(
+            Agent attackerAgent,
+            Agent victimAgent,
+            in AttackCollisionData collisionData,
+            WeaponComponentData attackerWeapon,
+            in Blow blow)
+        {
+            if (RushMovementMissionLogic.ShouldForceHorseChargeKnockDown(
+                attackerAgent, victimAgent, in collisionData))
+                return true;
+            return base.DecideAgentKnockedDownByBlow(
+                attackerAgent, victimAgent, in collisionData, attackerWeapon, in blow);
+        }
+
         public override bool DecideCrushedThrough(
             Agent attackerAgent,
             Agent defenderAgent,

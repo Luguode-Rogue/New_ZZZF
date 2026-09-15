@@ -5,7 +5,7 @@
 		<MainActive>HuiJianYuanZhen</MainActive>
 
 		<!-- 副主动技能 -->
-		<SubActive>AdrenalineRush</SubActive>
+		<SubActive>ChongCiZhan</SubActive>
 
 		<!-- 被动栏（仅允许一个） -->
 		<Passive>IronWill</Passive>

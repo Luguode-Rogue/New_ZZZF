@@ -30,6 +30,26 @@ using TaleWorlds.CampaignSystem.MapEvents;
 using TaleWorlds.CampaignSystem.Party;
 namespace New_ZZZF.Harmonys
 {
+    /// <summary>
+    /// 临时召唤物不参与战役伤亡士气结算。
+    /// 这同时规避 SandboxBattleMoraleModel 在无击杀者离场时访问 affectorAgent.Formation 的空引用。
+    /// </summary>
+    [HarmonyPatch(typeof(SandboxBattleMoraleModel), nameof(SandboxBattleMoraleModel.CalculateMaxMoraleChangeDueToAgentIncapacitatedExplained))]
+    internal static class SummonedAgentMoralePatch
+    {
+        [HarmonyPrefix]
+        private static bool Prefix(Agent affectedAgent, ref ValueTuple<ExplainedNumber, ExplainedNumber> __result)
+        {
+            if (!SummonManagerMissionLogic.IsManagedSummon(affectedAgent))
+                return true;
+
+            __result = new ValueTuple<ExplainedNumber, ExplainedNumber>(
+                new ExplainedNumber(0f, false, null),
+                new ExplainedNumber(0f, false, null));
+            return false;
+        }
+    }
+
     [HarmonyPatch(typeof(RangedSiegeWeapon), "GetBallisticErrorAppliedDirection")]
     static class GetBallisticErrorAppliedDirection_Patch
     {

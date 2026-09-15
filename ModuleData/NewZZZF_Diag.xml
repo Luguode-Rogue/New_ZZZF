@@ -3,7 +3,7 @@
 <!-- 排查矩阵：① 全 false 测基线；② 仅开 HarmonyPatchAll；③ 逐组开 Behavior-->
 <NewZZZFDiag>
   <!-- TacticalMap 战术地图（初始化/挂载/N键/Tick）-->
-  <TacticalMap>true</TacticalMap>
+  <TacticalMap>false</TacticalMap>
   <!-- 技能 HTML 界面（CustomSkillHtmlUi 初始化/Tick/M键）-->
   <CustomSkillHtmlUi>true</CustomSkillHtmlUi>
   <!-- 战斗内技能系统 Behavior-->

@@ -32,96 +32,12 @@ namespace New_ZZZF
         private bool CombatArtFlag { get; set; } = false;// 是否处于战技准备状态
 
         //------------------------ 资源与状态 ------------------------
-        private float _currentManaValue = 100f;
-        private float _currentStaminaValue = 100f;
-        private float _globalCooldownTimerValue = 0f;
-        private float _shieldStrengthValue = 0f;
-        private int _lifeResurgenceCountValue = 0;
-
-        /// <summary>
-        /// HUD 只在可见值发生变化时收到通知。资源/护盾按整数显示，CD/GCD 按 0.1 秒显示，
-        /// 避免每帧浮点变化触发 HTMLUI 跨进程状态同步。
-        /// </summary>
-        public event Action<AgentSkillComponent> HudStateChanged;
-
-        public float _currentMana
-        {
-            get => _currentManaValue;
-            set
-            {
-                int oldBucket = ToHudWholeBucket(_currentManaValue);
-                _currentManaValue = value;
-                if (oldBucket != ToHudWholeBucket(value))
-                    NotifyHudStateChanged();
-            }
-        }
-
-        public float _currentStamina
-        {
-            get => _currentStaminaValue;
-            set
-            {
-                int oldBucket = ToHudWholeBucket(_currentStaminaValue);
-                _currentStaminaValue = value;
-                if (oldBucket != ToHudWholeBucket(value))
-                    NotifyHudStateChanged();
-            }
-        }
-
-        public float _globalCooldownTimer
-        {
-            get => _globalCooldownTimerValue;
-            set
-            {
-                int oldBucket = ToHudTenthsBucket(_globalCooldownTimerValue);
-                _globalCooldownTimerValue = value;
-                if (oldBucket != ToHudTenthsBucket(value))
-                    NotifyHudStateChanged();
-            }
-        }
-
+        public float _currentMana = 100f;       // 当前法力值
+        public float _currentStamina = 100f;    // 当前耐力值
+        public float _globalCooldownTimer = 0f; // 公共CD计时器（仅法术）
         public bool _isInCombatArtState;        // 是否处于战技准备状态
-
-        public float _shieldStrength
-        {
-            get => _shieldStrengthValue;
-            set
-            {
-                int oldBucket = ToHudWholeBucket(_shieldStrengthValue);
-                _shieldStrengthValue = value;
-                if (oldBucket != ToHudWholeBucket(value))
-                    NotifyHudStateChanged();
-            }
-        }
-
-        public int _lifeResurgenceCount
-        {
-            get => _lifeResurgenceCountValue;
-            set
-            {
-                if (_lifeResurgenceCountValue == value)
-                    return;
-                _lifeResurgenceCountValue = value;
-                NotifyHudStateChanged();
-            }
-        }
-
-        private static int ToHudWholeBucket(float value)
-        {
-            if (value <= 0f) return 0;
-            return (int)Math.Floor(value + 0.5f);
-        }
-
-        private static int ToHudTenthsBucket(float value)
-        {
-            if (value <= 0f) return 0;
-            return (int)Math.Ceiling((value - 0.0001f) * 10f);
-        }
-
-        private void NotifyHudStateChanged()
-        {
-            HudStateChanged?.Invoke(this);
-        }
+        public float _shieldStrength = 0f; //护盾值
+        public int _lifeResurgenceCount = 0;//剩余复活次数
 
         public int _beHitCount = 0;//受击次数记录
         public float _beHitTime = 0f;//受击间隔记录
@@ -150,12 +66,16 @@ namespace New_ZZZF
 
         // 冷却计时器（Key: 技能实例, Value: 剩余冷却时间）
         public readonly Dictionary<SkillBase, float> _cooldownTimers = new Dictionary<SkillBase, float>();
-        private readonly List<SkillBase> _cooldownKeysScratch = new List<SkillBase>();
+        private readonly List<SkillBase> _cooldownKeysScratch = new List<SkillBase>(8);
+        private const float AiDecisionInterval = 0.5f;
+        private float _aiDecisionTimer;
 
         public AgentSkillComponent(Agent agent) : base(agent)
         {
             MaxHP = agent.Health;
             Speed = new AgentSpeed(agent);
+            // 将 AI 检查均匀分散到 0.5 秒窗口，避免整支部队在同一帧做战术判断。
+            _aiDecisionTimer = (agent.Index % 10) * (AiDecisionInterval / 10f);
         }
 
         public bool HasSkill(string skill)
@@ -191,11 +111,7 @@ namespace New_ZZZF
             if (PassiveSkill != null)
             {
                 PassiveSkill.OnEquip(Agent);
-                Debug.Print($"[被动] {PassiveSkill.SkillID} 已生效");
             }
-
-            // 槽位初始化完成后一次性通知 HUD；HTML 端只在技能结构变化时重建 DOM。
-            NotifyHudStateChanged();
         }
 
         /// <summary>
@@ -205,19 +121,37 @@ namespace New_ZZZF
         {
             if (!Agent.IsActive()) return;
 
-            // 玩家控制时处理输入
+            // 主角在冲刺斩期间会暂时切换为 AI Controller，让原生导航负责移动。
+            // 身份仍然是 MainAgent，不能因此进入普通士兵的自动施法逻辑。
+            if (Agent.IsMainAgent)
+            {
+                if (Agent.IsPlayerControlled)
+                    HandlePlayerInput(dt);
+                return;
+            }
+
             if (Agent.IsPlayerControlled)
                 HandlePlayerInput(dt);
             else
-                HandleAIBehaviorOfTick(dt);
+            {
+                _aiDecisionTimer -= dt;
+                if (_aiDecisionTimer <= 0f)
+                {
+                    // 加而不是直接赋值，避免帧长波动造成长期同步。
+                    _aiDecisionTimer += AiDecisionInterval;
+                    if (_aiDecisionTimer <= 0f)
+                        _aiDecisionTimer = AiDecisionInterval;
+                    HandleAIBehaviorOfTick();
+                }
+            }
         }
         /// <summary>
         /// 手动调用的每帧更新方法（由MissionBehavior驱动）
         /// </summary>
         public void CoolDownTick(float dt)
         {
-            _currentStamina = TaleWorlds.Library.MathF.Clamp(_currentStamina + dt, 0f, 100f);
-            _currentMana = TaleWorlds.Library.MathF.Clamp(_currentMana + dt, 0f, 100f);
+            _currentStamina += dt;
+            _currentMana += dt;
             _beHitTime -= dt;
             if (_beHitTime <= 0)
             {
@@ -253,13 +187,13 @@ namespace New_ZZZF
             {
                 if (scrollDelta > 0)
                 {
-                    SetSelectedSpellSlot((_selectedSpellSlot + 1) % 4);
+                    _selectedSpellSlot = (_selectedSpellSlot + 1) % 4;
                     if (SpellSlots[_selectedSpellSlot].SkillID != "NullSkill")
                         Script.SysOut(SpellSlots[_selectedSpellSlot].SkillID, Agent);
                 }
                 else if (scrollDelta < 0)
                 {
-                    SetSelectedSpellSlot((_selectedSpellSlot - 1 + 4) % 4);
+                    _selectedSpellSlot = (_selectedSpellSlot - 1 + 4) % 4;
                     if (SpellSlots[_selectedSpellSlot].SkillID != "NullSkill")
                         Script.SysOut(SpellSlots[_selectedSpellSlot].SkillID, Agent);
                 }
@@ -297,29 +231,44 @@ namespace New_ZZZF
         /// <summary>当前选中的法术栏位（0-3），供 HUD 等只读展示使用。</summary>
         public int SelectedSpellSlot => _selectedSpellSlot;
 
-        private void SetSelectedSpellSlot(int slot)
-        {
-            slot = (slot % 4 + 4) % 4;
-            if (_selectedSpellSlot == slot)
-                return;
-            _selectedSpellSlot = slot;
-            NotifyHudStateChanged();
-        }
-
 
         /// <summary>
         /// 尝试激活技能（核心逻辑）
         /// </summary>
         private void TryActivateSkill(SkillBase skill)
         {
-            if (skill == null || !CanActivateSkill(skill))
+            bool reportFailure = Agent != null && Agent.IsPlayerControlled;
+            if (skill == null)
             {
-                Script.SysOut("条件不满足", Agent);
+                if (reportFailure)
+                    Script.SysOut("技能发动失败：技能槽为空。", Agent);
+                return;
+            }
+
+            string failureReason;
+            if (!CanActivateSkill(skill, out failureReason))
+            {
+                if (reportFailure)
+                    Script.SysOut("[" + skill.SkillID + "] 发动失败：" + failureReason, Agent);
+                return;
+            }
+
+            skill.ResetActivationFailureReason();
+            bool activated;
+            try
+            {
+                activated = skill.Activate(Agent);
+            }
+            catch (Exception ex)
+            {
+                if (reportFailure)
+                    Script.SysOut("[" + skill.SkillID + "] 发动异常：" + ex.Message, Agent);
+                Debug.Print("[New_ZZZF][技能发动异常] " + skill.SkillID + ": " + ex);
                 return;
             }
 
             // 扣除资源// 触发技能效果
-            if (skill.Activate(Agent))
+            if (activated)
             {
                 if (skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt)
                 {
@@ -331,14 +280,20 @@ namespace New_ZZZF
                     _currentStamina = Math.Max(0, _currentStamina - skill.ResourceCost);
                 }
                 _cooldownTimers[skill] = skill.Cooldown;
-                NotifyHudStateChanged();
 
 
                 // 触发公共CD（仅法术）
                 if (skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt)
                     _globalCooldownTimer += 1.0f; // 公共CD设为1秒
 
-                Console.WriteLine($"[技能触发] {skill.SkillID} 剩余法力: {_currentMana}, 耐力: {_currentStamina}");
+            }
+            else
+            {
+                string reason = string.IsNullOrEmpty(skill.LastActivationFailureReason)
+                    ? "技能效果未成功创建。"
+                    : skill.LastActivationFailureReason;
+                if (reportFailure)
+                    Script.SysOut("[" + skill.SkillID + "] 发动失败：" + reason, Agent);
             }
 
         }
@@ -356,11 +311,25 @@ namespace New_ZZZF
         /// <summary>
         /// 检查技能是否可激活
         /// </summary>
-        private bool CanActivateSkill(SkillBase skill)
+        private bool CanActivateSkill(SkillBase skill, out string failureReason)
         {
+            failureReason = null;
             // 基础检查
-            if (skill == null) return false;
-            if (Agent.IsPerformingAction()) return false; // 角色正忙
+            if (skill == null)
+            {
+                failureReason = "技能实例为空。";
+                return false;
+            }
+            if (Agent == null || !Agent.IsActive())
+            {
+                failureReason = "施法者当前不可用。";
+                return false;
+            }
+            if (Agent.IsPerformingAction() && !skill.CanActivateWhilePerformingAction)
+            {
+                failureReason = "角色正在执行其他动作。";
+                return false;
+            }
 
             // 资源检查
             bool hasResource = (skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt) ?
@@ -370,10 +339,25 @@ namespace New_ZZZF
             // 冷却检查
             bool isOnCooldown = _cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0;
             bool isGCDBlocked = (skill.Type == SPSkillType.Spell) && _globalCooldownTimer > 0;
-            if (!hasResource) { Script.SysOut("耐力或魔法不足,需要的值为" + skill.ResourceCost, Agent); }
-            if (isOnCooldown) { Script.SysOut("技能未冷却,当前的冷却剩余" + remaining.ToString(), Agent); }
-            if (isGCDBlocked) { Script.SysOut("法术公共冷却未结束,当前的冷却剩余" + _globalCooldownTimer.ToString(), Agent); }
-            return hasResource && !isOnCooldown && !isGCDBlocked;
+            if (!hasResource)
+            {
+                bool usesMana = skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt;
+                float current = usesMana ? _currentMana : _currentStamina;
+                failureReason = string.Format("{0}不足（当前 {1:0.0}，需要 {2:0.0}）。",
+                    usesMana ? "法力" : "耐力", current, skill.ResourceCost);
+                return false;
+            }
+            if (isOnCooldown)
+            {
+                failureReason = string.Format("技能尚未冷却（剩余 {0:0.0} 秒）。", remaining);
+                return false;
+            }
+            if (isGCDBlocked)
+            {
+                failureReason = string.Format("法术公共冷却尚未结束（剩余 {0:0.0} 秒）。", _globalCooldownTimer);
+                return false;
+            }
+            return true;
         }
 
         //====================== 状态更新 ======================
@@ -387,51 +371,37 @@ namespace New_ZZZF
             if (_cooldownTimers.Count == 0)
                 return;
 
-            // 复用 key 缓冲区，避免英雄每帧 new Dictionary 复制整个冷却表。
+            // 复用键缓存，避免每个角色每次更新都创建 List 和 Dictionary 副本。
             _cooldownKeysScratch.Clear();
-            foreach (SkillBase skill in _cooldownTimers.Keys)
-                _cooldownKeysScratch.Add(skill);
+            foreach (SkillBase key in _cooldownTimers.Keys)
+                _cooldownKeysScratch.Add(key);
 
-            bool hudChanged = false;
-            foreach (SkillBase skill in _cooldownKeysScratch)
+            for (int i = 0; i < _cooldownKeysScratch.Count; i++)
             {
-                if (!_cooldownTimers.TryGetValue(skill, out float oldRemaining))
+                SkillBase key = _cooldownKeysScratch[i];
+                if (!_cooldownTimers.TryGetValue(key, out float value))
                     continue;
-
-                bool matchedType = ((skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt) && skillType == SPSkillType.Spell) ||
-                    (skill.Type == SPSkillType.MainActive && skillType == SPSkillType.MainActive) ||
-                    (skill.Type == SPSkillType.SubActive && skillType == SPSkillType.SubActive) ||
-                    ((skill.Type == SPSkillType.Passive || skill.Type == SPSkillType.Passive_Spell) && skillType == SPSkillType.Passive);
-
-                if (skillType != SPSkillType.None && !matchedType)
-                    continue;
-
-                float newRemaining = oldRemaining - dt;
-                int oldBucket = ToHudTenthsBucket(oldRemaining);
-
-                if (newRemaining <= 0f)
+                bool matchedType = ((key.Type == SPSkillType.Spell || key.Type == SPSkillType.Spell_CombatArt) && skillType == SPSkillType.Spell) ||
+                    (key.Type == SPSkillType.MainActive && skillType == SPSkillType.MainActive) ||
+                    (key.Type == SPSkillType.SubActive && skillType == SPSkillType.SubActive) ||
+                    ((key.Type == SPSkillType.Passive || key.Type == SPSkillType.Passive_Spell) && skillType == SPSkillType.Passive);
+                if (skillType == SPSkillType.None || matchedType)
                 {
-                    _cooldownTimers.Remove(skill);
-                    if (oldBucket != 0)
-                        hudChanged = true;
-                }
-                else
-                {
-                    _cooldownTimers[skill] = newRemaining;
-                    if (oldBucket != ToHudTenthsBucket(newRemaining))
-                        hudChanged = true;
+                    float remainingTime = value - dt;
+                    if (remainingTime <= 0)
+                        _cooldownTimers.Remove(key);
+                    else
+                        _cooldownTimers[key] = remainingTime;
                 }
             }
-
-            if (hudChanged)
-                NotifyHudStateChanged();
         }
 
         private void UpdateGlobalCooldown(float dt)
         {
-            if (_globalCooldownTimer > 0f)
+            if (_globalCooldownTimer > 0)
             {
-                _globalCooldownTimer = Math.Max(0f, _globalCooldownTimer - dt);
+                //Script.SysOut(_globalCooldownTimer.ToString(),this.AgentInstance);
+                _globalCooldownTimer -= dt;
             }
         }
         /// <summary>
@@ -448,38 +418,82 @@ namespace New_ZZZF
 
         //====================== AI逻辑 ======================
         //依次调用所有装备的技能的ai施法检查
-        private void HandleAIBehaviorOfTick(float dt)
+        private void HandleAIBehaviorOfTick()
         {
-            Random random = new Random();
-            if (MainActiveSkill.CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            // 强制移动期间不再运行普通 AI 技能轮询。否则冲刺斩临时接管移动时，
+            // 同一 Agent 仍可能通过其他技能槽连续发动技能并打断冲锋。
+            RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
+            if (movement != null && movement.IsRushing(Agent))
+                return;
+
+            if (IsSkillReadyForAi(MainActiveSkill) &&
+                MBRandom.RandomFloat > 0.5f && MainActiveSkill.CheckCondition(Agent))
             {
                 TryActivateSkill(MainActiveSkill);
             }
-            else if (SubActiveSkill.CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            else if (IsSkillReadyForAi(SubActiveSkill) &&
+                     MBRandom.RandomFloat > 0.5f && SubActiveSkill.CheckCondition(Agent))
             {
                 TryActivateSkill(SubActiveSkill);
             }
-            else if (CombatArtSkill.CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            else if (IsSkillReadyForAi(CombatArtSkill) &&
+                     MBRandom.RandomFloat > 0.5f && CombatArtSkill.CheckCondition(Agent))
             {
                 TryActivateSkill(CombatArtSkill);
             }
-            else if (SpellSlots[0].CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            else if (IsSkillReadyForAi(SpellSlots[0]) &&
+                     MBRandom.RandomFloat > 0.5f && SpellSlots[0].CheckCondition(Agent))
             {
                 TryActivateSkill(SpellSlots[0]);
             }
-            else if (SpellSlots[1].CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            else if (IsSkillReadyForAi(SpellSlots[1]) &&
+                     MBRandom.RandomFloat > 0.5f && SpellSlots[1].CheckCondition(Agent))
             {
                 TryActivateSkill(SpellSlots[1]);
             }
-            else if (SpellSlots[2].CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            else if (IsSkillReadyForAi(SpellSlots[2]) &&
+                     MBRandom.RandomFloat > 0.5f && SpellSlots[2].CheckCondition(Agent))
             {
                 TryActivateSkill(SpellSlots[2]);
             }
-            else if (SpellSlots[3].CheckCondition(Agent) && random.NextFloat() > 0.5f)
+            else if (IsSkillReadyForAi(SpellSlots[3]) &&
+                     MBRandom.RandomFloat > 0.5f && SpellSlots[3].CheckCondition(Agent))
             {
                 TryActivateSkill(SpellSlots[3]);
             }
 
+        }
+
+        /// <summary>
+        /// AI 专用的无日志机械条件预筛选。把冷却、资源和动作判断放在战术条件之前，
+        /// 避免技能不可用时仍执行距离、视线或单位搜索。
+        /// </summary>
+        private bool IsSkillReadyForAi(SkillBase skill)
+        {
+            if (skill == null || !skill.IsValid || skill.Type == SPSkillType.None ||
+                Agent == null || !Agent.IsActive())
+                return false;
+            if (Agent.IsPerformingAction() && !skill.CanActivateWhilePerformingAction)
+                return false;
+
+            bool usesMana = skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt;
+            if ((usesMana ? _currentMana : _currentStamina) < skill.ResourceCost)
+                return false;
+            if (_cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0f)
+                return false;
+            return skill.Type != SPSkillType.Spell || _globalCooldownTimer <= 0f;
+        }
+
+        /// <summary>
+        /// 消费冲刺斩抵达后排队的一次原生右砍请求。该回调进入和普通 AI 攻击相同的
+        /// 引擎输入链，因此仍由原生武器扫掠、格挡和伤害系统完成命中判定。
+        /// </summary>
+        public override void OnAIInputSet(
+            ref Agent.EventControlFlag eventFlag,
+            ref Agent.MovementControlFlag movementFlag,
+            ref Vec2 inputVector)
+        {
+            RushMovementMissionLogic.Current?.ApplyPendingAiAttack(Agent, ref movementFlag);
         }
     }
 }

@@ -47,6 +47,24 @@ namespace New_ZZZF.Systems
             if (agent.IsHuman)
             {
                 this.UpdateHumanStats(agent, agentDrivenProperties, _dt);
+
+                // 沿用模组中“按住空格加速跑”的已验证实现：base 每次重算后直接
+                // 设置本次最终速度倍率。仅处理徒步冲刺斩，不触碰任何坐骑属性。
+#if false
+                // 仅提高 Max 不会推动人物达到目标速度；由安全连续位移实现替代。
+                if (RushMovementMissionLogic.IsOnFootChongCiZhanRush(agent))
+                {
+                    agentDrivenProperties.MaxSpeedMultiplier = 5f;
+                    agentDrivenProperties.CombatMaxSpeedMultiplier = 5f;
+                }
+#endif
+                if (RushMovementMissionLogic.IsMountedChongCiZhanCharge(agent))
+                {
+                    // 坐骑实际速度由骑手的 MountSpeed 决定。仅修改这两个原生骑乘
+                    // 字段，避免此前 5 倍操控/碰撞属性组合造成物理负载失控。
+                    agentDrivenProperties.MountSpeed *= 2f;
+                    agentDrivenProperties.MountDashAccelerationMultiplier *= 2f;
+                }
                 return;
             }
         }

@@ -38,14 +38,21 @@ namespace New_ZZZF
             Vec3 tarPos = agent.Position;
             tarPos.z += 15;
             tarPos -= Script.MultiplyVectorByScalar(agent.LookDirection, 15);
-            if (!SkillSystemBehavior.WoW_AgentRushPos.ContainsKey(agent.Index))
+            RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
+            if (movement == null)
+                return FailActivation("当前任务未加载强制移动管理器。");
+            RushMovementOptions movementOptions = new RushMovementOptions
             {
-                SkillSystemBehavior.WoW_AgentRushPos.Add(agent.Index, tarPos);
-            }
-            else
-            { return false; }
+                Duration = 1.5f,
+                StopDistance = 0.35f,
+                SpeedLimit = 7f,
+                SpeedLimitIsMultiplier = false,
+                AllowMounted = false
+            };
+            if (!movement.TryRushToPosition(agent, tarPos, movementOptions, out string failureReason))
+                return FailActivation(failureReason ?? "跃进目标地点不可到达。");
             // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new TianFaZhiJianBuff(1.5f, agent), new RushToPosBuff(1.5f, 7f, agent), }; // 新实例
+            List<AgentBuff> newStates = new List<AgentBuff> { new TianFaZhiJianBuff(1.5f, agent) };
             foreach (var state in newStates)
             {
                 state.TargetAgent = agent;

@@ -167,7 +167,11 @@ namespace New_ZZZF
             TacticalMapLog.Section("MISSION BEHAVIOR INITIALIZE");
             TacticalMapLog.Info("Mission=" + (mission == null ? "null" : mission.GetType().FullName));
             if (NewZZZFDiag.SkillSystemBehavior)
+            {
+                mission.AddMissionBehavior(new RushMovementMissionLogic());
                 mission.AddMissionBehavior(new SkillSystemBehavior());
+                mission.AddMissionBehavior(new SummonManagerMissionLogic());
+            }
             if (NewZZZFDiag.MountedSlashCamera)
                 mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
             if (NewZZZFDiag.HeroChange)
@@ -179,9 +183,13 @@ namespace New_ZZZF
             }
             if (NewZZZFDiag.Affix)
                 mission.AddMissionBehavior(new AffixMissionBehavior());
+            if (NewZZZFDiag.AgentStatusView)
+                mission.AddMissionBehavior(new NewZZZF_MissionAgentStatusView());
             if (NewZZZFDiag.BattleHud)
                 mission.AddMissionBehavior(new BattleHudMissionLogic());
 
+            // 旧功能测试已完成使命，保留源码但停止注册，避免 Q 键继续触发测试攻击。
+            // mission.AddMissionBehavior(new FeatureTests.NativeMeleeCollisionTest.NativeMeleeCollisionTestBehavior());
         }
 
         protected override void OnSubModuleUnloaded()

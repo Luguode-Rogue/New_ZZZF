@@ -37,6 +37,8 @@ namespace New_ZZZF
         /// activeComponents绑定了agent的新属性
         /// </summary>
         private readonly List<AgentSkillComponent> _activeComponents = new List<AgentSkillComponent>();
+        private readonly List<AgentSkillComponent> _componentSnapshot = new List<AgentSkillComponent>();
+        private readonly List<GameEntity> _projectileSnapshot = new List<GameEntity>();
         public static Dictionary<int, AgentSkillComponent> ActiveComponents = new Dictionary<int, AgentSkillComponent>();
 
 
@@ -58,14 +60,11 @@ namespace New_ZZZF
         private const float TickInterval_05_2 = 0.5f;
         private float _tickTimer001 = 0.0f;
         private const float TickInterval_001 = 0.01f;
-        /// <summary>
-        /// 平滑移动的效果。字典用来存放施法agent和目标agent
-        /// </summary>
+        // 旧 RushTo 全局字典保留供追溯，新实现使用任务级 RushMovementMissionLogic。
+#if false
         public static Dictionary<int, Agent> WoW_AgentRushAgent = new Dictionary<int, Agent>();
-        /// <summary>
-        /// 平滑移动的效果。字典用来存放施法agent和目标agent
-        /// </summary>
         public static Dictionary<int, Vec3> WoW_AgentRushPos = new Dictionary<int, Vec3>();
+#endif
 
 
 
@@ -103,8 +102,6 @@ namespace New_ZZZF
                 _activeComponents.Add(skillComponent);
                 ActiveComponents.Add(agent.Index, skillComponent);
 
-
-                InformationManager.DisplayMessage(new InformationMessage("[技能系统] Agent" + agent.Name + " 已绑定技能组件"));
             }
             catch (Exception ex)
             {
@@ -250,16 +247,15 @@ namespace New_ZZZF
             _tickTimer05_2 += dt;
             _tickTimer001 += dt;
 
-            // 创建副本以避免遍历时集合被修改
-            List<AgentSkillComponent> componentsToProcess = _activeComponents.ToList();
-            foreach (Agent agent in Mission.Agents)//刷新位置和速度信息
-            {
-                if (ActiveComponents.TryGetValue(agent.Index, out var data))
-                {
-                    data.Speed.Tick(dt);
-                }
-            }
-            foreach (var comp in componentsToProcess)
+            bool processNonHeroState = _tickTimer05_2 >= TickInterval_05_2;
+            if (processNonHeroState)
+                _tickTimer05_2 -= TickInterval_05_2;
+
+            // 复用快照，避免每帧为全体 Agent 分配一份新 List。AI 战术判断由组件
+            // 自己按 Agent.Index 错峰，玩家输入仍保持逐帧响应。
+            _componentSnapshot.Clear();
+            _componentSnapshot.AddRange(_activeComponents);
+            foreach (AgentSkillComponent comp in _componentSnapshot)
             {
                 // 检查组件是否有效
                 if (comp.AgentInstance == null || !comp.AgentInstance.IsActive())
@@ -267,21 +263,13 @@ namespace New_ZZZF
                     continue; // 跳过无效组件
                 }
 
-                // 原有的处理逻辑
-                if (comp.AgentInstance.IsHero)
-                {
-                    comp.Tick(dt);
-                    comp.CoolDownTick(dt);
-                }
+                comp.Speed.Tick(dt);
+                comp.Tick(dt);
 
-                if (_tickTimer05 >= TickInterval_05_2)
-                {
-                    if (!comp.AgentInstance.IsHero)
-                    {
-                        comp.Tick(TickInterval_05_2);
-                        comp.CoolDownTick(TickInterval_05_2);
-                    }
-                }
+                if (comp.AgentInstance.IsHero || comp.AgentInstance.IsPlayerControlled)
+                    comp.CoolDownTick(dt);
+                else if (processNonHeroState)
+                    comp.CoolDownTick(TickInterval_05_2);
             }
 
             // 如果计时器超过了间隔时间，则减去间隔时间
@@ -289,7 +277,9 @@ namespace New_ZZZF
             if (_tickTimer05 >= TickInterval_05)
             {
                 _tickTimer05 -= TickInterval_05;
-                foreach (GameEntity missileEntity in WoW_CustomGameEntity.ToList())
+                _projectileSnapshot.Clear();
+                _projectileSnapshot.AddRange(WoW_CustomGameEntity);
+                foreach (GameEntity missileEntity in _projectileSnapshot)
                 {
                     if (!WoW_ProjectileDB.TryGetValue(missileEntity, out ProjectileData data))
                         continue;
@@ -319,7 +309,9 @@ namespace New_ZZZF
             if (_tickTimer001 >= TickInterval_001)
             {
                 _tickTimer001 -= TickInterval_001;
-                foreach (GameEntity missileEntity in WoW_CustomGameEntity.ToList())
+                _projectileSnapshot.Clear();
+                _projectileSnapshot.AddRange(WoW_CustomGameEntity);
+                foreach (GameEntity missileEntity in _projectileSnapshot)
                 {
                     if (!WoW_ProjectileDB.TryGetValue(missileEntity, out ProjectileData data))
                     {
@@ -522,9 +514,9 @@ namespace New_ZZZF
             foreach (AgentSkillComponent agent in _activeComponents)
             {
 
+                // 旧 RushTo 每帧传送实现保留但停用。新逻辑由 RushMovementMissionLogic 原生寻路驱动。
+#if false
                 Agent TAgent;
-                //平滑移动的实现部分
-
                 if (WoW_AgentRushAgent.TryGetValue(agent.AgentInstance.Index, out TAgent))
                 {
 
@@ -586,6 +578,7 @@ namespace New_ZZZF
 
                     }
                 }
+#endif
             }
             MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
             if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyPressed(14) && Agent.Main != null)
