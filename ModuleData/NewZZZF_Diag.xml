@@ -16,6 +16,10 @@
   <Affix>true</Affix>
   <!-- 战斗 HTML HUD（耐力/法力/技能冷却/技能槽）-->
   <BattleHud>true</BattleHud>
+  <!-- 战场友军换装（长按交互 + HTML Page）-->
+  <BattleEquipment>true</BattleEquipment>
+  <!-- 无武器 AI 自动拾取战场武器-->
+  <UnarmedWeaponPickup>true</UnarmedWeaponPickup>
   <!-- Harmony PatchAll（全部 [HarmonyPatch] 补丁，含 NewDamageModel）-->
   <HarmonyPatchAll>true</HarmonyPatchAll>
   <!-- 技能注册加载（true/SkillFactory/SkillConfig + L 键热重载）-->

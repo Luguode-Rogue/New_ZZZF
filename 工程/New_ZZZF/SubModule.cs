@@ -28,6 +28,8 @@ using System.Collections.Generic;
 using TaleWorlds.Engine.GauntletUI;
 using New_ZZZF.GUI;
 using BannerlordHtmlUI;
+using New_ZZZF.Systems.BattleEquipment;
+using New_ZZZF.Systems.BattlefieldPickup;
 
 namespace New_ZZZF
 {
@@ -82,6 +84,11 @@ namespace New_ZZZF
             {
                 BattleHudHtmlUi.Instance.InitializeOnFrameworkReady();
                 TacticalMapLog.Info("BattleHud HtmlUi InitializeOnFrameworkReady registered.");
+            }
+            if (NewZZZFDiag.BattleEquipment)
+            {
+                BattleEquipmentHtmlUi.Instance.InitializeOnFrameworkReady();
+                TacticalMapLog.Info("BattleEquipment HtmlUi InitializeOnFrameworkReady registered.");
             }
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
@@ -169,6 +176,7 @@ namespace New_ZZZF
             if (NewZZZFDiag.SkillSystemBehavior)
             {
                 mission.AddMissionBehavior(new RushMovementMissionLogic());
+                mission.AddMissionBehavior(new JiFengLianZhanMissionLogic());
                 mission.AddMissionBehavior(new SkillSystemBehavior());
                 mission.AddMissionBehavior(new SummonManagerMissionLogic());
             }
@@ -185,6 +193,10 @@ namespace New_ZZZF
                 mission.AddMissionBehavior(new AffixMissionBehavior());
             if (NewZZZFDiag.BattleHud)
                 mission.AddMissionBehavior(new BattleHudMissionLogic());
+            if (NewZZZFDiag.BattleEquipment)
+                mission.AddMissionBehavior(new BattleEquipmentMissionLogic());
+            if (NewZZZFDiag.UnarmedWeaponPickup)
+                mission.AddMissionBehavior(new UnarmedWeaponPickupMissionLogic());
 
         }
 
@@ -208,6 +220,11 @@ namespace New_ZZZF
             {
                 try { BattleHudHtmlUi.Instance.Dispose(); }
                 catch (Exception ex) { TacticalMapLog.Error("BattleHud HtmlUI Dispose failed.", ex); }
+            }
+            if (NewZZZFDiag.BattleEquipment)
+            {
+                try { BattleEquipmentHtmlUi.Instance.Dispose(); }
+                catch (Exception ex) { TacticalMapLog.Error("BattleEquipment HtmlUI Dispose failed.", ex); }
             }
             HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
             base.OnSubModuleUnloaded();

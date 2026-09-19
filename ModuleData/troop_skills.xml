@@ -25,9 +25,9 @@
     </Spells>
   </Troop>
   <Troop id="main_hero">
-    <MainActive>SheShouFuJi</MainActive>
-    <SubActive>LHTest_StickItemWeaponSweepProbe</SubActive>
-    <Passive>QiangLiZhaoHuan</Passive>
+    <MainActive>DaDiJianTa</MainActive>
+    <SubActive>JiFengLianZhan</SubActive>
+    <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>
     <Spells>
       <Slot1>NullSkill</Slot1>
@@ -123,6 +123,54 @@
   <Troop id="CharacterObject_10602">
     <MainActive>NullSkill</MainActive>
     <SubActive>HouYueSheJi</SubActive>
+    <Passive>NullSkill</Passive>
+    <CombatArt>NullSkill</CombatArt>
+    <Spells>
+      <Slot1>NullSkill</Slot1>
+      <Slot2>NullSkill</Slot2>
+      <Slot3>NullSkill</Slot3>
+      <Slot4>NullSkill</Slot4>
+    </Spells>
+  </Troop>
+  <Troop id="CharacterObject_3292">
+    <MainActive>NullSkill</MainActive>
+    <SubActive>JiFengLianZhan</SubActive>
+    <Passive>NullSkill</Passive>
+    <CombatArt>NullSkill</CombatArt>
+    <Spells>
+      <Slot1>NullSkill</Slot1>
+      <Slot2>NullSkill</Slot2>
+      <Slot3>NullSkill</Slot3>
+      <Slot4>NullSkill</Slot4>
+    </Spells>
+  </Troop>
+  <Troop id="CharacterObject_3294">
+    <MainActive>NullSkill</MainActive>
+    <SubActive>JiFengLianZhan</SubActive>
+    <Passive>NullSkill</Passive>
+    <CombatArt>NullSkill</CombatArt>
+    <Spells>
+      <Slot1>NullSkill</Slot1>
+      <Slot2>NullSkill</Slot2>
+      <Slot3>NullSkill</Slot3>
+      <Slot4>NullSkill</Slot4>
+    </Spells>
+  </Troop>
+  <Troop id="CharacterObject_3295">
+    <MainActive>NullSkill</MainActive>
+    <SubActive>JiFengLianZhan</SubActive>
+    <Passive>NullSkill</Passive>
+    <CombatArt>NullSkill</CombatArt>
+    <Spells>
+      <Slot1>NullSkill</Slot1>
+      <Slot2>NullSkill</Slot2>
+      <Slot3>NullSkill</Slot3>
+      <Slot4>NullSkill</Slot4>
+    </Spells>
+  </Troop>
+  <Troop id="CharacterObject_3296">
+    <MainActive>NullSkill</MainActive>
+    <SubActive>JiFengLianZhan</SubActive>
     <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>
     <Spells>

@@ -51,7 +51,7 @@ namespace New_ZZZF
                 return;
             }
 
-            BindAgentEquipmentSlots(agent);
+            RefreshAgentEquipmentBindings(agent);
         }
 
         public override void OnAgentBuild(Agent agent, Banner banner)
@@ -61,11 +61,14 @@ namespace New_ZZZF
             if (!agent.IsHuman || agent.IsMount)
                 return;
 
-            BindAgentEquipmentSlots(agent);
+            RefreshAgentEquipmentBindings(agent);
         }
 
-        private void BindAgentEquipmentSlots(Agent agent)
+        public static void RefreshAgentEquipmentBindings(Agent agent)
         {
+            if (agent == null || !agent.IsHuman || agent.IsMount || agent.SpawnEquipment == null)
+                return;
+
             var campaignBehavior = AffixCampaignBehavior.Current;
             var characterObject = agent.Character as CharacterObject;
             var hero = characterObject?.HeroObject;

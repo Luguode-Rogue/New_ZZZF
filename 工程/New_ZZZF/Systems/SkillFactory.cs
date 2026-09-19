@@ -63,6 +63,7 @@ namespace New_ZZZF
                 //// 副主动技能
                 { "BaseZhanJi", new BaseZhanJi() },
                 { "ChongCiZhan", new ChongCiZhan() },
+                { JiFengLianZhan.Id, new JiFengLianZhan() },
                 {"MagicShoot",new MagicShoot() },
 
                 {"HouYueSheJi",new HouYueSheJi() },

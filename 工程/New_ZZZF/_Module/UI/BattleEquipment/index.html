@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>战场装备交换</title>
+<style>
+:root{
+  font-family:"Microsoft YaHei","Segoe UI",sans-serif;color:#e9dec7;
+  --gold:#c7a352;--gold-bright:#efd58a;--line:#574323;--muted:#9e917b;
+  --tier-1:#b8b4aa;--tier-2:#62aa68;--tier-3:#5595dc;--tier-4:#b171d2;--tier-5:#dfb247;--tier-6:#e36d35;
+}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:rgba(2,2,2,.9);user-select:none}
+body{display:flex;align-items:center;justify-content:center;padding:2.4vh 2.5vw}button{font:inherit}
+.window{position:relative;width:min(1540px,96vw);height:min(940px,95vh);padding:25px 29px 23px;display:flex;flex-direction:column;overflow:hidden;border:2px solid #4f3d21;border-radius:5px;background:radial-gradient(ellipse at 50% -15%,rgba(153,112,48,.16),transparent 48%),linear-gradient(145deg,#1c160f,#080705);box-shadow:0 0 0 1px #171008,0 0 0 4px #84672f,0 0 0 7px #171008,0 28px 90px #000}
+.window::before{content:"";position:absolute;inset:9px;border:1px solid rgba(199,163,82,.15);pointer-events:none}
+.corner{position:absolute;width:19px;height:19px;border-color:var(--gold);border-style:solid;z-index:5;pointer-events:none}.corner.tl{left:13px;top:13px;border-width:2px 0 0 2px}.corner.tr{right:13px;top:13px;border-width:2px 2px 0 0}.corner.bl{left:13px;bottom:13px;border-width:0 0 2px 2px}.corner.br{right:13px;bottom:13px;border-width:0 2px 2px 0}
+header{position:relative;z-index:2;display:flex;align-items:center;gap:22px;min-height:76px;padding:0 10px 17px;border-bottom:1px solid rgba(199,163,82,.29)}
+.title-group{min-width:0}.eyebrow{margin-bottom:5px;color:#806a3c;font-size:9px;letter-spacing:.3em}h1{margin:0;color:var(--gold-bright);font-family:Georgia,"Microsoft YaHei",serif;font-size:28px;font-weight:500;letter-spacing:.11em;text-shadow:0 2px 6px #000}.sub{margin-top:5px;color:var(--muted);font-size:12px}.header-rule{flex:1;height:1px;background:linear-gradient(90deg,rgba(199,163,82,.36),transparent)}
+.actions{display:flex;gap:9px}.action{min-width:82px;padding:9px 16px;border:1px solid #5d4927;border-radius:2px;color:#cfc1a5;cursor:pointer;background:linear-gradient(#3c301d,#1c160e);box-shadow:inset 0 1px rgba(255,255,255,.035),0 3px 8px #0008;transition:.14s ease}.action:hover{color:#fff0c0;border-color:#b18d41;transform:translateY(-1px)}.action.primary{min-width:110px;color:#fff3c7;border-color:#c09a42;background:linear-gradient(#826324,#49360f);font-weight:700}.action:disabled{opacity:.48;cursor:default;transform:none}
+.exchange{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);gap:14px;flex:1;min-height:0;padding:18px 4px 2px}
+.hero-panel{position:relative;min-width:0;min-height:0;padding:13px 14px 14px;display:flex;flex-direction:column;border:1px solid #49371d;background:linear-gradient(180deg,rgba(22,17,11,.96),rgba(8,7,5,.99));box-shadow:inset 0 0 42px #000c}.hero-panel::after{content:"";position:absolute;inset:5px;border:1px solid rgba(199,163,82,.075);pointer-events:none}
+.hero-name{position:relative;z-index:3;min-height:38px;padding:5px 46px 10px;text-align:center;color:#e8d39d;font:19px Georgia,"Microsoft YaHei",serif;letter-spacing:.08em;border-bottom:1px solid rgba(199,163,82,.17);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.side-mark{position:absolute;left:22px;top:19px;color:#6f5930;font-size:9px;letter-spacing:.15em}
+.equipment-board{position:relative;flex:1;min-height:0;width:min(100%,620px);margin:7px auto 0;overflow:hidden;background:radial-gradient(ellipse at center,rgba(116,83,35,.09),transparent 64%)}
+.figure{position:absolute;inset:1.5% 15% 0;display:flex;justify-content:center;align-items:center;pointer-events:none}.figure img{width:100%;height:100%;object-fit:contain;opacity:.63;filter:saturate(.72) contrast(1.06) brightness(.71) drop-shadow(0 12px 22px #000)}
+.slots{position:absolute;inset:0;z-index:2}
+.equipment-slot{--rarity:#665538;position:absolute;padding:6px 7px;overflow:hidden;cursor:pointer;text-align:left;color:#d9ccb2;border:1px solid var(--rarity);border-radius:2px;background:linear-gradient(145deg,rgba(25,20,14,.94),rgba(6,6,5,.96));box-shadow:inset 0 0 14px #000c,0 3px 11px #0009;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+.equipment-slot:hover{transform:translateY(-2px);box-shadow:0 0 14px rgba(207,169,79,.25),inset 0 0 14px #000c;z-index:8}.equipment-slot.selected{border-color:#fff0b1!important;box-shadow:0 0 0 2px #8d6b2d,0 0 18px rgba(240,214,139,.54),inset 0 0 13px #000;z-index:9}.equipment-slot.over{border-color:#fff2b8!important;background:linear-gradient(145deg,rgba(91,68,28,.96),rgba(23,17,9,.98));z-index:9}.equipment-slot.empty-slot{border-style:dashed;border-color:#57492f;color:#77694f;background:rgba(9,8,6,.55)}
+/* 骑砍2实际槽位：左侧为四个武器位，护具直接覆盖纸娃娃对应部位。 */
+.equipment-slot.weapon-1,.equipment-slot.weapon-2,.equipment-slot.weapon-3,.equipment-slot.weapon-4{left:1.5%;width:27%;height:13.5%}
+.equipment-slot.weapon-1{top:10%}.equipment-slot.weapon-2{top:27.5%}.equipment-slot.weapon-3{top:45%}.equipment-slot.weapon-4{top:62.5%}
+.equipment-slot.head{left:39%;top:3%;width:22%;height:13%}.equipment-slot.body{left:35%;top:27%;width:30%;height:16%}.equipment-slot.cape{right:3%;top:20%;width:25%;height:14%}.equipment-slot.gloves{right:2%;top:47%;width:24%;height:14%}.equipment-slot.legs{left:36%;top:66%;width:28%;height:15%}
+.slot-top{display:flex;align-items:center;gap:5px;height:18px}.slot-icon{display:flex;align-items:center;justify-content:center;min-width:23px;height:17px;border:1px solid currentColor;color:var(--rarity);font-size:9px;font-weight:700;background:#0008}.slot-label{color:#a28b5c;font-size:9px;letter-spacing:.06em}.tier{margin-left:auto;color:var(--rarity);font:700 8px Georgia,serif}.item-name{margin-top:4px;color:var(--rarity);font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 3px #000}.item-meta{margin-top:2px;color:#8d8270;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.empty-name{display:flex;align-items:center;height:calc(100% - 18px);color:#695d47;font-size:10px}.origin{position:absolute;right:4px;bottom:3px;color:#6f6048;font-size:7px}
+.transfer{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#7b6536}.transfer::before,.transfer::after{content:"";width:1px;height:30%;background:linear-gradient(transparent,#70562a,transparent)}.transfer-glyph{width:40px;height:40px;display:grid;place-items:center;border:1px solid #6d572d;transform:rotate(45deg);background:#17110b;box-shadow:0 0 0 3px #090704,0 0 18px #000}.transfer-glyph span{transform:rotate(-45deg);color:#d0ad5a;font-size:21px}
+.tooltip{position:fixed;z-index:100;display:none;pointer-events:none;min-width:190px;max-width:310px;padding:11px 13px;border:1px solid #96763a;background:rgba(13,10,7,.98);box-shadow:0 10px 30px #000}.tooltip-title{font-size:13px;font-weight:700}.tooltip-slot{margin-top:3px;color:#a38f69;font-size:10px}.tooltip-meta{margin-top:7px;color:#a99d8a;font-size:10px;line-height:1.5}.message{position:fixed;left:50%;bottom:5vh;transform:translateX(-50%);z-index:200;display:none;min-width:260px;padding:10px 18px;text-align:center;border:1px solid #b45c48;background:rgba(69,19,14,.96);color:#ffe0d6;box-shadow:0 8px 25px #000}.message.show{display:block}
+@media(max-width:1100px){body{padding:1.5vh 1.5vw}.window{padding:20px 21px 18px}.exchange{grid-template-columns:minmax(0,1fr) 38px minmax(0,1fr);gap:8px}.equipment-slot{padding:4px 5px}.item-meta{display:none}.item-name{font-size:9px}.action{min-width:68px;padding:8px 11px}}
+@media(max-height:720px){.window{height:96vh;padding-top:18px}header{min-height:60px;padding-bottom:10px}h1{font-size:22px}.exchange{padding-top:11px}.hero-name{min-height:31px;font-size:16px}.item-name{margin-top:2px}}
+</style>
+</head>
+<body>
+<main class="window">
+  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+  <header><div class="title-group"><div class="eyebrow">BATTLEFIELD QUARTERMASTER</div><h1>战场装备交换</h1><div class="sub">拖拽装备，或依次选择两个槽位进行交换 · 变更仅在当前战斗中生效</div></div><div class="header-rule"></div><div class="actions"><button class="action" id="reset">重置</button><button class="action" id="cancel">取消</button><button class="action primary" id="commit">确认交换</button></div></header>
+  <section class="exchange">
+    <article class="hero-panel"><span class="side-mark">PLAYER</span><div class="hero-name" id="playerName">玩家</div><div class="equipment-board"><div class="figure"><img src="assets/equipment-figure.png" alt=""></div><div class="slots" id="playerDoll"></div></div></article>
+    <div class="transfer" aria-hidden="true"><div class="transfer-glyph"><span>⇄</span></div></div>
+    <article class="hero-panel"><span class="side-mark">ALLY</span><div class="hero-name" id="targetName">友军</div><div class="equipment-board"><div class="figure"><img src="assets/equipment-figure.png" alt=""></div><div class="slots" id="targetDoll"></div></div></article>
+  </section>
+</main>
+<div class="tooltip" id="tooltip"><div class="tooltip-title" id="tooltipTitle"></div><div class="tooltip-slot" id="tooltipSlot"></div><div class="tooltip-meta" id="tooltipMeta"></div></div><div class="message" id="message"></div>
+<script>
+(()=>{'use strict';
+const app=window.game.app,$=id=>document.getElementById(id);let session=null,layout=null,selected=null,busy=false;
+// EquipmentIndex 4 是未在本界面开放的 ExtraWeaponSlot；五个护具槽实际为 5–9。
+const SLOT_VISUALS={0:{role:'weapon-1',icon:'W1'},1:{role:'weapon-2',icon:'W2'},2:{role:'weapon-3',icon:'W3'},3:{role:'weapon-4',icon:'W4'},5:{role:'head',icon:'头'},6:{role:'body',icon:'甲'},7:{role:'legs',icon:'腿'},8:{role:'gloves',icon:'手'},9:{role:'cape',icon:'披'}};
+const SLOT_VISUALS_BY_NAME={'武器 1':SLOT_VISUALS[0],'武器 2':SLOT_VISUALS[1],'武器 3':SLOT_VISUALS[2],'武器 4':SLOT_VISUALS[3],'头部':SLOT_VISUALS[5],'身体':SLOT_VISUALS[6],'腿部':SLOT_VISUALS[7],'手部':SLOT_VISUALS[8],'披风':SLOT_VISUALS[9]};
+const slotVisual=spec=>SLOT_VISUALS[spec.index]||SLOT_VISUALS_BY_NAME[spec.name]||{role:'unknown',icon:'?'};
+const key=(side,slot)=>side+':'+slot;
+const tierNumber=tier=>Math.max(1,Math.min(6,Math.floor(Number(tier)||1)));
+const tierColor=tier=>`var(--tier-${tierNumber(tier)})`;
+function initialize(data){if(!data)return;session=data;layout={};for(const side of ['player','target'])for(const row of data[side].entries)layout[key(side,row.slot)]=row.token||null;selected=null;hideTooltip();render()}
+function itemMap(){const map={};for(const side of ['player','target'])for(const row of session[side].entries)if(row.token)map[row.token]={...row.item,origin:side};return map}
+function render(){if(!session)return;const items=itemMap();$('playerName').textContent=session.player.name;$('targetName').textContent=session.target.name;for(const side of ['player','target']){const root=$(side+'Doll');root.innerHTML='';for(const spec of session.slots){const visual=slotVisual(spec),k=key(side,spec.index),token=layout[k],item=token?items[token]:null;const el=document.createElement('button');el.type='button';el.className=`equipment-slot ${visual.role}${item?'':' empty-slot'}${selected===k?' selected':''}`;el.dataset.key=k;el.draggable=!!token;if(item){el.style.setProperty('--rarity',tierColor(item.tier));el.innerHTML=`<div class="slot-top"><span class="slot-icon">${visual.icon}</span><span class="slot-label">${escapeHtml(spec.name)}</span><span class="tier">T${tierNumber(item.tier)}</span></div><div class="item-name">${escapeHtml(item.name)}</div><div class="item-meta">${escapeHtml(item.modifier||item.type||'装备')}</div><span class="origin">${item.origin==='player'?'玩家':'友军'}</span>`;el.onmouseenter=e=>showTooltip(e,item,spec);el.onmousemove=moveTooltip;el.onmouseleave=hideTooltip}else{el.innerHTML=`<div class="slot-top"><span class="slot-icon">${visual.icon}</span><span class="slot-label">${escapeHtml(spec.name)}</span></div><div class="empty-name">— 空槽 —</div>`}el.onclick=()=>choose(k);el.ondragstart=e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',k);hideTooltip()};el.ondragover=e=>{e.preventDefault();e.dataTransfer.dropEffect='move';el.classList.add('over')};el.ondragleave=()=>el.classList.remove('over');el.ondrop=e=>{e.preventDefault();el.classList.remove('over');swap(e.dataTransfer.getData('text/plain'),k)};root.appendChild(el)}}}
+function choose(k){if(!selected){selected=k;render();return}if(selected===k){selected=null;render();return}swap(selected,k);selected=null}
+function swap(a,b){if(!a||!b||a===b)return;const av=layout[a],bv=layout[b];layout[a]=bv;layout[b]=av;hideTooltip();render()}
+function reset(){initialize(session)}
+function showTooltip(e,item,spec){$('tooltipTitle').textContent=item.name;$('tooltipTitle').style.color=tierColor(item.tier);$('tooltipSlot').textContent=spec.name+' · T'+tierNumber(item.tier);$('tooltipMeta').textContent=(item.modifier||item.type||'装备')+(item.maxAmount>1?` · 数量 ${item.amount}/${item.maxAmount}`:'')+(item.weight?` · 重量 ${Number(item.weight).toFixed(1)}`:'');$('tooltip').style.display='block';moveTooltip(e)}
+function moveTooltip(e){const tt=$('tooltip'),gap=16;let x=e.clientX+gap,y=e.clientY+gap;if(x+tt.offsetWidth>innerWidth-10)x=e.clientX-tt.offsetWidth-gap;if(y+tt.offsetHeight>innerHeight-10)y=e.clientY-tt.offsetHeight-gap;tt.style.left=Math.max(10,x)+'px';tt.style.top=Math.max(10,y)+'px'}
+function hideTooltip(){$('tooltip').style.display='none'}
+function show(msg){const el=$('message');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3200)}
+function assignments(){return Object.entries(layout).map(([k,token])=>{const [side,slot]=k.split(':');return{side,slot:Number(slot),token}})}
+async function commit(){if(busy)return;busy=true;$('commit').disabled=true;try{const result=await app.request('commit',{sessionId:session.sessionId,revision:session.revision,assignments:assignments()},15000);if(!result||!result.ok)show(result&&result.message||'交换失败')}catch(e){show('提交失败：'+e)}finally{busy=false;$('commit').disabled=false}}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('reset').onclick=reset;$('cancel').onclick=()=>app.call('cancel',{});$('commit').onclick=commit;app.state.subscribe('equipmentSession',initialize);app.request('getSession',{},10000).then(initialize).catch(e=>show('读取装备失败：'+e));
+})();
+</script>
+</body>
+</html>

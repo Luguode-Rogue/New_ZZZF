@@ -763,6 +763,8 @@ namespace New_ZZZF
             WeaponComponentData defendItem,
             bool isPassiveUsage)
         {
+            if (JiFengLianZhanMissionLogic.Current?.IsActive(attackerAgent) == true)
+                return true;
             return ZZZFBlockBreakRules.Decide(
                 attackerAgent,
                 defenderAgent,
@@ -771,6 +773,23 @@ namespace New_ZZZF
                 strikeType,
                 defendItem,
                 isPassiveUsage);
+        }
+
+        public override float CalculateRemainingMomentum(
+            float originalMomentum,
+            in Blow blow,
+            in AttackCollisionData collisionData,
+            Agent attacker,
+            Agent victim,
+            in MissionWeapon attackerWeapon,
+            bool isCrushThrough)
+        {
+            if (isCrushThrough &&
+                JiFengLianZhanMissionLogic.Current?.IsActive(attacker) == true)
+                return originalMomentum;
+            return base.CalculateRemainingMomentum(
+                originalMomentum, in blow, in collisionData,
+                attacker, victim, in attackerWeapon, isCrushThrough);
         }
 
         public override float ApplyDamageReductions(
@@ -831,6 +850,8 @@ namespace New_ZZZF
             WeaponComponentData defendItem,
             bool isPassiveUsage)
         {
+            if (JiFengLianZhanMissionLogic.Current?.IsActive(attackerAgent) == true)
+                return true;
             return ZZZFBlockBreakRules.Decide(
                 attackerAgent,
                 defenderAgent,
@@ -839,6 +860,23 @@ namespace New_ZZZF
                 strikeType,
                 defendItem,
                 isPassiveUsage);
+        }
+
+        public override float CalculateRemainingMomentum(
+            float originalMomentum,
+            in Blow blow,
+            in AttackCollisionData collisionData,
+            Agent attacker,
+            Agent victim,
+            in MissionWeapon attackerWeapon,
+            bool isCrushThrough)
+        {
+            if (isCrushThrough &&
+                JiFengLianZhanMissionLogic.Current?.IsActive(attacker) == true)
+                return originalMomentum;
+            return base.CalculateRemainingMomentum(
+                originalMomentum, in blow, in collisionData,
+                attacker, victim, in attackerWeapon, isCrushThrough);
         }
 
         public override float ApplyDamageReductions(

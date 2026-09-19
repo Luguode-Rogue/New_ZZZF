@@ -39,6 +39,12 @@ namespace New_ZZZF
         /// <summary>BattleHudHtmlUi（战斗 HTML HUD：耐力/法力/技能冷却 Surface）</summary>
         public static bool BattleHud = true;
 
+        /// <summary>BattleEquipment：友军长按交互换装与 HTML 页面</summary>
+        public static bool BattleEquipment = true;
+
+        /// <summary>UnarmedWeaponPickup：无武器 AI 主动拾取战场武器</summary>
+        public static bool UnarmedWeaponPickup = true;
+
         /// <summary>Harmony PatchAll（Harmonys/ 目录与各 [HarmonyPatch] 特性补丁，含 NewDamageModel 等）</summary>
         public static bool HarmonyPatchAll = true;
 
@@ -130,6 +136,10 @@ namespace New_ZZZF
                         new XElement("Affix", Affix.ToString().ToLowerInvariant()),
                         new XComment(" 战斗 HTML HUD（耐力/法力/技能冷却 Surface）"),
                         new XElement("BattleHud", BattleHud.ToString().ToLowerInvariant()),
+                        new XComment(" 战场友军换装（长按交互 + HTML Page）"),
+                        new XElement("BattleEquipment", BattleEquipment.ToString().ToLowerInvariant()),
+                        new XComment(" 无武器 AI 自动拾取战场武器"),
+                        new XElement("UnarmedWeaponPickup", UnarmedWeaponPickup.ToString().ToLowerInvariant()),
                         new XComment(" Harmony PatchAll（全部 [HarmonyPatch] 补丁，含 NewDamageModel）"),
                         new XElement("HarmonyPatchAll", HarmonyPatchAll.ToString().ToLowerInvariant()),
                         new XComment(" 技能注册加载（CompositeSpellRegistry/SkillFactory/SkillConfig + L 键热重载）"),
@@ -157,6 +167,8 @@ namespace New_ZZZF
             if (TryParseBool(root.Element("HeroChange")?.Value, out v)) HeroChange = v;
             if (TryParseBool(root.Element("Affix")?.Value, out v)) Affix = v;
             if (TryParseBool(root.Element("BattleHud")?.Value, out v)) BattleHud = v;
+            if (TryParseBool(root.Element("BattleEquipment")?.Value, out v)) BattleEquipment = v;
+            if (TryParseBool(root.Element("UnarmedWeaponPickup")?.Value, out v)) UnarmedWeaponPickup = v;
             if (TryParseBool(root.Element("HarmonyPatchAll")?.Value, out v)) HarmonyPatchAll = v;
             if (TryParseBool(root.Element("SkillRegistry")?.Value, out v)) SkillRegistry = v;
             if (TryParseBool(root.Element("DamageModels")?.Value, out v)) DamageModels = v;

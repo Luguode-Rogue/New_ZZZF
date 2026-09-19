@@ -605,6 +605,7 @@ namespace New_ZZZF
             ref Vec2 inputVector)
         {
             RushMovementMissionLogic.Current?.ApplyPendingAiAttack(Agent, ref movementFlag);
+            JiFengLianZhanMissionLogic.Current?.ApplyPendingAiAttack(Agent, ref movementFlag);
         }
     }
 }
