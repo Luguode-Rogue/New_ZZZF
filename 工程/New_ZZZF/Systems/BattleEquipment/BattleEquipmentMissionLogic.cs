@@ -55,7 +55,8 @@ namespace New_ZZZF.Systems.BattleEquipment
         {
             base.OnMissionTick(dt);
             if (BattleEquipmentHtmlUi.Instance.IsOpen) return;
-            if (_focusedTarget == null || !_focusedTarget.IsActive() || !IsValidPair(Agent.Main, _focusedTarget))
+            if (_focusedTarget == null) return;
+            if (!_focusedTarget.IsActive() || !IsValidPair(Agent.Main, _focusedTarget))
             {
                 _focusedTarget = null;
                 ResetHold();
@@ -63,11 +64,7 @@ namespace New_ZZZF.Systems.BattleEquipment
                 return;
             }
 
-            if (!_holdArmed)
-            {
-                BattleEquipmentHtmlUi.Instance.UpdateHint(_focusedTarget, 0f, false);
-                return;
-            }
+            if (!_holdArmed) return;
 
             if (!Mission.InputManager.IsGameKeyDown(13))
             {

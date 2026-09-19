@@ -32,6 +32,10 @@ namespace New_ZZZF.Systems.BattleEquipment
         private bool _pausedByUs;
         private bool _closing;
         private BattleEquipmentSession _session;
+        private Agent _lastHintTarget;
+        private bool _lastHintHolding;
+        private int _lastHintProgressStep;
+        private bool _hintStateInitialized;
 
         public static BattleEquipmentHtmlUi Instance => LazyInstance.Value;
         public bool IsOpen => _pageOpened;
@@ -87,6 +91,7 @@ namespace New_ZZZF.Systems.BattleEquipment
             if (!_registered || !HtmlUiService.IsReady || _hintShown) return;
             try { _hintShown = HtmlUiService.Surfaces.Show(_hintId); }
             catch (Exception ex) { TacticalMapLog.Error("[BattleEquipment] Hint show failed.", ex); }
+            ResetHintStateCache();
             UpdateHint(null, 0f, false);
         }
 
@@ -98,19 +103,38 @@ namespace New_ZZZF.Systems.BattleEquipment
                 try { HtmlUiService.Surfaces.Hide(_hintId); } catch { }
             }
             _hintShown = false;
+            ResetHintStateCache();
         }
 
         public void UpdateHint(Agent target, float progress, bool holding)
         {
             if (!_registered || !_hintShown || _pageOpened) return;
+            float clampedProgress = Math.Max(0f, Math.Min(1f, progress));
+            int progressStep = holding ? Math.Min(20, (int)(clampedProgress * 20f + 0.5f)) : 0;
+            if (_hintStateInitialized && ReferenceEquals(_lastHintTarget, target) &&
+                _lastHintHolding == holding && _lastHintProgressStep == progressStep)
+                return;
+
+            _hintStateInitialized = true;
+            _lastHintTarget = target;
+            _lastHintHolding = holding;
+            _lastHintProgressStep = progressStep;
             _scope.SetState(HintState, new
             {
                 visible = target != null,
                 target = target?.Name ?? string.Empty,
                 holding,
-                progress = Math.Max(0f, Math.Min(1f, progress)),
+                progress = progressStep / 20f,
                 text = holding ? "继续按住交互键" : "长按交互键交换装备"
             });
+        }
+
+        private void ResetHintStateCache()
+        {
+            _lastHintTarget = null;
+            _lastHintHolding = false;
+            _lastHintProgressStep = -1;
+            _hintStateInitialized = false;
         }
 
         public bool Open(Agent player, Agent target)

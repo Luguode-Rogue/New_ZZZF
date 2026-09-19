@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using BannerlordHtmlUI;
-using Newtonsoft.Json;
 using New_ZZZF.TacticalMap.Diagnostics;
 
 namespace New_ZZZF.BattleHud
@@ -33,8 +32,10 @@ namespace New_ZZZF.BattleHud
         private bool _shown;
         private bool _captureSuspended;
         private bool _dirty = true;
-        private string _lastSignature;
+        private bool _stateSeeded;
         private AgentSkillComponent _boundComponent;
+
+        private string RuntimeStateFullKey => OwnerId + "." + StateKey;
 
         public static BattleHudHtmlUi Instance => _instance.Value;
 
@@ -80,7 +81,7 @@ namespace New_ZZZF.BattleHud
                 if (HtmlUiService.Surfaces.Show(_surfaceId))
                 {
                     _shown = true;
-                    _lastSignature = null;
+                    _stateSeeded = false;
                     _dirty = true;
                     EnsureBoundComponent();
                     TacticalMapLog.Info("[BattleHud] Surface shown for mission.");
@@ -101,7 +102,7 @@ namespace New_ZZZF.BattleHud
             {
                 _shown = false;
                 _dirty = true;
-                _lastSignature = null;
+                _stateSeeded = false;
                 return;
             }
 
@@ -110,7 +111,7 @@ namespace New_ZZZF.BattleHud
                 HtmlUiService.Surfaces.Hide(_surfaceId);
                 _shown = false;
                 _dirty = true;
-                _lastSignature = null;
+                _stateSeeded = false;
                 TacticalMapLog.Info("[BattleHud] Surface hidden after mission.");
             }
             catch (Exception ex)
@@ -197,14 +198,19 @@ namespace New_ZZZF.BattleHud
             try
             {
                 object state = BuildState(_boundComponent);
-                string signature = JsonConvert.SerializeObject(state, Formatting.None);
                 _dirty = false;
-
-                if (!force && string.Equals(signature, _lastSignature, StringComparison.Ordinal))
-                    return;
-
-                _lastSignature = signature;
-                _scope.SetState(StateKey, state);
+                if (force || !_stateSeeded)
+                {
+                    _scope.SetState(StateKey, state);
+                    _stateSeeded = true;
+                }
+                else
+                {
+                    // StateStore performs multiple JToken conversions for equality checks.
+                    // The HUD already owns its signature and only reaches here on a real change,
+                    // so publish the state event directly after the initial hydration seed.
+                    HtmlUiService.SendEvent("state:" + RuntimeStateFullKey, state);
+                }
             }
             catch (Exception ex)
             {
@@ -325,7 +331,7 @@ namespace New_ZZZF.BattleHud
             _shown = false;
             _dirty = true;
             _surfaceId = null;
-            _lastSignature = null;
+            _stateSeeded = false;
         }
     }
 }
