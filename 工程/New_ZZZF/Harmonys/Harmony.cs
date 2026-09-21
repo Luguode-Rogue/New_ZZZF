@@ -282,6 +282,11 @@ namespace New_ZZZF.Harmonys
             ////等待加限制 colReaction = MeleeCollisionReaction.SlicedThrough;
         }
     }
+    // 旧版灵马哨笛补丁，保留源码供追溯。
+    // 该补丁会屏蔽 Agent.Mount 原版实现并直接写入 MountAgent，
+    // 导致瞬间上马、动作状态与骑乘关系不同步，也会污染全局上下马逻辑。
+    // 现在由 SpiritSteedMissionLogic 管理技能过渡，并让原版 Agent.Mount 完整执行。
+#if false
     [HarmonyPatch(typeof(Agent), "Mount")]
     public class AgentPatches
     {
@@ -340,4 +345,5 @@ namespace New_ZZZF.Harmonys
             return false;
         }
     }
+#endif
 }

@@ -284,6 +284,15 @@ namespace New_ZZZF
                 record.Agent.Name, record.Agent.IsAIControlled, record.Segment, isCanceled,
                 victim == null ? "null" : victim.Name.ToString()));
 
+            // 疾风连砍激活期间，伤害模型会将原本的 Blocked 强制判定为突破格挡，
+            // 但接触数据仍保留原始的 Blocked 结果。本次攻击照常完成突破与伤害，
+            // 这里只终止自动续击，避免突破格挡后立即衔接下一刀。
+            if (collisionData.CollisionResult == CombatCollisionResult.Blocked)
+            {
+                End(record, "本段突破格挡，停止自动续击");
+                return;
+            }
+
             // 同一挥击可能接触多个碰撞体；第一次接触后立即离开 WaitingForContact，
             // 因而同一段最多只会安排一次续击。第10段发生有效接触后，以及此后
             // 每完成5段时，支付5点耐力继续下一批5段；不设置总段数上限。

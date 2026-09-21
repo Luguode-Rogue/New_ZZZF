@@ -42,6 +42,8 @@ namespace New_ZZZF
         public bool TriggerRightAttackOnEnd;
         public bool UseSafeKinematicMovement;
         public float KinematicSpeed;
+        /// <summary>可选的方向冲锋终点；有效时骑乘冲锋到达该点即结束，仍保留穿阵撞倒逻辑。</summary>
+        public Vec3 DirectionalStopPosition = Vec3.Invalid;
         public Action<Agent, Agent, RushEndReason> OnEnded;
     }
 
@@ -187,6 +189,15 @@ namespace New_ZZZF
             RushRecord record = CreateRecord(mover, options, RushMovementMode.DirectionalCharge);
             record.Target = aimedTarget;
             record.Direction = direction.Normalized();
+            if (options.DirectionalStopPosition.IsValid)
+            {
+                if (!TryGetNavigablePosition(options.DirectionalStopPosition, out Vec3 stopPosition))
+                {
+                    failureReason = "目标地点没有可用的导航区域。";
+                    return false;
+                }
+                record.FixedPosition = stopPosition;
+            }
             record.LastMount = mover.MountAgent;
             _records.Add(mover.Index, record);
 #if false
@@ -375,6 +386,14 @@ namespace New_ZZZF
                 EndRecord(record, RushEndReason.Arrived);
                 return;
             }
+            else if (record.Mode == RushMovementMode.DirectionalCharge &&
+                     record.FixedPosition.IsValid &&
+                     (record.FixedPosition - mover.Position).AsVec2.Length <=
+                     Math.Max(0.35f, record.Options.StopDistance))
+            {
+                EndRecord(record, RushEndReason.Arrived);
+                return;
+            }
 
             record.DiagnosticsTimer -= dt;
             if (record.DiagnosticsTimer <= 0f)
@@ -543,6 +562,11 @@ namespace New_ZZZF
 
             if (record.Mode == RushMovementMode.DirectionalCharge)
             {
+                if (record.FixedPosition.IsValid)
+                {
+                    destination = record.FixedPosition;
+                    return true;
+                }
                 for (float lookAhead = 24f; lookAhead >= 4f; lookAhead -= 4f)
                 {
                     Vec3 candidate = record.Mover.Position + record.Direction.ToVec3() * lookAhead;

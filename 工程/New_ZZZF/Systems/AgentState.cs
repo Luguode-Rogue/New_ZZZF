@@ -79,6 +79,29 @@ namespace New_ZZZF
             catch (Exception e) { Debug.Print("[New_ZZZF] AddState.OnApply 异常: " + e.Message); }
         }
 
+        /// <summary>
+        /// 添加一个不可叠加状态。同 StateId 的旧状态会先正常移除，再由新状态
+        /// 替换，适用于灼烧等需要刷新持续时间和伤害快照的效果。
+        /// </summary>
+        public void AddOrReplaceState(AgentBuff state, Agent owner)
+        {
+            if (state == null) return;
+            Agent target = owner ?? state.TargetAgent;
+            for (int i = _activeStates.Count - 1; i >= 0; i--)
+            {
+                AgentBuff existing = _activeStates[i];
+                if (!string.Equals(existing.StateId, state.StateId, StringComparison.Ordinal))
+                    continue;
+                _activeStates.RemoveAt(i);
+                if (target != null)
+                {
+                    try { existing.OnRemove(target); }
+                    catch (Exception e) { Debug.Print("[New_ZZZF] ReplaceState.OnRemove 异常: " + e.Message); }
+                }
+            }
+            AddState(state, owner);
+        }
+
         public void UpdateStates(Agent agent, float dt)
         {
             for (int i = _activeStates.Count - 1; i >= 0; i--)
@@ -130,67 +153,124 @@ namespace New_ZZZF
             }
         }
     }
-    public class BurningState : AgentBuff
+    public class PeriodicMagicDamageState : AgentBuff
     {
-        private float _damagePerSecond;
+        private readonly float _baseDamagePerTick;
+        private readonly float _spellPowerCoefficient;
+        private readonly float _tickInterval;
+        private readonly DamageType _damageType;
+        private float _resolvedDamagePerTick;
         private float _timeSinceLastTick;
-        public BurningState(float duration, float dps, Agent source)
-        {
-            StateId = "fire_burning";
-            Duration = duration;
-            _damagePerSecond = dps;
-            SourceAgent = source;
-            _timeSinceLastTick = 0; // 新增初始化
-        }
 
+        public PeriodicMagicDamageState(
+            string stateId,
+            float duration,
+            float tickInterval,
+            float baseDamagePerTick,
+            float spellPowerCoefficient,
+            DamageType damageType,
+            Agent source)
+        {
+            StateId = stateId;
+            Duration = MathF.Max(0f, duration);
+            _tickInterval = MathF.Max(0.05f, tickInterval);
+            _baseDamagePerTick = MathF.Max(0f, baseDamagePerTick);
+            _spellPowerCoefficient = MathF.Max(0f, spellPowerCoefficient);
+            _damageType = damageType;
+            SourceAgent = source;
+            _timeSinceLastTick = 0f;
+        }
 
         public override void OnApply(Agent agent)
         {
-            // 触发燃烧特效
-            agent.PlayParticleEffect("fire_burning");
+            // DoT 在挂载时快照目标当前魔抗，后续每跳不再重复查属性，
+            // 也不进入 Blow/受击/战斗日志链。
+            MagicDamageResult result = MagicDamageSystem.Calculate(
+                agent, _baseDamagePerTick, _spellPowerCoefficient, _damageType);
+            _resolvedDamagePerTick = result.FinalDamage;
         }
 
         public override void OnUpdate(Agent agent, float dt)
         {
-            // 累积伤害时间
             _timeSinceLastTick += dt;
-
-            // 每秒触发一次伤害
-            if (_timeSinceLastTick >= 1f)
+            while (_timeSinceLastTick >= _tickInterval)
             {
-                // 使用你的伤害计算逻辑
-                Script.CalculateFinalMagicDamage(
-                    SourceAgent,
-                    agent,
-                    _damagePerSecond,
-                    DamageType.FIRE_DAMAGE
-                );
+                _timeSinceLastTick -= _tickInterval;
+                if (agent == null || !agent.IsActive())
+                    break;
+                if (_resolvedDamagePerTick <= 0f)
+                    continue;
 
-                _timeSinceLastTick -= 1f; // 重置计时器
+                // 持续伤害只直接修改生命，避免每跳制造 Blow、受击动作、
+                // 士气事件和伤害飘字。Health 属性会按引擎规则取整并同步。
+                agent.Health = MathF.Max(0f, agent.Health - _resolvedDamagePerTick);
             }
         }
 
         public override void OnRemove(Agent agent)
         {
-            // 移除特效
+        }
+    }
+
+    public class BurningState : PeriodicMagicDamageState
+    {
+        public BurningState(float duration, float baseDamagePerTick, Agent source)
+            : this(
+                duration,
+                baseDamagePerTick,
+                source,
+                New_ZZZF.Systems.MagicDamageSystem.GetSpellPowerCoefficient(source))
+        {
+        }
+
+        public BurningState(
+            float duration,
+            float baseDamagePerTick,
+            Agent source,
+            float spellPowerCoefficient)
+            : base(
+                "fire_burning",
+                duration,
+                1f,
+                baseDamagePerTick,
+                spellPowerCoefficient,
+                DamageType.FIRE_DAMAGE,
+                source)
+        {
+        }
+
+        public override void OnApply(Agent agent)
+        {
+            base.OnApply(agent);
+            agent.PlayParticleEffect("fire_burning");
+        }
+
+        public override void OnRemove(Agent agent)
+        {
             agent.StopParticleEffect("fire_burning");
         }
     }
     public class du : AgentBuff
     {
-        private float _damagePerSecond;
+        private readonly float _baseDamagePerSecond;
+        private float _resolvedDamagePerSecond;
         private float _timeSinceLastTick;
         public du(float duration, float dps, Agent source)
         {
             StateId = "du";
             Duration = duration;
-            _damagePerSecond = dps;
+            _baseDamagePerSecond = dps;
             SourceAgent = source;
             _timeSinceLastTick = 0; // 新增初始化
         }
 
         public override void OnApply(Agent agent)
         {
+            _resolvedDamagePerSecond = MagicDamageSystem.Calculate(
+                agent,
+                _baseDamagePerSecond,
+                MagicDamageSystem.GetSpellPowerCoefficient(SourceAgent),
+                DamageType.FIRE_DAMAGE).FinalDamage;
             // 触发燃烧特效
             agent.PlayParticleEffect("du");
         }
@@ -203,13 +283,8 @@ namespace New_ZZZF
             // 每秒触发一次伤害
             if (_timeSinceLastTick >= 1f)
             {
-                // 使用你的伤害计算逻辑
-                Script.CalculateFinalMagicDamage(
-                    SourceAgent,
-                    agent,
-                    _damagePerSecond,
-                    DamageType.FIRE_DAMAGE
-                );
+                if (agent != null && agent.IsActive() && _resolvedDamagePerSecond > 0f)
+                    agent.Health = MathF.Max(0f, agent.Health - _resolvedDamagePerSecond);
 
                 _timeSinceLastTick -= 1f; // 重置计时器
             }
@@ -267,25 +342,35 @@ namespace New_ZZZF
     /// <summary>中毒状态：持续造成火焰/毒素伤害（DOT）。</summary>
     public class WeakenState : AgentBuff
     {
-        private readonly float _damagePerSecond;
+        private readonly float _baseDamagePerSecond;
+        private float _resolvedDamagePerSecond;
         private float _timeSinceLastTick;
         public WeakenState(float duration, float dps, Agent source)
         {
             StateId = "forge_poison";
             Duration = duration;
-            _damagePerSecond = dps;
+            _baseDamagePerSecond = dps;
             SourceAgent = source;
             _timeSinceLastTick = 0;
         }
 
-        public override void OnApply(Agent agent) => agent.PlayParticleEffect("du");
+        public override void OnApply(Agent agent)
+        {
+            _resolvedDamagePerSecond = MagicDamageSystem.Calculate(
+                agent,
+                _baseDamagePerSecond,
+                MagicDamageSystem.GetSpellPowerCoefficient(SourceAgent),
+                DamageType.TOXIN_DAMAGE).FinalDamage;
+            agent.PlayParticleEffect("du");
+        }
 
         public override void OnUpdate(Agent agent, float dt)
         {
             _timeSinceLastTick += dt;
             if (_timeSinceLastTick >= 1f)
             {
-                Script.CalculateFinalMagicDamage(SourceAgent, agent, _damagePerSecond, DamageType.TOXIN_DAMAGE);
+                if (agent != null && agent.IsActive() && _resolvedDamagePerSecond > 0f)
+                    agent.Health = MathF.Max(0f, agent.Health - _resolvedDamagePerSecond);
                 _timeSinceLastTick -= 1f;
             }
         }

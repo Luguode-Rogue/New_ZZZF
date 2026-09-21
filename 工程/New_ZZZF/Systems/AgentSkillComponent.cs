@@ -21,6 +21,27 @@ namespace New_ZZZF
         public Agent AgentInstance => base.Agent;
         public Agent BaseAgent => base.Agent;//淦，记不住上面哪个名字
         public float MaxHP { get; private set; }
+        /// <summary>新增法强属性。魔法伤害 = 技能基础伤害 × 此系数，默认1。</summary>
+        public float MagicPowerCoefficient { get; private set; } = 1f;
+        /// <summary>来自角色属性的通用魔抗，对全部魔法属性生效。</summary>
+        public float AttributeMagicResistance { get; private set; }
+        /// <summary>来自装备、技能和状态等特殊来源的通用魔抗。</summary>
+        public float SpecialUniversalMagicResistance { get; private set; }
+        public float SpecialFireResistance { get; private set; }
+        public float SpecialIceResistance { get; private set; }
+        public float SpecialElectricityResistance { get; private set; }
+        public float SpecialToxinResistance { get; private set; }
+        private sealed class SpecialMagicResistanceSource
+        {
+            public float Universal;
+            public float Fire;
+            public float Ice;
+            public float Electricity;
+            public float Toxin;
+        }
+        private readonly Dictionary<string, SpecialMagicResistanceSource>
+            _specialMagicResistanceSources =
+                new Dictionary<string, SpecialMagicResistanceSource>(StringComparer.Ordinal);
         // 新增状态容器
         public AgentBuffContainer StateContainer { get; } = new AgentBuffContainer();
         //------------------------ 技能槽配置 ------------------------
@@ -172,6 +193,98 @@ namespace New_ZZZF
                 return true;
             }
             return false;
+        }
+
+        public void SetMagicPowerCoefficient(float value)
+        {
+            MagicPowerCoefficient = MathF.Max(0f, value);
+        }
+
+        public void SetAttributeMagicResistance(float value)
+        {
+            AttributeMagicResistance = value;
+        }
+
+        public void SetSpecialMagicResistances(
+            float universal,
+            float fire,
+            float ice,
+            float electricity,
+            float toxin)
+        {
+            SetSpecialMagicResistanceSource(
+                "direct", universal, fire, ice, electricity, toxin);
+        }
+
+        public void SetSpecialMagicResistanceSource(
+            string sourceId,
+            float universal,
+            float fire,
+            float ice,
+            float electricity,
+            float toxin)
+        {
+            if (string.IsNullOrEmpty(sourceId))
+                return;
+            _specialMagicResistanceSources[sourceId] = new SpecialMagicResistanceSource
+            {
+                Universal = universal,
+                Fire = fire,
+                Ice = ice,
+                Electricity = electricity,
+                Toxin = toxin
+            };
+            RecalculateSpecialMagicResistances();
+        }
+
+        public void RemoveSpecialMagicResistanceSource(string sourceId)
+        {
+            if (!string.IsNullOrEmpty(sourceId) &&
+                _specialMagicResistanceSources.Remove(sourceId))
+                RecalculateSpecialMagicResistances();
+        }
+
+        private void RecalculateSpecialMagicResistances()
+        {
+            float universal = 0f;
+            float fire = 0f;
+            float ice = 0f;
+            float electricity = 0f;
+            float toxin = 0f;
+            foreach (SpecialMagicResistanceSource source in _specialMagicResistanceSources.Values)
+            {
+                universal += source.Universal;
+                fire += source.Fire;
+                ice += source.Ice;
+                electricity += source.Electricity;
+                toxin += source.Toxin;
+            }
+            SpecialUniversalMagicResistance = universal;
+            SpecialFireResistance = fire;
+            SpecialIceResistance = ice;
+            SpecialElectricityResistance = electricity;
+            SpecialToxinResistance = toxin;
+        }
+
+        public float GetSpecialElementResistance(DamageType damageType)
+        {
+            switch (damageType)
+            {
+                case DamageType.FIRE_DAMAGE:
+                case DamageType.FIRE_ENHANCEMENT_BLASTING:
+                    return SpecialFireResistance;
+                case DamageType.ICE_DAMAGE:
+                case DamageType.ICE_ENHANCEMENT_FREEZING:
+                    return SpecialIceResistance;
+                case DamageType.ELECTRICITY_DAMAGE:
+                case DamageType.ELECTRICITY_ENHANCEMENT_PARALYZING:
+                    return SpecialElectricityResistance;
+                case DamageType.TOXIN_DAMAGE:
+                case DamageType.TOXIN_ENHANCEMENT_CORRUPTING:
+                    return SpecialToxinResistance;
+                default:
+                    return 0f;
+            }
         }
         /// <summary>
         /// 根据兵种配置初始化技能槽

@@ -177,6 +177,9 @@ namespace New_ZZZF
             {
                 mission.AddMissionBehavior(new RushMovementMissionLogic());
                 mission.AddMissionBehavior(new JiFengLianZhanMissionLogic());
+                mission.AddMissionBehavior(new SpellProjectileMissionLogic());
+                mission.AddMissionBehavior(new SpellAreaMissionLogic());
+                mission.AddMissionBehavior(new SpiritSteedMissionLogic());
                 mission.AddMissionBehavior(new SkillSystemBehavior());
                 mission.AddMissionBehavior(new SummonManagerMissionLogic());
             }

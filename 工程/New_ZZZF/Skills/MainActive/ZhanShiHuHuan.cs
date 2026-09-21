@@ -22,7 +22,7 @@ namespace New_ZZZF.Skills
             Text = new TextObject("战士呼唤");
             Difficulty = null;
             Description = new TextObject(
-                "在目视落点召唤一个与施法者阶级相同的帝国近战士兵，持续30秒。每个召唤物暂时占用等同其阶级的生命上限。消耗耐力：35。冷却时间：30秒。");
+                "快速使用时在视野内敌人最密集的位置召唤一个与施法者阶级相同的帝国近战士兵；按住Shift时改为在视线指示落点召唤。召唤物持续30秒，并暂时占用等同其阶级的生命上限。消耗耐力：35。冷却时间：30秒。");
         }
 
         public override bool Activate(Agent agent)
@@ -38,10 +38,11 @@ namespace New_ZZZF.Skills
 
             int summonedCount;
             string failureReason;
-            Agent aiTarget = !agent.IsMainAgent ? agent.GetTargetAgent() : null;
-            Vec3 summonPosition = aiTarget != null && aiTarget.IsActive()
-                ? aiTarget.Position
-                : Script.AgentLookPos(agent);
+            if (!SpellTargetingSystem.TryResolveAreaTarget(
+                    agent, MaximumAiCastDistance, 5f,
+                    out SpellTargetingSystem.Result targeting))
+                return FailActivation("视野内没有可用目标。");
+            Vec3 summonPosition = targeting.Position;
             if (!manager.TrySummonBatch(
                 agent,
                 summonPosition,

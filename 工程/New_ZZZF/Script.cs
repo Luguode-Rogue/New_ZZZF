@@ -173,28 +173,25 @@ namespace New_ZZZF
                         matrixFrame.rotation = Agent.Main.LookRotation;
                         matrixFrame.rotation.u = Vec3.Up;
                         item.Value.SetFrame(ref matrixFrame);
+                    }
 
-                        // 优化部分开始
-                        foreach (var foe in foeAgent)
+                    // 轮廓判定与16个指示器模型无关，每帧只执行一次。
+                    foreach (var foe in foeAgent)
+                    {
+                        if (foe.IsActive())
                         {
-                            if (foe.IsActive())
-                            {
-                                float distanceSq = lookP.DistanceSquared(foe.GetEyeGlobalPosition());
-                                uint? targetColor = distanceSq <= 25 ?
-                                    new Color(1f, 0f, 0f, 1f).ToUnsignedInteger() :
-                                    null;
+                            float distanceSq = lookP.DistanceSquared(foe.GetEyeGlobalPosition());
+                            uint? targetColor = distanceSq <= 25 ?
+                                new Color(1f, 0f, 0f, 1f).ToUnsignedInteger() :
+                                null;
 
-                                // 通过缓存避免重复设置相同颜色
-                                if (_contourCache.TryGetValue(foe, out var currentColor))
-                                {
-                                    if (currentColor == targetColor) continue;
-                                }
+                            if (_contourCache.TryGetValue(foe, out var currentColor) &&
+                                currentColor == targetColor)
+                                continue;
 
-                                foe.AgentVisuals.SetContourColor(targetColor, true);
-                                _contourCache[foe] = targetColor;
-                            }
+                            foe.AgentVisuals.SetContourColor(targetColor, true);
+                            _contourCache[foe] = targetColor;
                         }
-                        // 优化部分结束
                     }
                 }
             }
@@ -205,23 +202,33 @@ namespace New_ZZZF
                     MatrixFrame matrixFrame = MatrixFrame.Identity;
                     item.Value.SetFrame(ref matrixFrame);
                 }
-                Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
-
-                // 清理缓存优化
-                var toRemove = new List<Agent>();
-                foreach (var kvp in _contourCache)
+                // 不得遍历缓存中的 Agent 去调用 AgentVisuals：死亡/移除后的
+                // 托管对象可能仍存在，但 MBAgentVisuals 的原生指针已被回收。
+                // 只对当前 Mission.Agents 中仍活跃的实体清除轮廓。
+                foreach (Agent currentAgent in Mission.Current.Agents)
                 {
-                    if (!foeAgent.Contains(kvp.Key))
-                    {
-                        toRemove.Add(kvp.Key);
-                    }
-                    else
-                    {
-                        kvp.Key.AgentVisuals.SetContourColor(null, true);
-                    }
+                    if (currentAgent == null || !currentAgent.IsActive() ||
+                        !_contourCache.ContainsKey(currentAgent))
+                        continue;
+                    MBAgentVisuals visuals = currentAgent.AgentVisuals;
+                    if (visuals != null)
+                        visuals.SetContourColor(null, true);
                 }
-                foreach (var key in toRemove) _contourCache.Remove(key);
+                _contourCache.Clear();
             }
+        }
+
+        /// <summary>任务切换时只丢弃托管缓存，不访问可能已失效的原生 AgentVisuals。</summary>
+        public static void ClearProjectileTargetVisualCache()
+        {
+            _contourCache.Clear();
+        }
+
+        /// <summary>Agent 进入移除回调后只注销引用，禁止再访问其 AgentVisuals。</summary>
+        public static void ForgetProjectileTarget(Agent agent)
+        {
+            if (agent != null)
+                _contourCache.Remove(agent);
         }
         /// <summary>
         /// 玩家报错信息
@@ -1164,6 +1171,10 @@ namespace New_ZZZF
                 AmmoWeapon.CurrentUsageItem == null || !StartPos.IsValid || !StartDirOrEndPos.IsValid)
                 return 0;
 
+            WeaponComponentData ammoUsage = AmmoWeapon.CurrentUsageItem;
+            if (!ammoUsage.IsAmmo && !ammoUsage.IsConsumable)
+                return 0;
+
             //需要设定一个缺省值，避免传入的物品是近战武器，从而无法获取弹药速度
             //首先是根据传递进来的ShotWeapon获取AddCustomMissile需要的missile的speed属性，如果传递进来一个近战武器，则固定使用30的速度，差不多是投矛的弹速。
             ////更新：两个speed知道怎么回事了，投射物真实速度是在OnAgentShootMissile里 进行获取，然后进行记录，再在这里使用
@@ -1326,34 +1337,26 @@ namespace New_ZZZF
         /// <param name="DamageType"></param>
         public static void CalculateFinalMagicDamage(Agent Caster, Agent Victim, float BaseDamage, DamageType DamageType)
         {
-            SkillSystemBehavior.ActiveComponents.TryGetValue(Victim.Index, out var affectedComponent);
-            SkillSystemBehavior.ActiveComponents.TryGetValue(Caster.Index, out var attackerComponent);
-            if (affectedComponent != null)
-            {
-                if (affectedComponent.StateContainer.HasState("TianQiBuff"))
-                {
-                    return;
-                }
-            }
-            if (attackerComponent != null)
-            {
-                if (attackerComponent.StateContainer.HasState("JianQiCiFuBuff"))
-                {
+            Systems.MagicDamageSystem.Apply(
+                Caster,
+                Victim,
+                BaseDamage,
+                Systems.MagicDamageSystem.GetSpellPowerCoefficient(Caster),
+                DamageType);
+        }
 
-                }
-            }
-            float DifHP = Victim.Health;
-            DifHP -= BaseDamage;
-            Victim.Health = DifHP;
-            SysOut("造成了" + BaseDamage.ToString() + "点" + DamageType.ToString() + "伤害", Caster);
-
-            if (Victim.Health <= 0)
-            {
-                Blow blow = new Blow(Caster.Index);
-                blow.InflictedDamage = (int)BaseDamage;
-                Victim.Die(blow);
-                //Mission.Current.KillAgentCheat(Victim);
-            }
+        public static Systems.MagicDamageResult CalculateFinalMagicDamage(
+            Agent caster,
+            Agent victim,
+            float baseDamage,
+            float spellPowerCoefficient,
+            DamageType damageType,
+            Systems.MagicDamageFlags flags = Systems.MagicDamageFlags.None,
+            Vec3? impactPosition = null)
+        {
+            return Systems.MagicDamageSystem.Apply(
+                caster, victim, baseDamage, spellPowerCoefficient,
+                damageType, flags, impactPosition);
         }
         /// <summary>
         /// 注意判定非空，输入agent，获取对应的扩展信息
@@ -1377,7 +1380,8 @@ namespace New_ZZZF
 
         private static bool ConeOfArrows(Agent agent, int num)
         {
-            if (agent.Equipment != null)
+            if (agent != null && agent.IsActive() && agent.Mission != null &&
+                agent.Equipment != null && num > 0)
             {
 
 
@@ -1391,6 +1395,20 @@ namespace New_ZZZF
 
                 // EquipmentIndex转MissionWeapon
                 MissionWeapon mainHandEquipmentElement = agent.Equipment[mainHandIndex];
+                if (mainHandEquipmentElement.IsEmpty ||
+                    mainHandEquipmentElement.CurrentUsageItem == null ||
+                    !mainHandEquipmentElement.CurrentUsageItem.IsRangedWeapon)
+                {
+                    SysOut("主手武器不是有效的远程武器", agent);
+                    return false;
+                }
+
+                if (!TryGetActualAmmoWeapon(agent, mainHandEquipmentElement, out MissionWeapon ammoWeapon))
+                {
+                    SysOut("无有效弹药", agent);
+                    return false;
+                }
+
                 // 获取主手装备元素的修正后的导弹速度
                 float baseSpeed = -1;
                 SkillSystemBehavior.WoW_AgentMissileSpeedData.TryGetValue(agent.Index, out var list);
@@ -1421,7 +1439,8 @@ namespace New_ZZZF
                     radians = (randomValue) * (3.1415f / 180.0f); // 角度转换为弧度
 
                     mat3.RotateAboutSide(radians);
-                    int index = FireProjectileFromAgentWithWeaponAtPosition(agent, agent.Equipment[mainHandIndex], mainHandEquipmentElement, headPosition, mat3.f, baseSpeed);
+                    int index = FireProjectileFromAgentWithWeaponAtPosition(
+                        agent, mainHandEquipmentElement, ammoWeapon, headPosition, mat3.f, baseSpeed);
 
 
                 }

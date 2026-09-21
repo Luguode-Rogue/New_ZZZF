@@ -24,7 +24,7 @@ namespace New_ZZZF.Skills//（法术）
             ResourceCost = 15;
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0043}LeiJi");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0044}召唤一道闪电，轰击目标地点，造成施法者等级点伤害。消耗法力值：15。冷却时间：3秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0044}快速施法时轰击视野内敌人最密集的地点；按住Shift时轰击视线指示落点。对3米范围内的敌人造成30点基础电击伤害。消耗法力值：15。冷却时间：3秒。");
 
 
         }
@@ -32,14 +32,15 @@ namespace New_ZZZF.Skills//（法术）
 
         public override bool Activate(Agent agent)
         {
-            List<Agent> target = FindTarget(agent);
-            MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
-            Vec3 lookP = Script.CameraLookPos();
-            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(24) && Agent.Main != null)
-            {
-                Script.AgentListIFF(Agent.Main, Script.FindAgentsWithinSpellRange(lookP, 3), out var friendAgent, out var foeAgent);
-                target = foeAgent;
-            }
+            if (!SpellTargetingSystem.TryResolveAreaTarget(
+                    agent, 30f, 3f, out SpellTargetingSystem.Result targeting))
+                return FailActivation("视野内没有可用目标。");
+
+            Script.AgentListIFF(
+                agent,
+                Script.FindAgentsWithinSpellRange(targeting.Position, 3),
+                out _,
+                out List<Agent> target);
 
             if (target != null && target.Count > 0)
             {
@@ -52,23 +53,8 @@ namespace New_ZZZF.Skills//（法术）
                 }
                 return true;
             }
-            else
-                return false;
-
-
-        }
-        private List<Agent> FindTarget(Agent agent)
-        {
-
-            Agent tarAgent = Script.FindOptimalConflictPos(agent, Script.AgentLookPos(agent), 30);
-            if (tarAgent != null)
-            {
-
-                List<Agent> list = Script.FindAgentsWithinSpellRange(tarAgent.Position, 3);
-                Script.AgentListIFF(agent, list, out var FriendAgent, out var FoeAgent);
-                return FoeAgent;
-            }
-            else return null;
+            // 指示施法允许玩家预先封锁空地；快速施法则在统一选点阶段已保证有目标。
+            return targeting.UsesManualIndicator;
         }
         public static void useToAgent(Agent caster, Agent vimAgent)
         {

@@ -1,123 +1,220 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TaleWorlds.CampaignSystem;
-using TaleWorlds.Core;
-using TaleWorlds.MountAndBlade;
+using New_ZZZF.Systems;
 using TaleWorlds.Library;
+using TaleWorlds.Localization;
+using TaleWorlds.MountAndBlade;
 
-namespace New_ZZZF.Skills//（法术）
+namespace New_ZZZF.Skills
 {
-    // 示例：在火球术中附加燃烧状态
-    public class FireballSkill : SkillBase
+    /// <summary>沿瞄准方向飞行、接触后造成火焰爆炸并施加灼烧的基础法术。</summary>
+    public sealed class FireballSkill : SkillBase
     {
-        // 缓存机制：每Agent的目标检测结果，避免频繁遍历
-        private static Dictionary<int, (float time, List<Agent> enemies)> _targetCache = new Dictionary<int, (float, List<Agent>)>();
-        
+        private const float MinimumAiRange = 8f;
+        private const float MaximumAiRange = 45f;
+        private const float ProjectileSpeed = 25f;
+        private const float ProjectileLifetime = 4f;
+        private const float ProjectileHitRadius = 0.75f;
+        private const float ExplosionRadius = 4f;
+        private const float DirectBaseDamage = 30f;
+        private const float ExplosionCenterBaseDamage = 20f;
+        private const float ExplosionEdgeBaseDamage = 8f;
+        private const float BurningDuration = 5f;
+        private const float BurningBaseDamagePerTick = 5f;
+        private static readonly MBList<Agent> ExplosionTargets = new MBList<Agent>();
+
+        private sealed class FireballSnapshot
+        {
+            public float SpellPowerCoefficient;
+        }
+
         public FireballSkill()
         {
             SkillID = "Fireball";
             Type = SPSkillType.Spell;
-            Cooldown = 100f;
-            ResourceCost = 100f;
-            Text = new TaleWorlds.Localization.TextObject("{=12345678}Fireball");
-
-        }
-        
-        /// <summary>
-        /// NPC AI逻辑：智能判断是否应该释放火球术
-        /// 触发条件（满足任一即可）：
-        /// 1. 敌人群体密集（3个以上敌人在15米内）→ AOE收益最大化
-        /// 2. 有高价值目标（Hero/精英兵）在射程内 → 优先击杀威胁目标
-        /// 3. 自身血量低（<30%）且有敌人在射程内 → 绝望反击
-        /// 4. 敌人正在使用远程武器 → 优先打断
-        /// </summary>
-        public override bool CheckCondition(Agent caster)
-        {
-            // 1. 基础条件检查（Agent活跃且非坐骑）
-            if (!base.CheckCondition(caster)) return false;
-            
-            // 2. 性能优化：缓存机制（每2秒重新检测）
-            float currentTime = (float)Mission.Current.CurrentTime;
-            if (!_targetCache.TryGetValue(caster.Index, out var cached) ||
-                currentTime - cached.time > 2f)
-            {
-                var detectedEnemies = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 15);
-                _targetCache[caster.Index] = (currentTime, detectedEnemies);
-            }
-
-            // 3. 获取缓存的敌人列表
-            var enemies = _targetCache[caster.Index].enemies;
-            if (enemies == null || enemies.Count == 0) return false;
-            
-            // 4. 战术判断
-            // 条件1：群体密集（AOE收益）
-            if (enemies.Count >= 3) return true;
-            
-            // 条件2：高价值目标（Hero单位）
-            foreach (var enemy in enemies)
-            {
-                if (enemy.IsHero) return true;
-            }
-            
-            // 条件3：自身血量低（ desperation）
-            var skillComponent = caster.GetComponent<AgentSkillComponent>();
-            if (skillComponent != null && caster.Health < skillComponent.MaxHP * 0.3f) return true;
-            
-            // 条件4：敌人使用远程武器（优先打断）
-            foreach (var enemy in enemies)
-            {
-                var weapon = enemy.WieldedWeapon.CurrentUsageItem;
-                if (weapon != null && weapon.IsRangedWeapon) return true;
-            }
-            
-            return false;
-        }
-        
-        /// <summary>
-        /// 清理指定Agent的缓存（避免内存泄漏）
-        /// </summary>
-        public static void CleanCache(int agentIndex)
-        {
-            _targetCache.Remove(agentIndex);
+            Cooldown = 8f;
+            ResourceCost = 30f;
+            Difficulty = null;
+            Text = new TextObject("{=12345678}火球");
+            Description = new TextObject(
+                "快速施法时向视野内的敌人发射火球；按住Shift时改为朝视线指示落点发射。直接命中造成30点基础火焰伤害，随后在4米范围内造成20至8点基础火焰伤害，并施加持续5秒、每秒5点基础伤害的灼烧。灼烧挂载时按目标魔抗降低每秒伤害。所有伤害均乘以施法者的技能法强系数。消耗法力：30。冷却时间：8秒。");
         }
 
-
-        public override bool Activate(Agent agent)
+        public override bool Activate(Agent caster)
         {
-            Agent target = FindTarget(agent);
-            if (target == null || !target.IsActive()) return false;
+            if (caster == null || !caster.IsActive())
+                return FailActivation("施法者当前不可用。");
 
-            // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff>
+            SpellProjectileMissionLogic manager = SpellProjectileMissionLogic.GetForCurrentMission();
+            if (manager == null)
+                return FailActivation("当前任务未加载法术投射物管理器。");
+
+            if (!SpellTargetingSystem.TryResolveSingleTarget(
+                    caster, MaximumAiRange, out SpellTargetingSystem.Result targeting))
+                return FailActivation("视野内没有可用目标。");
+
+            Vec3 direction = ResolveCastDirection(caster, targeting);
+            SpellProjectileRequest request = new SpellProjectileRequest
+            {
+                Caster = caster,
+                StartPosition = caster.GetEyeGlobalPosition() + direction.NormalizedCopy() * 0.8f,
+                Direction = direction,
+                Speed = ProjectileSpeed,
+                Lifetime = ProjectileLifetime,
+                HitRadius = ProjectileHitRadius,
+                // 原版火焰投石器使用的 Fire Pot 弹丸可视网格。
+                MeshResourceName = "projectile_pot",
+                // TODO 飞行粒子的预期表现（资源完成前保持关闭）：
+                // 1. 核心层：贴合 Fire Pot 弹体的黄白色高亮火芯，尺寸稳定，不遮住弹体轮廓。
+                // 2. 外焰层：橙红火焰向飞行反方向拉伸，短寿命、连续低密度发射，不形成大块透明叠加。
+                // 3. 火星层：每秒少量亮黄火星脱落，带小幅随机侧向速度和轻微重力下坠。
+                // 4. 烟尾层：深灰薄烟在世界空间保留，寿命0.15~0.45秒，离开弹体后扩散并迅速淡出。
+                // 5. 整体宽度不超过当前0.75米判定半径；不带动态光源，远距离LOD关闭火星和烟雾。
+                ParticleSystemName = null,
+                HitHumanAgentsOnly = true,
+                HitEnemiesOnly = true,
+                InvokeImpactWhenLifetimeExpires = true,
+                OnImpact = OnFireballImpact,
+                Payload = new FireballSnapshot
                 {
-                    new BurningState(5f, 1f, agent), // 新实例
-                    new du(5f, 1f, agent)            // 新实例
-                };
+                    SpellPowerCoefficient = MagicDamageSystem.GetSpellPowerCoefficient(caster)
+                }
+            };
+            if (!manager.TrySpawn(request, out string failureReason))
+                return FailActivation(failureReason ?? "无法生成火球。");
 
-            foreach (var state in newStates)
-            {
-                state.TargetAgent = target;
-                target.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-            }
+            // 保留施法动作和声音，但投射物不创建粒子；粒子只在命中时生成。
+            MagicShoot.PlayReleasePresentation(caster);
             return true;
         }
-        private Agent FindTarget(Agent agent)
+
+        public override bool CheckCondition(Agent caster)
         {
-           // Script.GetTargetedInRange( agent,);
-            Agent castAgent = agent;
-            List<Agent> list = Script.FindAgentsWithinSpellRange(agent.GetEyeGlobalPosition(), 15);
-            List<Agent> FriendAgent = new List<Agent>();
-            List<Agent> FoeAgent = new List<Agent>();
-            Script.AgentListIFF(castAgent, list, out FriendAgent, out FoeAgent);
-            Agent outAgent = Script.FindClosestAgentToCaster(agent, FoeAgent);
-            if (outAgent != agent)
+            if (!base.CheckCondition(caster) ||
+                SpellProjectileMissionLogic.GetForCurrentMission() == null)
+                return false;
+
+            Agent target = caster.GetTargetAgent();
+            if (!IsValidEnemy(caster, target))
+                return false;
+
+            float distance = (target.Position - caster.Position).Length;
+            return distance >= MinimumAiRange && distance <= MaximumAiRange &&
+                   RushMovementMissionLogic.HasLineOfSight(caster, target);
+        }
+
+        private static void OnFireballImpact(SpellProjectileImpact impact)
+        {
+            if (impact?.Caster == null || Mission.Current == null)
+                return;
+            FireballSnapshot snapshot = impact.Payload as FireballSnapshot;
+            float spellPowerCoefficient = snapshot == null
+                ? MagicDamageSystem.GetSpellPowerCoefficient(impact.Caster)
+                : snapshot.SpellPowerCoefficient;
+
+            SpellProjectileMissionLogic.GetForCurrentMission()?.SpawnTimedParticle(
+                "psys_battleground_env_fire", impact.Position, 0.8f);
+
+            // TODO 命中粒子的预期表现：
+            // 1. 0~0.15秒：黄白中心火团瞬间膨胀，配合寿命极短的橙色光晕，强调命中爆点。
+            // 2. 0~0.45秒：橙红外焰向四周扩张后回缩，火星以环形高速喷出并受重力下落。
+            // 3. 0.1~1.5秒：深灰烟团延迟生成，向上扩散、尺寸增大、透明度逐渐归零。
+            // 4. 爆炸的视觉半径与4米伤害范围对齐；不用持续火焰伪装爆炸，结束后只留目标身上的灼烧。
+
+            if (impact.DirectTarget != null && impact.DirectTarget.IsActive())
             {
-                return outAgent;
+                MagicDamageSystem.Apply(
+                    impact.Caster,
+                    impact.DirectTarget,
+                    DirectBaseDamage,
+                    spellPowerCoefficient,
+                    DamageType.FIRE_DAMAGE,
+                    MagicDamageFlags.Burning,
+                    impact.Position);
             }
-            return null;
+
+            if (impact.Caster.Team != null)
+            {
+                Mission.Current.GetNearbyEnemyAgents(
+                    impact.Position.AsVec2,
+                    ExplosionRadius,
+                    impact.Caster.Team,
+                    ExplosionTargets);
+            }
+            else
+            {
+                Mission.Current.GetNearbyAgents(
+                    impact.Position.AsVec2,
+                    ExplosionRadius,
+                    ExplosionTargets);
+            }
+
+            float radiusSquared = ExplosionRadius * ExplosionRadius;
+            foreach (Agent target in ExplosionTargets)
+            {
+                if (target == null || !target.IsActive() || !target.IsHuman ||
+                    target == impact.Caster || !impact.Caster.IsEnemyOf(target))
+                    continue;
+                float distanceSquared =
+                    (target.Position + Vec3.Up - impact.Position).LengthSquared;
+                if (distanceSquared > radiusSquared)
+                    continue;
+
+                float distanceRatio = MathF.Clamp(
+                    MathF.Sqrt(distanceSquared) / ExplosionRadius, 0f, 1f);
+                float explosionBaseDamage = ExplosionCenterBaseDamage +
+                    (ExplosionEdgeBaseDamage - ExplosionCenterBaseDamage) * distanceRatio;
+                MagicDamageSystem.Apply(
+                    impact.Caster,
+                    target,
+                    explosionBaseDamage,
+                    spellPowerCoefficient,
+                    DamageType.FIRE_DAMAGE,
+                    MagicDamageFlags.Area | MagicDamageFlags.Burning,
+                    target.Position + Vec3.Up);
+
+                AgentSkillComponent component = target.GetComponent<AgentSkillComponent>();
+                if (component == null || !target.IsActive())
+                    continue;
+                BurningState burning = new BurningState(
+                    BurningDuration,
+                    BurningBaseDamagePerTick,
+                    impact.Caster,
+                    spellPowerCoefficient)
+                {
+                    TargetAgent = target
+                };
+                // TODO 灼烧粒子的预期表现：在目标腰、胸附近分布两个小型低发射率火焰，
+                // 间歇产生少量火星与薄烟。每个目标只保留一个效果，刷新DoT只延长时间，
+                // 不重复创建粒子；不使用动态阴影光源，远距离只保留一层小火焰。
+                component.StateContainer.AddOrReplaceState(burning, target);
+            }
+        }
+
+        private static Vec3 ResolveCastDirection(
+            Agent caster,
+            SpellTargetingSystem.Result targeting)
+        {
+            Vec3 origin = caster.GetEyeGlobalPosition();
+            if (targeting.UsesManualIndicator || targeting.Target == null)
+            {
+                Vec3 manualDirection = targeting.Position - origin;
+                return manualDirection.LengthSquared > 0.001f
+                    ? manualDirection.NormalizedCopy()
+                    : caster.LookDirection;
+            }
+
+            Agent target = targeting.Target;
+            Vec3 targetPosition = target.GetEyeGlobalPosition();
+            float distance = (targetPosition - origin).Length;
+            float travelTime = distance / ProjectileSpeed;
+            Vec3 predictedPosition = targetPosition + target.Velocity * travelTime;
+            Vec3 direction = predictedPosition - origin;
+            return direction.LengthSquared > 0.001f ? direction.NormalizedCopy() : caster.LookDirection;
+        }
+
+        private static bool IsValidEnemy(Agent caster, Agent target)
+        {
+            return caster != null && target != null && target != caster &&
+                   target.IsActive() && target.Health > 0f && caster.IsEnemyOf(target);
         }
     }
 }

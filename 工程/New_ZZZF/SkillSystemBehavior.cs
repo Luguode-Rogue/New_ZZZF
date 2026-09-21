@@ -621,10 +621,9 @@ namespace New_ZZZF
                 {
                     _activeComponents.Remove(comp);
                 }
-                if (affectorAgent != null)
-                {
-                    affectedAgent.AgentVisuals.SetContourColor(null, true);
-                }
+                // OnAgentRemoved 阶段的 AgentVisuals 原生指针可能已回收，
+                // 只清理托管缓存，不再调用 SetContourColor。
+                Script.ForgetProjectileTarget(affectedAgent);
                 ActiveComponents.Remove(affectedAgent.Index);
             }
         }
@@ -637,6 +636,7 @@ namespace New_ZZZF
             //WoW_SmartMisslie.Clear();
             WoW_ProjectileDB.Clear();
             WoW_Ring.Clear();
+            Script.ClearProjectileTargetVisualCache();
             //WoW_gameEntityOwnedByAgent.Clear();
             WoW_CustomGameEntity.Clear();
             WoW_AgentMissileSpeedData.Clear();
@@ -652,6 +652,7 @@ namespace New_ZZZF
             //WoW_SmartMisslie.Clear();
             WoW_ProjectileDB.Clear();
             WoW_Ring.Clear();
+            Script.ClearProjectileTargetVisualCache();
             //WoW_gameEntityOwnedByAgent.Clear();
             WoW_CustomGameEntity.Clear();
             WoW_AgentMissileSpeedData.Clear();

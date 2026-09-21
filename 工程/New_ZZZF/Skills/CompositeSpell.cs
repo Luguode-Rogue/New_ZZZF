@@ -268,7 +268,7 @@ namespace New_ZZZF
         private static void RegisterOfficialSpells()
         {
             // 仅登记已存在于 SkillFactory 的、适合作为组合原料的法术
-            string[] ids = new[] { "Fireball", "lingmashaodi", "HuiJianYuanZhen", "LeiJi", "HongShiZiHuoYan", "HuoYanTuXi" };
+            string[] ids = new[] { "Fireball", "FireWall", "lingmashaodi", "HuiJianYuanZhen", "LeiJi", "HongShiZiHuoYan", "HuoYanTuXi" };
             foreach (var id in ids)
             {
                 var sk = SkillFactory._skillRegistry.TryGetValue(id, out var s) ? s : null;

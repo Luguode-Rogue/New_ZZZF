@@ -13,6 +13,8 @@ namespace New_ZZZF
 {
     internal class ShengZhuangWuBu : SkillBase
     {
+        // 旧版骑乘操控被动，实际效果仍由 SkillSystemBehavior 中的遗留逻辑执行。
+        // 本轮暂缓重构；后续处理时应将每帧 SetInitialFrame 迁移为独立的原生移动逻辑。
         public ShengZhuangWuBu()
         {
             SkillID = "ShengZhuangWuBu";      // 必须唯一
@@ -21,7 +23,7 @@ namespace New_ZZZF
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0045}ShengZhuangWuBu");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0046}低速时，坐骑自动转向为当前视线方向，并且解锁横向移动能力");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0046}被动技能。骑乘时，坐骑朝向会随当前视野方向调整；配合方向键可以改变移动朝向。");
         }
         public override bool Activate(Agent agent)
         {

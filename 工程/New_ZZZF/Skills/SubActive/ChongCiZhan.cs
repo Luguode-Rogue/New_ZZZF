@@ -1,4 +1,3 @@
-using System.Linq;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.Localization;
@@ -25,7 +24,7 @@ namespace New_ZZZF
             ResourceCost = 10f;
             Text = new TextObject("{=ZZZF_CHONG_CI_ZHAN_NAME}冲刺斩");
             Description = new TextObject(
-                "{=ZZZF_CHONG_CI_ZHAN_DESC}冲向选中的敌人。徒步时高速接近目标，并在进入攻击距离后发动一次右侧挥砍；骑乘时沿冲锋方向穿过敌阵，撞倒接触到的敌方步兵。敌方步行枪兵的有效突刺可以中断骑乘冲锋。持续时间：5秒。消耗耐力：10。冷却时间：10秒。");
+                "{=ZZZF_CHONG_CI_ZHAN_DESC}快速使用时冲向视野内的敌人；按住Shift时直接冲向视线指示落点。徒步时高速接近目标，并在冲锋结束时发动一次右侧挥砍；骑乘时沿冲锋路径穿过敌阵，撞倒接触到的敌方步兵。敌方步行枪兵的有效突刺可以中断骑乘冲锋。持续时间：5秒。消耗耐力：10。冷却时间：10秒。");
             Difficulty = null;
         }
 
@@ -37,9 +36,11 @@ namespace New_ZZZF
             if (movement.IsRushing(agent))
                 return FailActivation("当前已经处于强制移动状态。");
 
-            Agent target = FindTarget(agent);
-            if (target == null)
+            if (!SpellTargetingSystem.TryResolveSingleTarget(
+                    agent, 60f, out SpellTargetingSystem.Result targeting))
                 return FailActivation("没有找到可见的敌方目标。");
+            Agent target = targeting.Target;
+            bool rushToIndicator = targeting.UsesManualIndicator;
 
             bool mounted = agent.MountAgent != null;
             if (!mounted && !HasUsableMeleeWeapon(agent))
@@ -59,12 +60,28 @@ namespace New_ZZZF
                 TriggerRightAttackOnEnd = !mounted,
                 UseSafeKinematicMovement = !mounted,
                 KinematicSpeed = 30.2f,
-                StopDistance = mounted ? 1f : GetAttackStopDistance(agent)
+                StopDistance = rushToIndicator
+                    ? 0.75f
+                    : (mounted ? 1f : GetAttackStopDistance(agent)),
+                DirectionalStopPosition = rushToIndicator
+                    ? targeting.Position
+                    : Vec3.Invalid
             };
 
             string failureReason;
             bool started;
-            if (mounted)
+            if (rushToIndicator && mounted)
+            {
+                Vec2 direction = targeting.Position.AsVec2 - agent.Position.AsVec2;
+                started = movement.TryDirectionalCharge(
+                    agent, null, direction, options, out failureReason);
+            }
+            else if (rushToIndicator)
+            {
+                started = movement.TryRushToPosition(
+                    agent, targeting.Position, options, out failureReason);
+            }
+            else if (mounted)
             {
                 Vec2 direction = target.Position.AsVec2 - agent.Position.AsVec2;
                 started = movement.TryDirectionalCharge(agent, target, direction, options, out failureReason);
@@ -126,30 +143,6 @@ namespace New_ZZZF
 
             // 距离和方向均合格后才做射线，降低大量低级士兵同时检查时的开销。
             return RushMovementMissionLogic.HasLineOfSight(caster, target);
-        }
-
-        private static Agent FindTarget(Agent caster)
-        {
-            if (caster == null || Mission.Current == null)
-                return null;
-
-            Agent preferred = caster.IsMainAgent
-                ? Script.FindTargetedLockableAgent(caster)
-                : caster.GetTargetAgent();
-            if (IsValidVisibleEnemy(caster, preferred))
-                return preferred;
-
-            foreach (Agent candidate in Mission.Current.Agents
-                         .Where(candidate => candidate != null && candidate != caster &&
-                                             candidate.IsHuman && !candidate.IsMount &&
-                                             candidate.IsActive() && candidate.Health > 0f &&
-                                             caster.IsEnemyOf(candidate))
-                         .OrderBy(candidate => (candidate.Position - caster.Position).LengthSquared))
-            {
-                if (RushMovementMissionLogic.HasLineOfSight(caster, candidate))
-                    return candidate;
-            }
-            return null;
         }
 
         private static bool IsValidVisibleEnemy(Agent caster, Agent target)

@@ -74,6 +74,7 @@ namespace New_ZZZF
                 {"QiangLiZhaoHuan",new QiangLiZhaoHuan() },
                 //// 法术
                 { "Fireball", new FireballSkill() },               // 火球术
+                { "FireWall", new FireWallSkill() },               // 火墙术
                 { "lingmashaodi", new lingmashaodi() },               // 
                 { "HuiJianYuanZhen", new HuiJianYuanZhen() },               // 辉剑圆阵
             
