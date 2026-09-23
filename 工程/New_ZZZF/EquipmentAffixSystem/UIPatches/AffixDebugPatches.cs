@@ -10,6 +10,8 @@ namespace New_ZZZF
     /// 调试用：日志记录 GetModifiedItemName 的返回值和 ItemModifier.Name 的状态。
     /// 验证通过后应移除。
     /// </summary>
+    // 纯诊断补丁会在每次物品名称读取时同步写文件；不参与 PatchAll。
+#if false
     [HarmonyPatch(typeof(EquipmentElement), "GetModifiedItemName")]
     public class AffixDebug_GetModifiedItemName
     {
@@ -39,4 +41,5 @@ namespace New_ZZZF
             }
         }
     }
+#endif
 }

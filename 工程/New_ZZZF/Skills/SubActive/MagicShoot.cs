@@ -62,7 +62,7 @@ namespace New_ZZZF.Skills
         /// 自定义投射物不会自动进入原生武器输入链，因此在生成成功后按当前武器
         /// 补播对应释放动作和三维武器声。动作只写上半身通道，不影响移动。
         /// </summary>
-        internal static void PlayReleasePresentation(Agent caster)
+        internal static void PlayReleasePresentation(Agent caster, bool playWeaponSound = true)
         {
             if (caster == null || !caster.IsActive())
                 return;
@@ -136,7 +136,8 @@ namespace New_ZZZF.Skills
             }
 
             caster.SetActionChannel(1, ActionIndexCache.Create(actionName));
-            SoundManager.StartOneShotEvent(soundEvent, caster.Position);
+            if (playWeaponSound)
+                SoundManager.StartOneShotEvent(soundEvent, caster.Position);
         }
 
     }

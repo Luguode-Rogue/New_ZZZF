@@ -40,15 +40,7 @@ namespace New_ZZZF.TacticalMap.UI
 
         private static void Diag(string msg)
         {
-            try { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; } catch { }
-            try
-            {
-                string path = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                    "tmap_diag.log");
-                System.IO.File.AppendAllText(path, DateTime.Now.ToString("HH:mm:ss") + " " + msg + "\n");
-            }
-            catch { }
+            // 临时绘制诊断关闭：渲染回调不能同步写文件。
         }
 
         private static string TopFrame(Exception ex)

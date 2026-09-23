@@ -553,10 +553,8 @@ namespace New_ZZZF
                 // Name 必须包含 {ITEMNAME} 占位符，否则 GetModifiedItemName() 返回空字符串导致物品名字消失
                 var nameTO = new TextObject("{=zzzf_affix_mod}{ITEMNAME}", null);
                 typeof(ItemModifier).GetProperty("Name")?.SetValue(modifier, nameTO);
-                LogDebug($"[CreateOrGetItemModifier] modifierId={modifierId}, Name.ToString()='{modifier.Name?.ToString()}'");
                 // 注册到 MBObjectManager：presumed=true 保证存档/读档可正确序列化
                 modifier = MBObjectManager.Instance.RegisterPresumedObject<ItemModifier>(modifier);
-                LogDebug($"[CreateOrGetItemModifier] After RegisterPresumedObject, Name.ToString()='{modifier.Name?.ToString()}'");
             }
 
             return modifier;
@@ -582,9 +580,7 @@ namespace New_ZZZF
                 // Name 必须包含 {ITEMNAME} 占位符，否则 GetModifiedItemName() 返回空字符串导致物品名字消失
                 var nameTO = new TextObject("{=zzzf_affix_mod}{ITEMNAME}", null);
                 typeof(ItemModifier).GetProperty("Name")?.SetValue(modifier, nameTO);
-                LogDebug($"[RebuildModifiers] modifierId={modifierId}, Name.ToString()='{modifier.Name?.ToString()}'");
                 modifier = MBObjectManager.Instance.RegisterPresumedObject<ItemModifier>(modifier);
-                LogDebug($"[RebuildModifiers] After RegisterPresumedObject, Name.ToString()='{modifier.Name?.ToString()}'");
             }
         }
 
@@ -1015,18 +1011,5 @@ namespace New_ZZZF
             return result;
         }
 
-        // ========== 调试日志 ==========
-        private static readonly string DebugLogPath =
-            @"E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\affix_debug.log";
-
-        private static void LogDebug(string msg)
-        {
-            try
-            {
-                System.IO.File.AppendAllText(DebugLogPath,
-                    $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}");
-            }
-            catch { }
-        }
     }
 }

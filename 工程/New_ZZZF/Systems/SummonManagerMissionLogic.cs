@@ -66,6 +66,8 @@ namespace New_ZZZF
         private readonly Dictionary<int, SummonRecord> _summonsByAgentIndex = new Dictionary<int, SummonRecord>();
         private readonly Dictionary<int, List<SummonRecord>> _summonsBySummonerIndex = new Dictionary<int, List<SummonRecord>>();
         private readonly Dictionary<int, HealthDebtRecord> _healthDebts = new Dictionary<int, HealthDebtRecord>();
+        private readonly List<HealthDebtRecord> _debtSnapshot = new List<HealthDebtRecord>();
+        private readonly List<SummonRecord> _summonSnapshot = new List<SummonRecord>();
 
         public static SummonManagerMissionLogic Current { get; private set; }
 
@@ -333,10 +335,11 @@ namespace New_ZZZF
             // 某些原版/模组属性刷新会重设 HealthLimit；有债务时每帧重新施加，保证上限占用稳定。
             if (_healthDebts.Count > 0)
             {
-                List<HealthDebtRecord> debts = new List<HealthDebtRecord>(_healthDebts.Values);
-                for (int i = 0; i < debts.Count; i++)
+                _debtSnapshot.Clear();
+                _debtSnapshot.AddRange(_healthDebts.Values);
+                for (int i = 0; i < _debtSnapshot.Count; i++)
                 {
-                    HealthDebtRecord debt = debts[i];
+                    HealthDebtRecord debt = _debtSnapshot[i];
                     ApplyHealthLimit(debt);
                     if (debt.Debt <= 0f && debt.Summoner != null && debt.Summoner.IsActive())
                         _healthDebts.Remove(debt.Summoner.Index);
@@ -346,12 +349,16 @@ namespace New_ZZZF
             if (_summonsByAgentIndex.Count == 0)
                 return;
 
-            List<SummonRecord> snapshot = new List<SummonRecord>(_summonsByAgentIndex.Values);
-            for (int i = 0; i < snapshot.Count; i++)
+            _summonSnapshot.Clear();
+            _summonSnapshot.AddRange(_summonsByAgentIndex.Values);
+            for (int i = 0; i < _summonSnapshot.Count; i++)
             {
-                SummonRecord record = snapshot[i];
+                SummonRecord record = _summonSnapshot[i];
                 Agent summon = record.SummonedAgent;
-                if (summon == null || !summon.IsActive())
+                if (summon == null || !_summonsByAgentIndex.TryGetValue(summon.Index, out SummonRecord current) ||
+                    !ReferenceEquals(current, record))
+                    continue;
+                if (!summon.IsActive())
                 {
                     RemoveRecord(record);
                     continue;
@@ -658,7 +665,8 @@ namespace New_ZZZF
 
             // 理论债务允许超过基础上限；引擎显示值至少保留1点，所以生命不足也不阻止召唤。
             float effectiveLimit = Math.Max(1f, debt.BaseHealthLimit - debt.Debt);
-            summoner.HealthLimit = effectiveLimit;
+            if (Math.Abs(summoner.HealthLimit - effectiveLimit) > 0.01f)
+                summoner.HealthLimit = effectiveLimit;
             if (summoner.Health > effectiveLimit)
                 summoner.Health = effectiveLimit;
         }

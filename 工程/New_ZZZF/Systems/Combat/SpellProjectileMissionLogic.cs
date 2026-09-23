@@ -93,9 +93,18 @@ namespace New_ZZZF
             public float Elapsed;
         }
 
+        private struct PendingSound
+        {
+            public string EventName;
+            public Vec3 Position;
+        }
+
         private readonly List<ProjectileRecord> _projectiles = new List<ProjectileRecord>();
         private readonly List<TimedEffect> _effects = new List<TimedEffect>();
+        private readonly List<PendingSound> _pendingSounds = new List<PendingSound>();
         private readonly MBList<Agent> _nearbyAgents = new MBList<Agent>();
+        // 仅同一个 MissionTick 内复用；下一帧重新读取，避免命中使用过期胶囊。
+        private readonly Dictionary<Agent, CapsuleData> _frameCapsules = new Dictionary<Agent, CapsuleData>();
         public static SpellProjectileMissionLogic Current { get; private set; }
         public override MissionBehaviorType BehaviorType => MissionBehaviorType.Logic;
 
@@ -176,14 +185,24 @@ namespace New_ZZZF
             return true;
         }
 
-        public void SpawnTimedParticle(string particleSystemName, Vec3 position, float lifetime)
+        public void SpawnTimedParticle(string particleSystemName, Vec3 position, float lifetime, float scale = 1f)
         {
-            if (Mission?.Scene == null || string.IsNullOrEmpty(particleSystemName) || lifetime <= 0f)
+            if (Mission?.Scene == null || string.IsNullOrEmpty(particleSystemName) || lifetime <= 0f || scale <= 0f)
                 return;
             GameEntity effect = GameEntity.CreateEmpty(Mission.Scene);
-            effect.SetLocalPosition(position);
+            MatrixFrame frame = MatrixFrame.Identity;
+            frame.origin = position;
+            frame.rotation.ApplyScaleLocal(scale);
+            effect.SetGlobalFrame(frame);
             effect.AddParticleSystemComponent(particleSystemName);
             _effects.Add(new TimedEffect { Entity = effect, RemainingLifetime = lifetime });
+        }
+
+        /// <summary>命中音效排到任务帧，保证施法成功后框架的施法声先播放。</summary>
+        public void QueueOneShotSound(string eventName, Vec3 position)
+        {
+            if (!string.IsNullOrEmpty(eventName) && position.IsValid)
+                _pendingSounds.Add(new PendingSound { EventName = eventName, Position = position });
         }
 
         /// <summary>让一圈火焰从碰撞点扩散至实际伤害半径，之后统一回收实体。</summary>
@@ -224,6 +243,16 @@ namespace New_ZZZF
             TickEffects(dt);
             if (dt <= 0f || Mission?.Scene == null)
                 return;
+
+            for (int i = 0; i < _pendingSounds.Count; i++)
+            {
+                PendingSound sound = _pendingSounds[i];
+                try { SoundManager.StartOneShotEvent(sound.EventName, sound.Position); }
+                catch (Exception) { /* 音效故障不得中断战斗任务帧。 */ }
+            }
+            _pendingSounds.Clear();
+
+            _frameCapsules.Clear();
 
             for (int i = _projectiles.Count - 1; i >= 0; i--)
             {
@@ -280,7 +309,7 @@ namespace New_ZZZF
             }
         }
 
-        private static void UpdateHoming(ProjectileRecord record, float dt)
+        private void UpdateHoming(ProjectileRecord record, float dt)
         {
             SpellProjectileRequest request = record.Request;
             if (request.HomingTurnRateDegrees <= 0f)
@@ -307,7 +336,7 @@ namespace New_ZZZF
             if (!CanHitAgent(request, target))
                 return;
 
-            CapsuleData targetCapsule = target.CollisionCapsule;
+            CapsuleData targetCapsule = GetFrameCapsule(target);
             Vec3 desiredDirection = (targetCapsule.P1 + targetCapsule.P2) * 0.5f -
                                     record.Entity.GlobalPosition;
             if (desiredDirection.LengthSquared < 0.0001f)
@@ -350,7 +379,17 @@ namespace New_ZZZF
             return closest;
         }
 
-        private static void TestCandidate(
+        private CapsuleData GetFrameCapsule(Agent agent)
+        {
+            if (!_frameCapsules.TryGetValue(agent, out CapsuleData capsule))
+            {
+                capsule = agent.CollisionCapsule;
+                _frameCapsules.Add(agent, capsule);
+            }
+            return capsule;
+        }
+
+        private void TestCandidate(
             SpellProjectileRequest request,
             Agent candidate,
             Vec3 start,
@@ -363,7 +402,7 @@ namespace New_ZZZF
             if (!CanHitAgent(request, candidate))
                 return;
 
-            CapsuleData capsule = candidate.CollisionCapsule;
+            CapsuleData capsule = GetFrameCapsule(candidate);
             float projectileT;
             float distanceSquared = SegmentToSegmentDistanceSquared(
                 start, end, capsule.P1, capsule.P2, out projectileT);
@@ -547,6 +586,7 @@ namespace New_ZZZF
                 _effects[i].Entity?.Remove(1);
             _projectiles.Clear();
             _effects.Clear();
+            _pendingSounds.Clear();
             if (ReferenceEquals(Current, this))
                 Current = null;
             base.OnEndMission();

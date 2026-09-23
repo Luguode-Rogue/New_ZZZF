@@ -28,16 +28,26 @@ namespace MountedSlashCamera
             ref Vec3 ____cameraSpecialTargetPositionToAdd)    // 目标摄像机位置偏移
         {
             // 获取玩家主控角色
+            if (__instance == null || __instance.Mission == null)
+                return;
             Agent mainAgent = __instance.Mission.MainAgent;
 
             // 条件检查：功能启用 + 骑马 + 第三人称 + 未查看角色面板
             bool isActive = MountedSlashCameraMissionLogic.CameraON
+                && mainAgent != null && mainAgent.IsActive() && mainAgent.AgentVisuals != null
+                && mainAgent.Monster != null
                 && mainAgent.MountAgent != null
                 && !__instance.Mission.CameraIsFirstPerson
                 && !__instance.IsViewingCharacter();
 
             if (isActive)
             {
+                var skeleton = mainAgent.AgentVisuals.GetSkeleton();
+                if (skeleton == null)
+                {
+                    ____cameraSpecialTargetPositionToAdd = Vec3.Zero;
+                    return;
+                }
                 // 检测是否处于架枪冲刺状态（返回3表示正在架枪）
                 int couchState = GetCouchLanceState();
                 bool isCouchLance = couchState == 3;
@@ -49,8 +59,7 @@ namespace MountedSlashCamera
                 sbyte headBoneIndex = mainAgent.Monster.HeadLookDirectionBoneIndex;
 
                 // 计算头部骨骼的世界坐标框架
-                MatrixFrame boneFrame = mainAgent.AgentVisuals.GetSkeleton()
-                    .GetBoneEntitialFrame(headBoneIndex, true);
+                MatrixFrame boneFrame = skeleton.GetBoneEntitialFrame(headBoneIndex, true);
 
                 // 应用第一人称摄像机偏移到骨骼框架
                 boneFrame.origin = boneFrame.TransformToParent(

@@ -262,6 +262,7 @@ namespace New_ZZZF.Harmonys
     }
 
     // 修补DecideWeaponCollisionReaction方法 (新版已移至 MissionCombatMechanicsHelper 静态类)
+#if false // 未完成的全局穿透实验：无条件 ContinueChecking 会改变所有近战碰撞链。
     [HarmonyPatch(typeof(MissionCombatMechanicsHelper), "DecideWeaponCollisionReaction")]
     public class DecideWeaponCollisionReaction_Patch
     {
@@ -282,6 +283,7 @@ namespace New_ZZZF.Harmonys
             ////等待加限制 colReaction = MeleeCollisionReaction.SlicedThrough;
         }
     }
+#endif
     // 旧版灵马哨笛补丁，保留源码供追溯。
     // 该补丁会屏蔽 Agent.Mount 原版实现并直接写入 MountAgent，
     // 导致瞬间上马、动作状态与骑乘关系不同步，也会污染全局上下马逻辑。

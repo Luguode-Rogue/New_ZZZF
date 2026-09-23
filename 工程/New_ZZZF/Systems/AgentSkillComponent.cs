@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using TaleWorlds.CampaignSystem.Extensions;
 using TaleWorlds.CampaignSystem.ViewModelCollection.CharacterDeveloper;
 using TaleWorlds.Core;
+using TaleWorlds.Engine;
 using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
@@ -548,6 +549,13 @@ namespace New_ZZZF
                     _globalCooldownTimer += 1.0f; // 公共CD设为1秒
 
                 NotifyHudTimersChanged();
+
+                // 统一施法音效入口：只在真正发动成功后播放，技能可自行指定事件。
+                if (!string.IsNullOrEmpty(skill.CastSoundEvent) && Agent != null && Agent.IsActive())
+                {
+                    try { SoundManager.StartOneShotEvent(skill.CastSoundEvent, Agent.Position); }
+                    catch (Exception) { /* 音效故障不得影响已成功结算的技能。 */ }
+                }
 
             }
             else

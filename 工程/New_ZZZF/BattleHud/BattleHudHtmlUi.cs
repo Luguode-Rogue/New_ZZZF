@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using BannerlordHtmlUI;
@@ -40,6 +41,9 @@ namespace New_ZZZF.BattleHud
         private bool _timersDirty = true;
         private bool _selectionDirty = true;
         private AgentSkillComponent _boundComponent;
+        private long _nextShowAttemptTimestamp;
+        private long _nextPublishAttemptTimestamp;
+        private static readonly long RetryDelayTicks = Stopwatch.Frequency * 2L;
 
         public static BattleHudHtmlUi Instance => _instance.Value;
 
@@ -82,25 +86,35 @@ namespace New_ZZZF.BattleHud
         public void OnMissionStarted()
         {
             if (_captureSuspended || !_registered || !HtmlUiService.IsReady || _shown) return;
+            long now = Stopwatch.GetTimestamp();
+            if (now < _nextShowAttemptTimestamp) return;
             try
             {
                 if (HtmlUiService.Surfaces.Show(_surfaceId))
                 {
+                    _nextShowAttemptTimestamp = 0L;
                     _shown = true;
                     MarkAllDirty();
                     EnsureBoundComponent();
                     TacticalMapLog.Info("[BattleHud] Surface shown for mission.");
                     PublishPendingState();
                 }
+                else
+                {
+                    _nextShowAttemptTimestamp = now + RetryDelayTicks;
+                }
             }
             catch (Exception ex)
             {
+                _nextShowAttemptTimestamp = now + RetryDelayTicks;
                 TacticalMapLog.Error("[BattleHud] Surface show failed.", ex);
             }
         }
 
         public void OnMissionEnded()
         {
+            _nextShowAttemptTimestamp = 0L;
+            _nextPublishAttemptTimestamp = 0L;
             UnbindComponent();
 
             if (!_registered || !HtmlUiService.IsReady || !_shown)
@@ -158,7 +172,8 @@ namespace New_ZZZF.BattleHud
             if (_captureSuspended || !_shown || !_registered || !HtmlUiService.IsReady) return;
 
             EnsureBoundComponent();
-            if (_fullDirty || _vitalsDirty || _timersDirty || _selectionDirty)
+            if (Stopwatch.GetTimestamp() >= _nextPublishAttemptTimestamp &&
+                (_fullDirty || _vitalsDirty || _timersDirty || _selectionDirty))
                 PublishPendingState();
         }
 
@@ -259,6 +274,7 @@ namespace New_ZZZF.BattleHud
             catch (Exception ex)
             {
                 MarkAllDirty();
+                _nextPublishAttemptTimestamp = Stopwatch.GetTimestamp() + RetryDelayTicks;
                 TacticalMapLog.Error("[BattleHud] State publish failed.", ex);
             }
         }
@@ -405,6 +421,8 @@ namespace New_ZZZF.BattleHud
             _shown = false;
             MarkAllDirty();
             _surfaceId = null;
+            _nextShowAttemptTimestamp = 0L;
+            _nextPublishAttemptTimestamp = 0L;
         }
     }
 }

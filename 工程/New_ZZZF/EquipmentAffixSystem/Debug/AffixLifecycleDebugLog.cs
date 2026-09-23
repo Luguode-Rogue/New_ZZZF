@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-
 namespace New_ZZZF
 {
     /// <summary>
@@ -9,44 +6,13 @@ namespace New_ZZZF
     /// </summary>
     internal static class AffixLifecycleDebugLog
     {
-        private static readonly object Sync = new object();
-
-        private static string FilePath
-        {
-            get
-            {
-                string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
-                return Path.GetFullPath(Path.Combine(
-                    baseDirectory,
-                    "..", "..", "Modules", "New_ZZZF",
-                    "affix_lifecycle_debug.log"));
-            }
-        }
-
         internal static void Info(string message) => Write("INFO", message);
         internal static void Warn(string message) => Write("WARN", message);
         internal static void Error(string message) => Write("ERROR", message);
 
         private static void Write(string level, string message)
         {
-            try
-            {
-                lock (Sync)
-                {
-                    string path = FilePath;
-                    string directory = Path.GetDirectoryName(path);
-                    if (!string.IsNullOrEmpty(directory))
-                        Directory.CreateDirectory(directory);
-
-                    File.AppendAllText(
-                        path,
-                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{level}] {message}{Environment.NewLine}");
-                }
-            }
-            catch
-            {
-                // 诊断日志绝不能影响游戏逻辑。
-            }
+            // 生命周期日志仅用于临时排查，不能在 Harmony/战场回调内同步写盘。
         }
     }
 }

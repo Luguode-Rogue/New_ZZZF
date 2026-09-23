@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 
@@ -15,6 +16,9 @@ namespace New_ZZZF.TacticalMap.Diagnostics
         private static string _logPath;
         private static bool _initialized;
         private static bool _sessionStarted;
+        private static long _writeWindowStart;
+        private static int _writesInWindow;
+        private const int MaximumWritesPerSecond = 8;
 
         public static string LogPath
         {
@@ -78,6 +82,16 @@ namespace New_ZZZF.TacticalMap.Diagnostics
 
             lock (Sync)
             {
+                // 反复失败的 UI/原生回调可能每帧报错；限制主线程同步写盘次数。
+                long now = Stopwatch.GetTimestamp();
+                if (now - _writeWindowStart >= Stopwatch.Frequency || _writeWindowStart == 0L)
+                {
+                    _writeWindowStart = now;
+                    _writesInWindow = 0;
+                }
+                if (_writesInWindow >= MaximumWritesPerSecond)
+                    return;
+                _writesInWindow++;
                 try
                 {
                     if (!_sessionStarted)

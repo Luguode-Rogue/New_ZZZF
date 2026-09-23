@@ -17,10 +17,12 @@ namespace New_ZZZF.Systems.BattlefieldPickup
         private const float SearchInterval = 0.45f;
         private const float SearchRadiusSquared = 625f;
         private const float AssignmentTimeout = 12f;
+        private const float UseRetryInterval = 0.5f;
         private const float SummaryLogInterval = 5f;
         private const int AgentsPerSearch = 6;
 
         private readonly Dictionary<Agent, Assignment> _assignments = new Dictionary<Agent, Assignment>();
+        private readonly List<Agent> _assignmentSnapshot = new List<Agent>();
         private float _searchTimer;
         private float _summaryLogTimer;
         private int _roundRobinIndex;
@@ -108,12 +110,10 @@ namespace New_ZZZF.Systems.BattlefieldPickup
                 if (distanceSquared > SearchRadiusSquared) continue;
                 EquipmentIndex slot = SelectPickupSlot(agent, item);
                 if (slot == EquipmentIndex.None) continue;
-                if (!agent.CanMoveDirectlyToPosition(item.GameEntityWithWorldPosition.AsVec2)) continue;
-
                 float score = MissionGameModels.Current.ItemPickupModel.GetItemScoreForAgent(item, agent);
                 score += item.WeaponCopy.Item.Tierf * 25f;
                 score -= MathF.Sqrt(distanceSquared) * 2f;
-                if (score > bestScore)
+                if (score > bestScore && agent.CanMoveDirectlyToPosition(item.GameEntityWithWorldPosition.AsVec2))
                 {
                     bestScore = score;
                     best = item;
@@ -167,15 +167,16 @@ namespace New_ZZZF.Systems.BattlefieldPickup
         {
             if (item == null || item.IsDeactivated || item.IsDisabled || item.HasUser) return false;
             if (item.HasAIMovingTo && !item.IsAIMovingTo(agent)) return false;
-            if (item.GameEntityWithWorldPosition.GetNavMesh() == UIntPtr.Zero) return false;
 
             MissionWeapon weapon = item.WeaponCopy;
             if (weapon.IsEmpty || weapon.Item == null || weapon.IsShield() || weapon.IsBanner()) return false;
             if (weapon.Item.ItemFlags.HasAnyFlag(ItemFlags.CannotBePickedUp)) return false;
             WeaponComponentData usage = weapon.CurrentUsageItem ?? weapon.Item.PrimaryWeapon;
             if (usage == null || usage.IsAmmo) return false;
-            if (usage.IsMeleeWeapon || weapon.IsAnyConsumable()) return true;
-            return usage.IsRangedWeapon && HasMatchingAmmo(agent, usage.AmmoClass);
+            if (!usage.IsMeleeWeapon && !weapon.IsAnyConsumable() &&
+                (!usage.IsRangedWeapon || !HasMatchingAmmo(agent, usage.AmmoClass)))
+                return false;
+            return item.GameEntityWithWorldPosition.GetNavMesh() != UIntPtr.Zero;
         }
 
         private static bool HasOffensiveWeapon(Agent agent)
@@ -207,10 +208,13 @@ namespace New_ZZZF.Systems.BattlefieldPickup
         private void TickAssignments(float dt)
         {
             if (_assignments.Count == 0) return;
-            foreach (Agent agent in _assignments.Keys.ToArray())
+            _assignmentSnapshot.Clear();
+            _assignmentSnapshot.AddRange(_assignments.Keys);
+            foreach (Agent agent in _assignmentSnapshot)
             {
-                Assignment assignment = _assignments[agent];
+                if (!_assignments.TryGetValue(agent, out Assignment assignment)) continue;
                 assignment.Age += dt;
+                assignment.UseRetryTimer -= dt;
                 SpawnedItemEntity item = assignment.Item;
                 bool timedOut = assignment.Age >= AssignmentTimeout;
                 if (agent == null || !agent.IsActive() || HasOffensiveWeapon(agent) || item == null || item.IsDeactivated ||
@@ -226,13 +230,14 @@ namespace New_ZZZF.Systems.BattlefieldPickup
                 {
                     WorldFrame frame = item.GetUserFrameForAgent(agent);
                     float distanceSquared = frame.Origin.GetGroundVec3().DistanceSquared(agent.Position);
-                    if (agent.CanReachAndUseObject(item, distanceSquared))
+                    if (assignment.UseRetryTimer <= 0f && agent.CanReachAndUseObject(item, distanceSquared))
                     {
                         if (!assignment.UseRequested)
                         {
                             assignment.UseRequested = true;
                             Log("use requested agent=" + AgentName(agent) + " item=" + ItemName(item));
                         }
+                        assignment.UseRetryTimer = UseRetryInterval;
                         agent.UseGameObject(item, -1);
                     }
                 }
@@ -319,6 +324,7 @@ namespace New_ZZZF.Systems.BattlefieldPickup
             public SpawnedItemEntity Item { get; }
             public float Age { get; set; }
             public bool UseRequested { get; set; }
+            public float UseRetryTimer { get; set; }
             public Assignment(SpawnedItemEntity item) { Item = item; }
         }
     }
