@@ -19,6 +19,7 @@ namespace New_ZZZF.Systems.BattleEquipment
         private const string HintName = "battleequipmenthint";
         private const string SessionState = "equipmentSession";
         private const string HintState = "equipmentHint";
+        internal const float HoldDurationSeconds = 0.75f;
 
         private static readonly Lazy<BattleEquipmentHtmlUi> LazyInstance =
             new Lazy<BattleEquipmentHtmlUi>(() => new BattleEquipmentHtmlUi());
@@ -34,7 +35,7 @@ namespace New_ZZZF.Systems.BattleEquipment
         private BattleEquipmentSession _session;
         private Agent _lastHintTarget;
         private bool _lastHintHolding;
-        private int _lastHintProgressStep;
+        private float _lastHintProgress;
         private bool _hintStateInitialized;
 
         public static BattleEquipmentHtmlUi Instance => LazyInstance.Value;
@@ -74,6 +75,10 @@ namespace New_ZZZF.Systems.BattleEquipment
                 });
 
                 _scope.RegisterRequest("getSession", _ => Task.FromResult<object>(_session?.BuildState()));
+                _scope.RegisterRequest("getHint", _ => Task.FromResult<object>(BuildHintState(
+                    _lastHintTarget,
+                    _lastHintProgress,
+                    _lastHintHolding)));
                 _scope.RegisterRequest("commit", payload => Task.FromResult(Commit(payload)));
                 _scope.RegisterCommand("cancel", _ => Close());
                 _scope.RegisterCommand("clientLog", payload => TacticalMapLog.Info("[BattleEquipment JS] " + (payload?["message"]?.Value<string>() ?? string.Empty)));
@@ -110,30 +115,35 @@ namespace New_ZZZF.Systems.BattleEquipment
         {
             if (!_registered || !_hintShown || _pageOpened) return;
             float clampedProgress = Math.Max(0f, Math.Min(1f, progress));
-            int progressStep = holding ? Math.Min(20, (int)(clampedProgress * 20f + 0.5f)) : 0;
+            _lastHintProgress = holding ? clampedProgress : 0f;
             if (_hintStateInitialized && ReferenceEquals(_lastHintTarget, target) &&
-                _lastHintHolding == holding && _lastHintProgressStep == progressStep)
+                _lastHintHolding == holding)
                 return;
 
             _hintStateInitialized = true;
             _lastHintTarget = target;
             _lastHintHolding = holding;
-            _lastHintProgressStep = progressStep;
-            _scope.SetState(HintState, new
+            _scope.SetState(HintState, BuildHintState(target, _lastHintProgress, holding));
+        }
+
+        private static object BuildHintState(Agent target, float progress, bool holding)
+        {
+            return new
             {
                 visible = target != null,
                 target = target?.Name ?? string.Empty,
                 holding,
-                progress = progressStep / 20f,
+                progress = holding ? Math.Max(0f, Math.Min(1f, progress)) : 0f,
+                holdDurationMs = (int)(HoldDurationSeconds * 1000f),
                 text = holding ? "继续按住交互键" : "长按交互键交换装备"
-            });
+            };
         }
 
         private void ResetHintStateCache()
         {
             _lastHintTarget = null;
             _lastHintHolding = false;
-            _lastHintProgressStep = -1;
+            _lastHintProgress = 0f;
             _hintStateInitialized = false;
         }
 

@@ -5,7 +5,6 @@ namespace New_ZZZF.Systems.BattleEquipment
 {
     public sealed class BattleEquipmentMissionLogic : MissionLogic
     {
-        private const float HoldSeconds = 0.75f;
         private Agent _focusedTarget;
         private bool _holdArmed;
         private float _holdTime;
@@ -74,9 +73,9 @@ namespace New_ZZZF.Systems.BattleEquipment
             }
 
             _holdTime += dt;
-            float progress = _holdTime / HoldSeconds;
+            float progress = _holdTime / BattleEquipmentHtmlUi.HoldDurationSeconds;
             BattleEquipmentHtmlUi.Instance.UpdateHint(_focusedTarget, progress, true);
-            if (_holdTime >= HoldSeconds)
+            if (_holdTime >= BattleEquipmentHtmlUi.HoldDurationSeconds)
             {
                 Agent target = _focusedTarget;
                 ResetHold();

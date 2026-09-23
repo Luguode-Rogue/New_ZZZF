@@ -40,7 +40,7 @@ namespace New_ZZZF.TacticalMap.UI
 
         private static void Diag(string msg)
         {
-            try { TaleWorlds.Library.Debug.Print("[TMap] " + msg); } catch { }
+            try { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; } catch { }
             try
             {
                 string path = System.IO.Path.Combine(

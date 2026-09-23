@@ -87,7 +87,7 @@ namespace New_ZZZF
             }
             catch (Exception ex)
             {
-                Debug.Print($"[CompositeSpellRegistry] 保存失败: {ex.Message}");
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
         }
 
@@ -126,7 +126,7 @@ namespace New_ZZZF
             }
 
             if (_recipes.Count > 0)
-                Debug.Print($"[CompositeSpellRegistry] 已重建自创法术 {_recipes.Count} 个");
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
         }
 
         private static void LoadFromDisk()
@@ -159,7 +159,7 @@ namespace New_ZZZF
             }
             catch (Exception ex)
             {
-                Debug.Print($"[CompositeSpellRegistry] 读取失败: {ex.Message}");
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
         }
     }

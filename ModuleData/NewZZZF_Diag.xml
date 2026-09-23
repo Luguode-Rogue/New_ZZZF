@@ -14,7 +14,7 @@
   <HeroChange>true</HeroChange>
   <!-- 词缀系统（MissionBehavior + CampaignBehavior + Ctrl+F5~F9）-->
   <Affix>true</Affix>
-  <!-- 战斗 HTML HUD（耐力/法力/技能冷却/技能槽）-->
+  <!-- 战斗 HTML HUD（耐力/法力/技能冷却 Surface）-->
   <BattleHud>true</BattleHud>
   <!-- 战场友军换装（长按交互 + HTML Page）-->
   <BattleEquipment>true</BattleEquipment>
@@ -22,7 +22,7 @@
   <UnarmedWeaponPickup>true</UnarmedWeaponPickup>
   <!-- Harmony PatchAll（全部 [HarmonyPatch] 补丁，含 NewDamageModel）-->
   <HarmonyPatchAll>true</HarmonyPatchAll>
-  <!-- 技能注册加载（true/SkillFactory/SkillConfig + L 键热重载）-->
+  <!-- 技能注册加载（CompositeSpellRegistry/SkillFactory/SkillConfig + L 键热重载）-->
   <SkillRegistry>true</SkillRegistry>
   <!-- 伤害模型替换（InitializeGameStarter 的 WOW_*/ZZZF_* 模型）-->
   <DamageModels>true</DamageModels>

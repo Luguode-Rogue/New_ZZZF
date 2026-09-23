@@ -23,6 +23,14 @@
 
 原始来源：`../Bug修复记录/`、`../UI开发文档/`、`../工作日志/`。
 
+### BattleHud 性能优化后不可见（2026-09-21）
+
+性能优化后，BattleHud Surface 和 iframe 均已成功加载，但页面没有可靠完成首屏状态恢复，`#hud.hidden` 始终未被移除。修复方式是显式绑定 `New_ZZZF.BattleHud` scope，并增加独立 `getState` 首屏状态请求；运行期仍保留属性、计时器和选槽的拆分轻量更新。
+
+本次最重要的排查经验：`Surface shown`、iframe `readyState=complete` 都不能证明业务 UI 已经显示；必须继续验证 scope、状态请求、`render(available=true)` 和 DOM 显隐完整链路。
+
+完整记录：[2026-09-21 BattleHud 性能优化后不可见修复](../Bug修复记录/2026-09-21_BattleHud_性能优化后不可见修复.md)。
+
 ### 存档 / 数据持久化
 
 - 词缀/物品系统存档读档丢失

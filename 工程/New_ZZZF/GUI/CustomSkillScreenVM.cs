@@ -1350,7 +1350,7 @@ namespace New_ZZZF
                     ? $"导出成功！已导出 {exportedCount} 个兵种/领主配置到 troop_skills.xml（跳过 {excludeIds.Count} 个队伍成员）"
                     : $"导出成功！共 {exportedCount} 个兵种/领主配置已保存到 troop_skills.xml";
 
-                Debug.Print($"[New_ZZZF] 技能配置已导出: troop_skills.xml (导出{exportedCount}, 跳过{excludeIds.Count})");
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
             catch (System.Exception ex)
             {

@@ -1,4 +1,4 @@
-﻿using New_ZZZF;
+using New_ZZZF;
 using New_ZZZF.Skills;
 using System;
 using System.Collections.Generic;
@@ -76,7 +76,7 @@ namespace New_ZZZF
                 { "Fireball", new FireballSkill() },               // 火球术
                 { "FireWall", new FireWallSkill() },               // 火墙术
                 { "lingmashaodi", new lingmashaodi() },               // 
-                { "HuiJianYuanZhen", new HuiJianYuanZhen() },               // 辉剑圆阵
+                { "LiuXingFeiDan", new LiuXingFeiDan() },                  // 流星飞弹
             
                 {"LeiJi",new LeiJi() },
             
@@ -116,7 +116,7 @@ namespace New_ZZZF
                 // 处理空值或空白ID
                 if (string.IsNullOrWhiteSpace(skillID))
                 {
-                    Debug.Print("[SkillFactory] 警告：传入空技能ID");
+                    /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                     SkillBase skillBase = new NullSkill();
                     if (Game.Current.GameType is Campaign)
                     {
@@ -140,7 +140,7 @@ namespace New_ZZZF
                 }
 
                 // 处理未知技能ID
-                Debug.Print($"[SkillFactory] 错误：未注册的技能ID '{skillID}'");
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 SkillBase skillBase2 = new NullSkill();
                 if (Game.Current.GameType is Campaign)
                 {
@@ -161,7 +161,7 @@ namespace New_ZZZF
         {
             if (string.IsNullOrWhiteSpace(id) || skill == null) return;
             _skillRegistry[id] = skill;
-            Debug.Print($"[SkillFactory] 动态注册法术: {id}");
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
         }
 
         /// <summary>

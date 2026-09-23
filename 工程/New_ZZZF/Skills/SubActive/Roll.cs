@@ -99,9 +99,7 @@ namespace New_ZZZF
 
             agent.SetCurrentActionProgress(0, 0.3f);
             agent.SetCurrentActionSpeed(0, 2f);
-            Debug.Print(string.Format(
-                "[New_ZZZF][翻滚][Start] agent={0}, ai={1}, direction={2}, destination={3}",
-                agent.Name, agent.IsAIControlled, direction, destination));
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             return true;
         }
 

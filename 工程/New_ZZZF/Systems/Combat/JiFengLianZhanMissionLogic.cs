@@ -126,9 +126,7 @@ namespace New_ZZZF
 
             CancelCurrentAiCombatAction(agent);
 
-            Debug.Print(string.Format(
-                "[New_ZZZF][疾风连斩][Start] agent={0}, weapon={1}/{2}, direction={3}",
-                agent.Name, weapon.Item.StringId, record.WeaponUsage, record.Direction));
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             reason = null;
             return true;
         }
@@ -201,10 +199,7 @@ namespace New_ZZZF
             Agent.ActionCodeType type = record.Agent.GetCurrentActionType(1);
             if (IsReadyOrRelease(type))
             {
-                Debug.Print(string.Format(
-                    "[New_ZZZF][疾风连斩][AttackStarted] agent={0}, ai={1}, segment={2}, direction={3}, actionType={4}, action={5}",
-                    record.Agent.Name, record.Agent.IsAIControlled, record.Segment,
-                    record.Direction, type, record.Agent.GetCurrentAction(1).GetName()));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 record.LastSuccessfulDirection = record.Direction;
                 record.RetryingLastSuccessfulDirection = false;
                 record.Phase = ChainPhase.WaitingForContact;
@@ -237,9 +232,7 @@ namespace New_ZZZF
                 if (record.Agent.IsAIControlled)
                     record.Agent.SetHasOnAiInputSetCallback(true);
 
-                Debug.Print(string.Format(
-                    "[New_ZZZF][疾风连斩][DirectionRejected] agent={0}, segment={1}, rejected={2}, fallback={3}",
-                    record.Agent.Name, record.Segment, rejectedDirection, record.Direction));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 return;
             }
 
@@ -279,10 +272,7 @@ namespace New_ZZZF
                 record.Phase != ChainPhase.WaitingForContact)
                 return;
 
-            Debug.Print(string.Format(
-                "[New_ZZZF][疾风连斩][Contact] agent={0}, ai={1}, segment={2}, canceled={3}, victim={4}",
-                record.Agent.Name, record.Agent.IsAIControlled, record.Segment, isCanceled,
-                victim == null ? "null" : victim.Name.ToString()));
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
 
             // 疾风连砍激活期间，伤害模型会将原本的 Blocked 强制判定为突破格挡，
             // 但接触数据仍保留原始的 Blocked 结果。本次攻击照常完成突破与伤害，
@@ -308,10 +298,7 @@ namespace New_ZZZF
                 }
 
                 component.ChangeStamina(-BonusSegmentStaminaCost);
-                Debug.Print(string.Format(
-                    "[New_ZZZF][疾风连斩][Extend] agent={0}, completedSegment={1}, cost={2:0.0}, stamina={3:0.0}, unlockedThrough={4}",
-                    record.Agent.Name, record.Segment, BonusSegmentStaminaCost,
-                    component._currentStamina, record.Segment + BonusBatchSegments));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
 
             record.PreviousDirection = record.Direction;
@@ -430,9 +417,7 @@ namespace New_ZZZF
             FaceCurrentTarget(agent);
             if (firstInjection)
             {
-                Debug.Print(string.Format(
-                    "[New_ZZZF][疾风连斩][AIInject] agent={0}, segment={1}, direction={2}, before={3}, after={4}",
-                    agent.Name, record.Segment, record.Direction, previousFlags, movementFlags));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 MarkInjected(record);
             }
         }
@@ -452,9 +437,7 @@ namespace New_ZZZF
             bool accepted = agent.SetActionChannel(
                 1, ActionIndexCache.act_none, true, (AnimFlags)0UL,
                 0f, 1f, 0f, 0f, 0f, false, 0f, 0, false);
-            Debug.Print(string.Format(
-                "[New_ZZZF][疾风连斩][AITakeover] agent={0}, previousAction={1}, canceled={2}",
-                agent.Name, actionType, accepted));
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
         }
 
         private static void FaceCurrentTarget(Agent agent)
@@ -563,9 +546,7 @@ namespace New_ZZZF
         {
             if (record == null || record.Agent == null || !_records.Remove(record.Agent.Index))
                 return;
-            Debug.Print(string.Format(
-                "[New_ZZZF][疾风连斩][End] agent={0}, segment={1}, speed={2:0.00}, reason={3}",
-                record.Agent.Name, record.Segment, record.ActionSpeed, reason));
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
         }
 
         public override void OnAgentRemoved(

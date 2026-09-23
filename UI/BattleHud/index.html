@@ -76,7 +76,9 @@ body{pointer-events:none;user-select:none}
 <script>
 (() => {
   'use strict';
-  const app = window.game.app;
+  // Coexist Surface 可能被挂载到其他 Page 的同源 iframe 中；显式绑定
+  // BattleHud scope，避免首屏恢复依赖宿主页面推断出的默认 owner。
+  const app = window.game.scope('New_ZZZF.BattleHud');
   const hud = document.getElementById('hud');
   const skillbar = document.getElementById('skillbar');
   const SLOT_KEYS = {
@@ -105,14 +107,18 @@ body{pointer-events:none;user-select:none}
   function syncLocalCountdowns(state) {
     const now = nowMs();
     const seen = new Set();
+    const compact = Array.isArray(state);
+    const timers = compact ? LAYOUT : (state.skills || []);
 
-    for (const s of (state.skills || [])) {
-      seen.add(s.slot);
-      const cd = Math.max(0, Number(s.cd) || 0);
+    for (let i = 0; i < timers.length; i++) {
+      const s = compact ? null : timers[i];
+      const slot = compact ? timers[i] : s.slot;
+      seen.add(slot);
+      const cd = Math.max(0, Number(compact ? state[i + 1] : s.cd) || 0);
       if (cd > 0.001) {
-        localCooldowns.set(s.slot, { remaining: cd, stamp: now });
+        localCooldowns.set(slot, { remaining: cd, stamp: now });
       } else {
-        localCooldowns.delete(s.slot);
+        localCooldowns.delete(slot);
       }
     }
 
@@ -120,7 +126,7 @@ body{pointer-events:none;user-select:none}
       if (!seen.has(slot)) localCooldowns.delete(slot);
     }
 
-    const gcd = Math.max(0, Number(state.gcd) || 0);
+    const gcd = Math.max(0, Number(compact ? state[0] : state.gcd) || 0);
     if (gcd > 0.001) {
       const oldRemaining = remainingOf(localGcd, now);
       const continuing = oldRemaining > 0.001;
@@ -283,6 +289,47 @@ body{pointer-events:none;user-select:none}
     document.getElementById('gcdBadge').classList.toggle('off', !gcdOn);
   }
 
+  function applyVitalsState(values) {
+    if (!Array.isArray(values) || !latestState || !latestState.available) return;
+    latestState.stamina = Number(values[0]) || 0;
+    latestState.mana = Number(values[1]) || 0;
+    latestState.shield = Number(values[2]) || 0;
+    latestState.lives = Number(values[3]) || 0;
+
+    renderBar('stamFill', 'stamText', latestState.stamina, 100);
+    renderBar('manaFill', 'manaText', latestState.mana, 100);
+
+    const shieldBadge = document.getElementById('shieldBadge');
+    const shield = fmt(latestState.shield);
+    toggleClass(shieldBadge, 'off', shield <= 0);
+    shieldBadge.textContent = '护盾 ' + shield;
+
+    const livesBadge = document.getElementById('livesBadge');
+    const lives = fmt(latestState.lives);
+    toggleClass(livesBadge, 'off', lives <= 0);
+    livesBadge.textContent = '复活 ' + lives;
+
+    updateSkillCells(latestState, nowMs());
+  }
+
+  function applyTimersState(values) {
+    if (!Array.isArray(values) || !latestState || !latestState.available) return;
+    syncLocalCountdowns(values);
+    const now = nowMs();
+    updateSkillCells(latestState, now);
+    updateGcdBadge(now);
+  }
+
+  function applySelectionState(value) {
+    if (!latestState || !latestState.available) return;
+    const selected = Math.max(0, Math.min(3, Number(value) || 0));
+    latestState.selectedSpellSlot = selected;
+    for (const skill of (latestState.skills || [])) {
+      skill.selected = skill.slot === ('spell' + selected);
+    }
+    updateSkillCells(latestState, nowMs());
+  }
+
   function render(state) {
     latestState = state;
     if (!state || !state.available) {
@@ -314,14 +361,46 @@ body{pointer-events:none;user-select:none}
     updateGcdBadge(now);
   }
 
-  app.state.subscribe('battleHud', render);
   const hydrate = () => {
-    try { render(app.state.get('battleHud')); } catch (_) {}
+    try {
+      render(app.state.get('battleHud'));
+      applyVitalsState(app.state.get('battleHud.vitals'));
+      applyTimersState(app.state.get('battleHud.timers'));
+      applySelectionState(app.state.get('battleHud.selection'));
+    } catch (_) {}
   };
-  if (window.game && typeof window.game.ready === 'function') {
-    window.game.ready().then(hydrate).catch(hydrate);
+
+  // 主动请求一次完整状态。共存 iframe 的 retained-state 快照若因装载时序
+  // 未送达，HUD 仍可独立完成首次显示；后续变化继续走拆分后的轻量状态。
+  const requestCurrentState = () => {
+    try {
+      return app.request('getState').then(render).catch(() => {});
+    } catch (_) {
+      return Promise.resolve();
+    }
+  };
+  const reportReady = () => {
+    try {
+      if (window.game.surface && typeof window.game.surface.ready === 'function')
+        window.game.surface.ready({ component: 'BattleHud' }).catch(() => {});
+    } catch (_) {}
+  };
+  if (typeof app.state.watch === 'function') {
+    app.state.watch('battleHud', render);
+    app.state.watch('battleHud.vitals', applyVitalsState);
+    app.state.watch('battleHud.timers', applyTimersState);
+    app.state.watch('battleHud.selection', applySelectionState);
+    window.game.ready().then(reportReady).catch(() => {});
   } else {
-    hydrate();
+    // 旧版 Framework 的兼容回退；新版由 watch 负责无竞态首屏水合。
+    app.state.subscribe('battleHud', render);
+    app.state.subscribe('battleHud.vitals', applyVitalsState);
+    app.state.subscribe('battleHud.timers', applyTimersState);
+    app.state.subscribe('battleHud.selection', applySelectionState);
+    requestCurrentState();
+    if (window.game && typeof window.game.ready === 'function') {
+      window.game.ready().then(() => { hydrate(); requestCurrentState(); }).catch(() => { hydrate(); requestCurrentState(); });
+    } else hydrate();
   }
 })();
 </script>

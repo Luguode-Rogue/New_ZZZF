@@ -1,4 +1,4 @@
-﻿using New_ZZZF;
+using New_ZZZF;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
@@ -30,7 +30,7 @@ public class CriticalStrikePassive : New_ZZZF.SkillBase
         if (MBRandom.RandomFloat < 0.15f) // 15%暴击率
         {
             //attackInfo.Damage *= 2;
-            Debug.Print("暴击触发！");
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
         }
     }
 }

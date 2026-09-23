@@ -1,4 +1,4 @@
-﻿using New_ZZZF.Systems;
+using New_ZZZF.Systems;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -76,7 +76,7 @@ namespace New_ZZZF
             if (state.TargetAgent == null) return; // 无有效目标则只登记不触发特效
 
             try { state.OnApply(state.TargetAgent); }
-            catch (Exception e) { Debug.Print("[New_ZZZF] AddState.OnApply 异常: " + e.Message); }
+            catch (Exception e) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
         }
 
         /// <summary>
@@ -96,7 +96,7 @@ namespace New_ZZZF
                 if (target != null)
                 {
                     try { existing.OnRemove(target); }
-                    catch (Exception e) { Debug.Print("[New_ZZZF] ReplaceState.OnRemove 异常: " + e.Message); }
+                    catch (Exception e) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
                 }
             }
             AddState(state, owner);
@@ -119,13 +119,13 @@ namespace New_ZZZF
                 }
 
                 try { state.OnUpdate(target, dt); }
-                catch (Exception e) { Debug.Print("[New_ZZZF] OnUpdate 异常: " + e.Message); }
+                catch (Exception e) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
 
                 if (state.Duration <= 0)
                 {
                     _activeStates.RemoveAt(i);
                     try { state.OnRemove(target); }
-                    catch (Exception e) { Debug.Print("[New_ZZZF] OnRemove 异常: " + e.Message); }
+                    catch (Exception e) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
                 }
             }
         }

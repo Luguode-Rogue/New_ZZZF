@@ -147,7 +147,7 @@ namespace New_ZZZF
                 _transitions.Remove(rider.Index);
                 if (spawnedMount != null && spawnedMount.IsActive() && spawnedMount.RiderAgent == null)
                     spawnedMount.FadeOut(true, false);
-                Debug.Print("[New_ZZZF][灵马哨笛] 生成或上马失败: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 failureReason = "坐骑生成或上马失败。";
                 return false;
             }
@@ -180,7 +180,7 @@ namespace New_ZZZF
             catch (Exception ex)
             {
                 _transitions.Remove(rider.Index);
-                Debug.Print("[New_ZZZF][灵马哨笛] 下马请求失败: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 failureReason = "下马请求失败。";
                 return false;
             }
@@ -309,7 +309,7 @@ namespace New_ZZZF
             }
             catch (Exception ex)
             {
-                Debug.Print("[New_ZZZF][灵马哨笛] 上马兼容兜底失败: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
         }
 
@@ -324,7 +324,7 @@ namespace New_ZZZF
             }
             catch (Exception ex)
             {
-                Debug.Print("[New_ZZZF][灵马哨笛] 下马兼容兜底失败: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
         }
 

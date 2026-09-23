@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -1241,7 +1241,9 @@ namespace New_ZZZF
         //    // 防御性检查：如果物品视图模型为空或物品ID无效，则直接返回
         //    if (itemVM == null || string.IsNullOrEmpty(itemVM.StringId))
         //    {
+        //        /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。
         //        Debug.Print("[ERROR] EquipEquipment: Invalid itemVM or StringId");
+        //        */
         //        return;
         //    }
 
@@ -1249,7 +1251,9 @@ namespace New_ZZZF
         //    EquipmentIndex targetIndex = this.TargetEquipmentType;
         //    if (targetIndex < EquipmentIndex.WeaponItemBeginSlot || targetIndex >= EquipmentIndex.NumAllWeaponSlots)
         //    {
+        //        /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。
         //        Debug.Print($"[ERROR] EquipEquipment: Invalid target slot index {targetIndex}");
+        //        */
         //        return;
         //    }
 
@@ -1259,7 +1263,9 @@ namespace New_ZZZF
         //    // 临时插入虚构物品到玩家库存（绕过DoesTransferItemExist校验）
         //    ItemRosterElement tempElement = itemVM.ItemRosterElement;
         //    playerInventory.AddToCounts(tempElement.EquipmentElement, 1);
+        //    /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。
         //    Debug.Print($"临时插入物品 {tempElement.EquipmentElement.Item?.Name} 到玩家库存");
+        //    */
 
         //    // 检查目标装备槽是否被占用
         //    bool isSlotOccupied = this._currentCharacter.Equipment[targetIndex].Item != null;
@@ -1280,7 +1286,9 @@ namespace New_ZZZF
         //            civilianEquipment: !this.IsInWarSet
         //        );
         //        commands.Add(unequipCommand);
+        //        /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。
         //        Debug.Print($"生成卸下命令：{oldEquipment.Item?.Name}");
+        //        */
         //    }
 
         //    // 生成装备新物品的命令
@@ -1295,15 +1303,21 @@ namespace New_ZZZF
         //        civilianEquipment: !this.IsInWarSet
         //    );
         //    commands.Add(equipCommand);
+        //    /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。
         //    Debug.Print($"生成装备命令：{tempElement.EquipmentElement.Item?.Name} -> Slot {targetIndex}");
+        //    */
 
         //    // 执行所有转移命令
         //    this._inventoryLogic.AddTransferCommands(commands);
+        //    /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。
         //    Debug.Print("已提交转移命令列表");
+        //    */
 
         //    // 恢复玩家库存（移除临时插入的虚构物品）
         //    playerInventory.AddToCounts(tempElement.EquipmentElement, -1);
+        //    /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。
         //    Debug.Print($"已从库存移除临时物品 {tempElement.EquipmentElement.Item?.Name}");
+        //    */
         //}
 
         private void EquipEquipment(SPSkillItemVM itemVM)

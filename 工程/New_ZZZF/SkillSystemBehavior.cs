@@ -140,8 +140,8 @@ namespace New_ZZZF
             InformationManager.DisplayMessage(new InformationMessage(errorMsg, Colors.Red));
 
             // 日志输出
-            Debug.Print(errorMsg);
-            Debug.Print(ex.StackTrace);
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
         }
         public override void OnMissionTick(float dt)
         {
@@ -398,7 +398,6 @@ namespace New_ZZZF
                     // 距离判定（使用文档中的Distance方法）
                     if (currentPos.Distance(targetPos) < 0.5f)
                     {
-                        if (data.Name == "HuiJianYuanZhen") { HuiJianYuanZhen.HuiJianYuanZhenDamage(missileEntity); }
                         DestroyProjectile(missileEntity);
 
                     }

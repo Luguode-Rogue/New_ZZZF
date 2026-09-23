@@ -403,16 +403,7 @@ namespace New_ZZZF
                 if (SkillSystemBehavior.ActiveComponents.TryGetValue(
                         mover.Index, out AgentSkillComponent component) && component?.Speed != null)
                     trackedSpeed = component.Speed.speed.Length;
-                Debug.Print(string.Format(
-                    "[New_ZZZF][RushMovement][Tick] mover={0}, mode={1}, controller={2}, pos={3}, moved={4:0.00}, nativeVelocity={5:0.00}, trackedSpeed={6:0.00}, inputMagnitude={7:0.00}, maxSpeedLimit={8:0.00}, currentSpeedLimit={9:0.00}, maxSpeedMul={10:0.00}, combatSpeedMul={11:0.00}, remaining={12:0.00}",
-                    mover.Name, record.Mode, mover.Controller, mover.Position,
-                    (mover.Position - record.StartPosition).AsVec2.Length,
-                    mover.MovementVelocity.Length, trackedSpeed,
-                    mover.MovementInputVector.Length,
-                    mover.GetMaximumSpeedLimit(), mover.GetCurrentSpeedLimit(),
-                    mover.AgentDrivenProperties.MaxSpeedMultiplier,
-                    mover.AgentDrivenProperties.CombatMaxSpeedMultiplier,
-                    record.Remaining));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
 
             if (record.Options.UseSafeKinematicMovement)
@@ -529,7 +520,7 @@ namespace New_ZZZF
             {
                 record.ApexTriggered = true;
                 try { options.OnApex?.Invoke(mover, record.Target); }
-                catch (Exception ex) { Debug.Print("[New_ZZZF][ParabolicLeap] 最高点回调异常: " + ex); }
+                catch (Exception ex) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
             }
 
             if (touchedGround || progress >= 1f)
@@ -726,12 +717,7 @@ namespace New_ZZZF
 
         private static void LogStart(RushRecord record)
         {
-            Debug.Print(string.Format(
-                "[New_ZZZF][RushMovement][Start] mover={0}, mode={1}, controller={2}, main={3}, mounted={4}, pos={5}, target={6}, duration={7:0.00}, stopDistance={8:0.00}",
-                record.Mover.Name, record.Mode, record.Mover.Controller, record.Mover.IsMainAgent,
-                record.Mover.MountAgent != null, record.Mover.Position,
-                record.Target != null ? record.Target.Name.ToString() : record.FixedPosition.ToString(),
-                record.Options.Duration, record.Options.StopDistance));
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
         }
 
         public static bool HasLineOfSight(Agent mover, Agent target)
@@ -764,15 +750,11 @@ namespace New_ZZZF
             {
                 MissionGameModels.Current.AgentStatCalculateModel.UpdateAgentStats(
                     record.Mover, record.Mover.AgentDrivenProperties);
-                Debug.Print(string.Format(
-                    "[New_ZZZF][RushMovement][StatRefresh:{0}] mover={1}, maxSpeedMul={2:0.00}, combatSpeedMul={3:0.00}",
-                    phase, record.Mover.Name,
-                    record.Mover.AgentDrivenProperties.MaxSpeedMultiplier,
-                    record.Mover.AgentDrivenProperties.CombatMaxSpeedMultiplier));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
             catch (Exception ex)
             {
-                Debug.Print("[New_ZZZF][RushMovement][StatRefreshFailed:" + phase + "] " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
         }
 #endif
@@ -792,15 +774,11 @@ namespace New_ZZZF
             try
             {
                 record.Mover.UpdateAgentProperties();
-                Debug.Print(string.Format(
-                    "[New_ZZZF][RushMovement][MountedStatRefresh:{0}] mover={1}, mountSpeed={2:0.00}, mountDashAcceleration={3:0.00}",
-                    phase, record.Mover.Name,
-                    record.Mover.AgentDrivenProperties.MountSpeed,
-                    record.Mover.AgentDrivenProperties.MountDashAccelerationMultiplier));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
             catch (Exception ex)
             {
-                Debug.Print("[New_ZZZF][RushMovement][MountedStatRefreshFailed:" + phase + "] " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
         }
 
@@ -830,13 +808,7 @@ namespace New_ZZZF
 #endif
             RefreshMountedChongCiZhanStats(record, "End");
 
-            Debug.Print(string.Format(
-                "[New_ZZZF][RushMovement][End] mover={0}, mode={1}, reason={2}, controller={3}, elapsed={4:0.00}, moved={5:0.00}, remainingDistance={6:0.00}",
-                mover.Name, record.Mode, reason, mover.Controller,
-                record.Options.Duration - record.Remaining,
-                (mover.Position - record.StartPosition).AsVec2.Length,
-                record.Target != null ? (record.Target.Position - mover.Position).AsVec2.Length :
-                (record.FixedPosition - mover.Position).AsVec2.Length));
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
 
             // 冲刺斩的斩击属于“冲锋结束动作”，不只在成功抵达时发生。超时、
             // 丢失视线、路径失败、卡住、主动取消或枪兵中断都会请求一次原生右砍。
@@ -847,7 +819,7 @@ namespace New_ZZZF
             }
 
             try { record.Options.OnEnded?.Invoke(mover, record.Target, reason); }
-            catch (Exception ex) { Debug.Print("[New_ZZZF][RushMovement] 结束回调异常: " + ex); }
+            catch (Exception ex) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
         }
 
         private void QueueRightAttack(Agent attacker, Agent target)
@@ -877,9 +849,7 @@ namespace New_ZZZF
                 if (!record.InputInjectionLogged)
                 {
                     record.InputInjectionLogged = true;
-                    Debug.Print(string.Format(
-                        "[New_ZZZF][RushMovement][PlayerInput] mover={0}, direction={1}, flags={2}",
-                        mainAgent.Name, direction, mainAgent.MovementFlags));
+                    /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 }
             }
 #endif
@@ -929,19 +899,13 @@ namespace New_ZZZF
                 if (mainAgent.WalkMode)
                     mainAgent.EventControlFlags |= Agent.EventControlFlag.Run;
                 mainAgent.EventControlFlags |= Agent.EventControlFlag.DoubleTapToDirectionUp;
-                Debug.Print(string.Format(
-                    "[New_ZZZF][RushMovement][NativeSprint] mover={0}, mounted={1}, walkMode={2}, events={3}",
-                    mainAgent.Name, mainAgent.MountAgent != null, mainAgent.WalkMode,
-                    mainAgent.EventControlFlags));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
 
             if (!record.InputInjectionLogged)
             {
                 record.InputInjectionLogged = true;
-                Debug.Print(string.Format(
-                    "[New_ZZZF][RushMovement][PostControlInput] mover={0}, direction={1}, input={2}, inputMagnitude={3:0.00}, flags={4}",
-                    mainAgent.Name, direction, mainAgent.MovementInputVector,
-                    inputMagnitude, mainAgent.MovementFlags));
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
         }
 

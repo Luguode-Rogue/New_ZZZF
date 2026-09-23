@@ -1,4 +1,4 @@
-﻿using Bannerlord.ButterLib.SaveSystem.Extensions;
+using Bannerlord.ButterLib.SaveSystem.Extensions;
 using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
 namespace New_ZZZF
@@ -37,11 +37,11 @@ namespace New_ZZZF
     //                        SkillConfigManager.Instance.LoadFromXml(xmlPath);
 
     //                        // 调试日志
-    //                        Debug.Print("[New_ZZZF] 技能配置加载完成！");
+    //                        /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */
     //                    }
     //                    catch (Exception ex)
     //                    {
-    //                        Debug.Print($"[New_ZZZF] 配置加载失败: {ex.Message}");
+    //                        /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */
     //                    }
     //                }
     //            }

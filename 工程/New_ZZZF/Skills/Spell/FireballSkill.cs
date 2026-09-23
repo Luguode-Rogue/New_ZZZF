@@ -12,7 +12,8 @@ namespace New_ZZZF.Skills
         private const float MaximumAiRange = 45f;
         private const float ProjectileSpeed = 25f;
         private const float ProjectileLifetime = 4f;
-        private const float ProjectileHitRadius = 0.75f;
+        private const float ProjectileHitRadius = 1f;
+        private const float ProjectileWorldHitRadius = 0.3f;
         private const float ExplosionRadius = 4f;
         private const float DirectBaseDamage = 30f;
         private const float ExplosionCenterBaseDamage = 20f;
@@ -60,6 +61,8 @@ namespace New_ZZZF.Skills
                 Speed = ProjectileSpeed,
                 Lifetime = ProjectileLifetime,
                 HitRadius = ProjectileHitRadius,
+                WorldHitRadius = ProjectileWorldHitRadius,
+                CollisionInterval = 0.05f,
                 // 原版火焰投石器使用的 Fire Pot 弹丸可视网格。
                 MeshResourceName = "projectile_pot",
                 // TODO 飞行粒子的预期表现（资源完成前保持关闭）：

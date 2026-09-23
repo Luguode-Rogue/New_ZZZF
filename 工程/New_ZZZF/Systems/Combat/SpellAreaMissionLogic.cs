@@ -262,7 +262,7 @@ namespace New_ZZZF
                 }
                 catch (Exception ex)
                 {
-                    Debug.Print("[New_ZZZF][持续法术区域] 目标回调异常: " + ex);
+                    /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 }
             }
         }
@@ -314,7 +314,7 @@ namespace New_ZZZF
             }
             catch (Exception ex)
             {
-                Debug.Print("[New_ZZZF][持续法术区域] 中心更新异常: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 return;
             }
             if (!newCenter.IsValid)
@@ -378,7 +378,7 @@ namespace New_ZZZF
             }
             catch (Exception ex)
             {
-                Debug.Print("[New_ZZZF][持续法术区域] 结束回调异常: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
         }
 

@@ -180,7 +180,7 @@ namespace New_ZZZF
             if (troop == null)
             {
                 failureReason = "未找到阶级 " + tier + " 对应的帝国兵种：" + EmpireTroopIds[tier] + "。";
-                Debug.Print("[New_ZZZF][召唤] " + failureReason);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 return false;
             }
 
@@ -252,7 +252,7 @@ namespace New_ZZZF
             catch (Exception ex)
             {
                 failureReason = "计算召唤数量时发生异常：" + ex.Message;
-                Debug.Print("[New_ZZZF][召唤] 被动修饰召唤调用失败: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 return false;
             }
 
@@ -323,12 +323,7 @@ namespace New_ZZZF
             }
 
             summonedCount = newSummons.Count;
-            Debug.Print(string.Format(
-                "[New_ZZZF][召唤] {0} 完成批量召唤：{1} 个，阶级 {2}，替换旧召唤物 {3} 个。",
-                summoner.Name,
-                summonedCount,
-                tier,
-                oldSummons != null ? oldSummons.Count : 0));
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             return true;
         }
 
@@ -341,9 +336,10 @@ namespace New_ZZZF
                 List<HealthDebtRecord> debts = new List<HealthDebtRecord>(_healthDebts.Values);
                 for (int i = 0; i < debts.Count; i++)
                 {
-                    ApplyHealthLimit(debts[i]);
-                    if (debts[i].Debt <= 0f && debts[i].Summoner != null && debts[i].Summoner.IsActive())
-                        _healthDebts.Remove(debts[i].Summoner.Index);
+                    HealthDebtRecord debt = debts[i];
+                    ApplyHealthLimit(debt);
+                    if (debt.Debt <= 0f && debt.Summoner != null && debt.Summoner.IsActive())
+                        _healthDebts.Remove(debt.Summoner.Index);
                 }
             }
 
@@ -516,7 +512,7 @@ namespace New_ZZZF
             catch (Exception ex)
             {
                 failureReason = "生成士兵时发生异常：" + ex.Message;
-                Debug.Print("[New_ZZZF][召唤] SpawnAgent失败: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 return false;
             }
 
@@ -687,7 +683,7 @@ namespace New_ZZZF
             }
             catch (Exception ex)
             {
-                Debug.Print("[New_ZZZF][召唤] 安全移除召唤物失败: " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             }
             finally
             {

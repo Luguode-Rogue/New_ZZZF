@@ -1,4 +1,4 @@
-﻿using SandBox.Conversation.MissionLogics;
+using SandBox.Conversation.MissionLogics;
 using System;
 using System.Collections.Generic;
 using TaleWorlds.CampaignSystem.Extensions;
@@ -59,8 +59,14 @@ namespace New_ZZZF
         private float _shieldStrengthValue;
         private int _lifeResurgenceCountValue;
 
-        /// <summary>HUD 状态发生可见变化时通知界面；不在每帧主动轮询刷新。</summary>
+        /// <summary>技能结构等低频完整状态变化。</summary>
         public event Action<AgentSkillComponent> HudStateChanged;
+        /// <summary>耐力、法力、护盾或复活次数变化。</summary>
+        public event Action<AgentSkillComponent> HudVitalsChanged;
+        /// <summary>技能冷却或公共冷却开始、结束、延长。</summary>
+        public event Action<AgentSkillComponent> HudTimersChanged;
+        /// <summary>玩家选择的法术槽变化。</summary>
+        public event Action<AgentSkillComponent> HudSelectionChanged;
 
         public float _currentMana
         {
@@ -73,7 +79,7 @@ namespace New_ZZZF
                     return;
                 }
                 _currentManaValue = value;
-                NotifyHudStateChanged();
+                NotifyHudVitalsChanged();
             }
         }
         public float _currentStamina
@@ -87,7 +93,7 @@ namespace New_ZZZF
                     return;
                 }
                 _currentStaminaValue = value;
-                NotifyHudStateChanged();
+                NotifyHudVitalsChanged();
             }
         }
         public float _globalCooldownTimer
@@ -105,7 +111,7 @@ namespace New_ZZZF
                 bool isActive = newValue > 0.0001f;
                 bool extended = isActive && newValue > oldValue + 0.05f;
                 if (wasActive != isActive || extended)
-                    NotifyHudStateChanged();
+                    NotifyHudTimersChanged();
             }
         }
         public bool _isInCombatArtState;        // 是否处于战技准备状态
@@ -120,7 +126,7 @@ namespace New_ZZZF
                     return;
                 }
                 _shieldStrengthValue = value;
-                NotifyHudStateChanged();
+                NotifyHudVitalsChanged();
             }
         }
         public int _lifeResurgenceCount
@@ -131,7 +137,7 @@ namespace New_ZZZF
                 if (_lifeResurgenceCountValue == value)
                     return;
                 _lifeResurgenceCountValue = value;
-                NotifyHudStateChanged();
+                NotifyHudVitalsChanged();
             }
         }
 
@@ -174,6 +180,21 @@ namespace New_ZZZF
         private void NotifyHudStateChanged()
         {
             HudStateChanged?.Invoke(this);
+        }
+
+        private void NotifyHudVitalsChanged()
+        {
+            HudVitalsChanged?.Invoke(this);
+        }
+
+        private void NotifyHudTimersChanged()
+        {
+            HudTimersChanged?.Invoke(this);
+        }
+
+        private void NotifyHudSelectionChanged()
+        {
+            HudSelectionChanged?.Invoke(this);
         }
 
         public AgentSkillComponent(Agent agent) : base(agent)
@@ -438,7 +459,7 @@ namespace New_ZZZF
             if (_selectedSpellSlot == slot)
                 return;
             _selectedSpellSlot = slot;
-            NotifyHudStateChanged();
+            NotifyHudSelectionChanged();
         }
 
 
@@ -473,7 +494,7 @@ namespace New_ZZZF
             {
                 if (reportFailure)
                     Script.SysOut("[" + skill.SkillID + "] 发动异常：" + ex.Message, Agent);
-                Debug.Print("[New_ZZZF][技能发动异常] " + skill.SkillID + ": " + ex);
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 return;
             }
 
@@ -496,7 +517,7 @@ namespace New_ZZZF
                 if (skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt)
                     _globalCooldownTimer += 1.0f; // 公共CD设为1秒
 
-                NotifyHudStateChanged();
+                NotifyHudTimersChanged();
 
             }
             else
@@ -617,7 +638,7 @@ namespace New_ZZZF
 
             // 冷却中的视觉倒计时由 HTML 本地完成；C# 只在冷却真正结束时再同步一次。
             if (anyCooldownFinished)
-                NotifyHudStateChanged();
+                NotifyHudTimersChanged();
         }
 
         private void UpdateGlobalCooldown(float dt)

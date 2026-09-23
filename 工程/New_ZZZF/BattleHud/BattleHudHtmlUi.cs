@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using BannerlordHtmlUI;
 using New_ZZZF.TacticalMap.Diagnostics;
 
@@ -10,9 +11,9 @@ namespace New_ZZZF.BattleHud
     /// 战斗内 HTML HUD（耐力/法力/技能冷却等）。
     ///
     /// 刷新策略：
-    ///  - AgentSkillComponent 在“HUD 可见值”发生变化时发 HudStateChanged；
-    ///  - 本类只把事件合并为 dirty 标记，并在 MissionTick 最多发布一次；
-    ///  - 不再固定 10Hz 轮询/序列化完整状态；
+    ///  - 完整结构、属性、冷却和选槽使用独立 retained state；
+    ///  - 同类变化在 MissionTick 合并，页面晚加载或重载也能从状态快照恢复；
+    ///  - 属性和选槽变化不再构造、序列化完整技能状态；
     ///  - 技能 CD/GCD 只在开始、结束或主动延长时跨桥同步，倒计时由 HTML 本地绘制；
     ///  - 资源/护盾按整数变化通知，避免每帧浮点变化跨 HTMLUI 桥。
     /// </summary>
@@ -22,6 +23,9 @@ namespace New_ZZZF.BattleHud
         private const string SurfaceName = "battlehud";
         private const string ContentRootName = "ui";
         private const string StateKey = "battleHud";
+        private const string VitalsStateKey = "battleHud.vitals";
+        private const string TimersStateKey = "battleHud.timers";
+        private const string SelectionStateKey = "battleHud.selection";
 
         private static readonly Lazy<BattleHudHtmlUi> _instance =
             new Lazy<BattleHudHtmlUi>(() => new BattleHudHtmlUi());
@@ -31,11 +35,11 @@ namespace New_ZZZF.BattleHud
         private bool _registered;
         private bool _shown;
         private bool _captureSuspended;
-        private bool _dirty = true;
-        private bool _stateSeeded;
+        private bool _fullDirty = true;
+        private bool _vitalsDirty = true;
+        private bool _timersDirty = true;
+        private bool _selectionDirty = true;
         private AgentSkillComponent _boundComponent;
-
-        private string RuntimeStateFullKey => OwnerId + "." + StateKey;
 
         public static BattleHudHtmlUi Instance => _instance.Value;
 
@@ -61,6 +65,8 @@ namespace New_ZZZF.BattleHud
 
             _scope = HtmlUiService.CreateScope(OwnerId);
             _scope.RegisterContentRoot(ContentRootName, uiRoot);
+            _scope.RegisterRequest("getState", _ =>
+                Task.FromResult<object>(BuildState(_boundComponent)));
             _surfaceId = _scope.RegisterSurface(new HtmlUiSurface(SurfaceName, "BattleHud/index.html")
             {
                 ContentRootId = ContentRootName,
@@ -81,11 +87,10 @@ namespace New_ZZZF.BattleHud
                 if (HtmlUiService.Surfaces.Show(_surfaceId))
                 {
                     _shown = true;
-                    _stateSeeded = false;
-                    _dirty = true;
+                    MarkAllDirty();
                     EnsureBoundComponent();
                     TacticalMapLog.Info("[BattleHud] Surface shown for mission.");
-                    PublishState(true);
+                    PublishPendingState();
                 }
             }
             catch (Exception ex)
@@ -101,8 +106,7 @@ namespace New_ZZZF.BattleHud
             if (!_registered || !HtmlUiService.IsReady || !_shown)
             {
                 _shown = false;
-                _dirty = true;
-                _stateSeeded = false;
+                MarkAllDirty();
                 return;
             }
 
@@ -110,8 +114,7 @@ namespace New_ZZZF.BattleHud
             {
                 HtmlUiService.Surfaces.Hide(_surfaceId);
                 _shown = false;
-                _dirty = true;
-                _stateSeeded = false;
+                MarkAllDirty();
                 TacticalMapLog.Info("[BattleHud] Surface hidden after mission.");
             }
             catch (Exception ex)
@@ -133,7 +136,7 @@ namespace New_ZZZF.BattleHud
                 {
                     HtmlUiService.Surfaces.Hide(_surfaceId);
                     _shown = false;
-                    _dirty = true;
+                    MarkAllDirty();
                 }
                 catch (Exception ex)
                 {
@@ -155,8 +158,8 @@ namespace New_ZZZF.BattleHud
             if (_captureSuspended || !_shown || !_registered || !HtmlUiService.IsReady) return;
 
             EnsureBoundComponent();
-            if (_dirty)
-                PublishState(false);
+            if (_fullDirty || _vitalsDirty || _timersDirty || _selectionDirty)
+                PublishPendingState();
         }
 
         private void EnsureBoundComponent()
@@ -172,51 +175,129 @@ namespace New_ZZZF.BattleHud
             UnbindComponent();
             _boundComponent = next;
             if (_boundComponent != null)
+            {
                 _boundComponent.HudStateChanged += OnHudStateChanged;
+                _boundComponent.HudVitalsChanged += OnHudVitalsChanged;
+                _boundComponent.HudTimersChanged += OnHudTimersChanged;
+                _boundComponent.HudSelectionChanged += OnHudSelectionChanged;
+            }
 
-            _dirty = true;
+            MarkAllDirty();
         }
 
         private void UnbindComponent()
         {
             if (_boundComponent != null)
+            {
                 _boundComponent.HudStateChanged -= OnHudStateChanged;
+                _boundComponent.HudVitalsChanged -= OnHudVitalsChanged;
+                _boundComponent.HudTimersChanged -= OnHudTimersChanged;
+                _boundComponent.HudSelectionChanged -= OnHudSelectionChanged;
+            }
             _boundComponent = null;
         }
 
         private void OnHudStateChanged(AgentSkillComponent component)
         {
             if (ReferenceEquals(component, _boundComponent))
-                _dirty = true;
+                _fullDirty = true;
         }
 
-        private void PublishState(bool force)
+        private void OnHudVitalsChanged(AgentSkillComponent component)
+        {
+            if (ReferenceEquals(component, _boundComponent))
+                _vitalsDirty = true;
+        }
+
+        private void OnHudTimersChanged(AgentSkillComponent component)
+        {
+            if (ReferenceEquals(component, _boundComponent))
+                _timersDirty = true;
+        }
+
+        private void OnHudSelectionChanged(AgentSkillComponent component)
+        {
+            if (ReferenceEquals(component, _boundComponent))
+                _selectionDirty = true;
+        }
+
+        private void MarkAllDirty()
+        {
+            _fullDirty = true;
+            _vitalsDirty = true;
+            _timersDirty = true;
+            _selectionDirty = true;
+        }
+
+        private void PublishPendingState()
         {
             if (!_shown || !_registered || _scope == null) return;
-            if (!force && !_dirty) return;
 
             try
             {
-                object state = BuildState(_boundComponent);
-                _dirty = false;
-                if (force || !_stateSeeded)
+                if (_fullDirty)
                 {
-                    _scope.SetState(StateKey, state);
-                    _stateSeeded = true;
+                    _scope.SetState(StateKey, BuildState(_boundComponent));
+                    _fullDirty = false;
                 }
-                else
+                if (_vitalsDirty)
                 {
-                    // StateStore performs multiple JToken conversions for equality checks.
-                    // The HUD already owns its signature and only reaches here on a real change,
-                    // so publish the state event directly after the initial hydration seed.
-                    HtmlUiService.SendEvent("state:" + RuntimeStateFullKey, state);
+                    _scope.SetState(VitalsStateKey, BuildVitalsState(_boundComponent));
+                    _vitalsDirty = false;
+                }
+                if (_timersDirty)
+                {
+                    _scope.SetState(TimersStateKey, BuildTimersState(_boundComponent));
+                    _timersDirty = false;
+                }
+                if (_selectionDirty)
+                {
+                    _scope.SetState(SelectionStateKey, _boundComponent == null ? 0 : _boundComponent.SelectedSpellSlot);
+                    _selectionDirty = false;
                 }
             }
             catch (Exception ex)
             {
-                _dirty = true;
+                MarkAllDirty();
                 TacticalMapLog.Error("[BattleHud] State publish failed.", ex);
             }
+        }
+
+        private static int[] BuildVitalsState(AgentSkillComponent comp)
+        {
+            return new[]
+            {
+                comp == null ? 0 : QuantizeWhole(comp._currentStamina),
+                comp == null ? 0 : QuantizeWhole(comp._currentMana),
+                comp == null ? 0 : QuantizeWhole(comp._shieldStrength),
+                comp == null ? 0 : comp._lifeResurgenceCount
+            };
+        }
+
+        private static float[] BuildTimersState(AgentSkillComponent comp)
+        {
+            var values = new float[9];
+            if (comp == null) return values;
+
+            values[0] = QuantizeTenths(comp._globalCooldownTimer);
+            for (int i = 0; i < comp.SpellSlots.Length; i++)
+                values[i + 1] = GetCooldown(comp.SpellSlots[i], comp);
+            values[5] = GetCooldown(comp.MainActiveSkill, comp);
+            values[6] = GetCooldown(comp.SubActiveSkill, comp);
+            values[7] = GetCooldown(comp.PassiveSkill, comp);
+            values[8] = GetCooldown(comp.CombatArtSkill, comp);
+            return values;
+        }
+
+        private static float GetCooldown(SkillBase skill, AgentSkillComponent comp)
+        {
+            if (skill != null &&
+                !string.Equals(skill.SkillID, "NullSkill", StringComparison.OrdinalIgnoreCase) &&
+                comp._cooldownTimers.TryGetValue(skill, out float timer) && timer > 0f)
+            {
+                return QuantizeTenths(timer);
+            }
+            return 0f;
         }
 
         private static object BuildState(AgentSkillComponent comp)
@@ -329,9 +410,8 @@ namespace New_ZZZF.BattleHud
             _scope = null;
             _registered = false;
             _shown = false;
-            _dirty = true;
+            MarkAllDirty();
             _surfaceId = null;
-            _stateSeeded = false;
         }
     }
 }

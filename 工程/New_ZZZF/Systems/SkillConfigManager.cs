@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Xml.Linq;
 using System.IO;
 using TaleWorlds.Core;
@@ -136,7 +136,7 @@ namespace New_ZZZF
                 return skillSet;
             }
 
-            Debug.Print($"[警告] 未找到兵种 {troopId} 的技能配置，返回默认");
+            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             return null;
         }
         /// <summary>
@@ -190,7 +190,7 @@ namespace New_ZZZF
         {
             if (string.IsNullOrEmpty(skillId))
             {
-                Debug.Print($"[警告] 未知技能ID: {skillId}");
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 return new NullSkill(); // 返回空技能占位
             }
 
@@ -198,7 +198,7 @@ namespace New_ZZZF
             SkillFactory._skillRegistry.TryGetValue(skillId, out skill);
             if (skill == null)
             {
-                Debug.Print($"[警告] 未知技能ID: {skillId}");
+                /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
                 return new NullSkill(); // 返回空技能占位
             }
             return skill;

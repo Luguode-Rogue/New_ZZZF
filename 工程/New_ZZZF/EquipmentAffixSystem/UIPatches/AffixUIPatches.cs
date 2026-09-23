@@ -49,6 +49,7 @@ namespace New_ZZZF
                 {
                     LogDebug("SKIP: AffixCampaignBehavior.Current is null");
                     return;
+
                 }
 
                 LogDebug($"LOOKUP: modifierId='{element.ItemModifier?.StringId ?? "null"}', ModifierToInstanceMap.Count={behavior.ModifierToInstanceMap.Count}, ItemRecordMap.Count={behavior.ItemRecordMap.Count}");

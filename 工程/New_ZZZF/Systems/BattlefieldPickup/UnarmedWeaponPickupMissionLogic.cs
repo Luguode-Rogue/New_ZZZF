@@ -17,16 +17,21 @@ namespace New_ZZZF.Systems.BattlefieldPickup
         private const float SearchInterval = 0.45f;
         private const float SearchRadiusSquared = 625f;
         private const float AssignmentTimeout = 12f;
+        private const float SummaryLogInterval = 5f;
         private const int AgentsPerSearch = 6;
 
         private readonly Dictionary<Agent, Assignment> _assignments = new Dictionary<Agent, Assignment>();
         private float _searchTimer;
+        private float _summaryLogTimer;
         private int _roundRobinIndex;
+        private int _eligibleSinceLastSummary;
+        private int _noCandidateSinceLastSummary;
 
         public override void AfterStart()
         {
             base.AfterStart();
             Mission.OnItemPickUp += OnItemPickedUp;
+            Log("MissionLogic started");
         }
 
         public override void OnMissionTick(float dt)
@@ -35,6 +40,7 @@ namespace New_ZZZF.Systems.BattlefieldPickup
             if (GameNetwork.IsClientOrReplay || Mission.Mode == MissionMode.Conversation || Mission.Mode == MissionMode.CutScene) return;
 
             TickAssignments(dt);
+            TickSummaryLog(dt);
             _searchTimer -= dt;
             if (_searchTimer > 0f) return;
             _searchTimer = SearchInterval;
@@ -55,17 +61,26 @@ namespace New_ZZZF.Systems.BattlefieldPickup
                 visited++;
                 if (!CanSearch(agent)) continue;
                 checkedCount++;
+                _eligibleSinceLastSummary++;
 
-                SpawnedItemEntity item = FindBestWeapon(agent);
-                if (item == null) continue;
+                CandidateSelection selection = FindBestWeapon(agent);
+                if (selection == null)
+                {
+                    _noCandidateSinceLastSummary++;
+                    continue;
+                }
 
                 try
                 {
-                    agent.HumanAIComponent.MoveToUsableGameObject(item, null, Agent.AIScriptedFrameFlags.NoAttack);
-                    _assignments[agent] = new Assignment(item);
+                    ClearUnusableReplacementSlot(agent, selection.Slot);
+                    agent.HumanAIComponent.MoveToUsableGameObject(selection.Item, null, Agent.AIScriptedFrameFlags.NoAttack);
+                    _assignments[agent] = new Assignment(selection.Item);
+                    Log("assigned agent=" + AgentName(agent) + " item=" + ItemName(selection.Item) +
+                        " slot=" + selection.Slot);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Log("assign failed agent=" + AgentName(agent) + " item=" + ItemName(selection.Item) + " error=" + ex);
                     ClearAssignment(agent);
                 }
             }
@@ -79,9 +94,10 @@ namespace New_ZZZF.Systems.BattlefieldPickup
                    agent.CanBeAssignedForScriptedMovement() && !agent.IsInWater();
         }
 
-        private SpawnedItemEntity FindBestWeapon(Agent agent)
+        private CandidateSelection FindBestWeapon(Agent agent)
         {
             SpawnedItemEntity best = null;
+            EquipmentIndex bestSlot = EquipmentIndex.None;
             float bestScore = float.MinValue;
             foreach (MissionObject missionObject in Mission.ActiveMissionObjects)
             {
@@ -90,9 +106,8 @@ namespace New_ZZZF.Systems.BattlefieldPickup
 
                 float distanceSquared = item.GameEntity.GlobalPosition.DistanceSquared(agent.Position);
                 if (distanceSquared > SearchRadiusSquared) continue;
-                EquipmentIndex slot = MissionEquipment.SelectWeaponPickUpSlot(agent, item.WeaponCopy, item.IsStuckMissile());
+                EquipmentIndex slot = SelectPickupSlot(agent, item);
                 if (slot == EquipmentIndex.None) continue;
-                if (!MissionGameModels.Current.ItemPickupModel.IsItemAvailableForAgent(item, agent, slot)) continue;
                 if (!agent.CanMoveDirectlyToPosition(item.GameEntityWithWorldPosition.AsVec2)) continue;
 
                 float score = MissionGameModels.Current.ItemPickupModel.GetItemScoreForAgent(item, agent);
@@ -102,9 +117,50 @@ namespace New_ZZZF.Systems.BattlefieldPickup
                 {
                     bestScore = score;
                     best = item;
+                    bestSlot = slot;
                 }
             }
-            return best;
+            return best == null ? null : new CandidateSelection(best, bestSlot);
+        }
+
+        private static EquipmentIndex SelectPickupSlot(Agent agent, SpawnedItemEntity item)
+        {
+            EquipmentIndex selected = MissionEquipment.SelectWeaponPickUpSlot(agent, item.WeaponCopy, item.IsStuckMissile());
+            if (selected != EquipmentIndex.None &&
+                (agent.Equipment[selected].IsEmpty || IsUnusableOccupiedSlot(agent, selected)))
+                return selected;
+
+            for (int i = 0; i < 4; i++)
+            {
+                EquipmentIndex slot = (EquipmentIndex)i;
+                if (agent.Equipment[slot].IsEmpty) return slot;
+            }
+
+            for (int i = 0; i < 4; i++)
+            {
+                EquipmentIndex slot = (EquipmentIndex)i;
+                if (IsUnusableOccupiedSlot(agent, slot)) return slot;
+            }
+
+            return selected;
+        }
+
+        private static bool IsUnusableOccupiedSlot(Agent agent, EquipmentIndex slot)
+        {
+            MissionWeapon weapon = agent.Equipment[slot];
+            if (weapon.IsEmpty || weapon.Item == null) return false;
+            WeaponComponentData usage = weapon.CurrentUsageItem ?? weapon.Item.PrimaryWeapon;
+            if (usage == null || usage.IsAmmo) return weapon.Amount <= 0;
+            if (weapon.IsAnyConsumable()) return weapon.Amount <= 0;
+            return usage.IsRangedWeapon && !HasMatchingAmmo(agent, usage.AmmoClass);
+        }
+
+        private static void ClearUnusableReplacementSlot(Agent agent, EquipmentIndex slot)
+        {
+            if (slot == EquipmentIndex.None || agent.Equipment[slot].IsEmpty || !IsUnusableOccupiedSlot(agent, slot)) return;
+            string oldItem = agent.Equipment[slot].Item?.StringId ?? "unknown";
+            agent.RemoveEquippedWeapon(slot);
+            Log("cleared unusable slot agent=" + AgentName(agent) + " slot=" + slot + " item=" + oldItem);
         }
 
         private static bool IsCandidate(Agent agent, SpawnedItemEntity item)
@@ -156,9 +212,12 @@ namespace New_ZZZF.Systems.BattlefieldPickup
                 Assignment assignment = _assignments[agent];
                 assignment.Age += dt;
                 SpawnedItemEntity item = assignment.Item;
+                bool timedOut = assignment.Age >= AssignmentTimeout;
                 if (agent == null || !agent.IsActive() || HasOffensiveWeapon(agent) || item == null || item.IsDeactivated ||
-                    item.IsDisabled || assignment.Age >= AssignmentTimeout || (item.HasAIMovingTo && !item.IsAIMovingTo(agent)))
+                    item.IsDisabled || timedOut || (item.HasAIMovingTo && !item.IsAIMovingTo(agent)))
                 {
+                    if (timedOut)
+                        Log("assignment timeout agent=" + AgentName(agent) + " item=" + ItemName(item));
                     ClearAssignment(agent);
                     continue;
                 }
@@ -168,10 +227,18 @@ namespace New_ZZZF.Systems.BattlefieldPickup
                     WorldFrame frame = item.GetUserFrameForAgent(agent);
                     float distanceSquared = frame.Origin.GetGroundVec3().DistanceSquared(agent.Position);
                     if (agent.CanReachAndUseObject(item, distanceSquared))
+                    {
+                        if (!assignment.UseRequested)
+                        {
+                            assignment.UseRequested = true;
+                            Log("use requested agent=" + AgentName(agent) + " item=" + ItemName(item));
+                        }
                         agent.UseGameObject(item, -1);
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Log("use failed agent=" + AgentName(agent) + " item=" + ItemName(item) + " error=" + ex);
                     ClearAssignment(agent);
                 }
             }
@@ -179,6 +246,8 @@ namespace New_ZZZF.Systems.BattlefieldPickup
 
         private void OnItemPickedUp(Agent agent, SpawnedItemEntity item)
         {
+            if (agent != null && _assignments.ContainsKey(agent))
+                Log("pickup succeeded agent=" + AgentName(agent) + " item=" + ItemName(item));
             if (agent != null && _assignments.ContainsKey(agent)) ClearAssignment(agent);
             foreach (Agent other in _assignments.Where(x => ReferenceEquals(x.Value.Item, item)).Select(x => x.Key).ToArray())
                 ClearAssignment(other);
@@ -194,8 +263,35 @@ namespace New_ZZZF.Systems.BattlefieldPickup
                     if (agent.HumanAIComponent.GetCurrentlyMovingGameObject() is SpawnedItemEntity)
                         agent.HumanAIComponent.MoveToClear();
                 }
-                catch { }
+                catch (Exception ex) { Log("clear movement failed agent=" + AgentName(agent) + " error=" + ex); }
             }
+        }
+
+        private void TickSummaryLog(float dt)
+        {
+            _summaryLogTimer -= dt;
+            if (_summaryLogTimer > 0f) return;
+            _summaryLogTimer = SummaryLogInterval;
+            if (_eligibleSinceLastSummary > 0)
+                Log("search summary eligible=" + _eligibleSinceLastSummary + " noCandidate=" +
+                    _noCandidateSinceLastSummary + " activeAssignments=" + _assignments.Count);
+            _eligibleSinceLastSummary = 0;
+            _noCandidateSinceLastSummary = 0;
+        }
+
+        private static string AgentName(Agent agent)
+        {
+            return agent?.Name?.ToString() ?? "null";
+        }
+
+        private static string ItemName(SpawnedItemEntity item)
+        {
+            return item?.WeaponCopy.Item?.StringId ?? "null";
+        }
+
+        private static void Log(string message)
+        {
+            UnarmedWeaponPickupLog.Info(message);
         }
 
         protected override void OnEndMission()
@@ -203,13 +299,26 @@ namespace New_ZZZF.Systems.BattlefieldPickup
             Mission.OnItemPickUp -= OnItemPickedUp;
             foreach (Agent agent in _assignments.Keys.ToArray()) ClearAssignment(agent);
             _assignments.Clear();
+            Log("MissionLogic ended");
             base.OnEndMission();
+        }
+
+        private sealed class CandidateSelection
+        {
+            public SpawnedItemEntity Item { get; }
+            public EquipmentIndex Slot { get; }
+            public CandidateSelection(SpawnedItemEntity item, EquipmentIndex slot)
+            {
+                Item = item;
+                Slot = slot;
+            }
         }
 
         private sealed class Assignment
         {
             public SpawnedItemEntity Item { get; }
             public float Age { get; set; }
+            public bool UseRequested { get; set; }
             public Assignment(SpawnedItemEntity item) { Item = item; }
         }
     }
