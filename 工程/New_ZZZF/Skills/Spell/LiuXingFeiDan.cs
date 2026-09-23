@@ -243,7 +243,7 @@ namespace New_ZZZF.Skills
                         HitRadius = ProjectileHitRadius,
                         WorldHitRadius = WorldHitRadius,
                         CollisionInterval = LogicInterval,
-                        MeshResourceName = "projectile_pot",
+                        PrefabResourceName = "mangonel_mapicon_projectile",
                         ParticleSystemName = null,
                         HitHumanAgentsOnly = true,
                         HitEnemiesOnly = true,

@@ -63,6 +63,21 @@ namespace New_ZZZF
         Spell_CombatArt//
     }
 
+    /// <summary>一次技能发动的费用与个人冷却规则；法术公共冷却仍由统一入口处理。</summary>
+    public struct SkillActivationPolicy
+    {
+        public float ResourceCost;
+        public bool IgnoreSkillCooldown;
+        public float CooldownOnSuccess;
+
+        public SkillActivationPolicy(float resourceCost, bool ignoreSkillCooldown, float cooldownOnSuccess)
+        {
+            ResourceCost = resourceCost;
+            IgnoreSkillCooldown = ignoreSkillCooldown;
+            CooldownOnSuccess = cooldownOnSuccess;
+        }
+    }
+
     /// <summary>
     /// 技能抽象基类（所有具体技能必须继承此类）
     /// </summary>
@@ -120,6 +135,14 @@ namespace New_ZZZF
         public virtual bool IsValid => true;
         /// <summary>是否允许在原生攻击、瞄准等动作进行期间发动。默认关闭。</summary>
         public virtual bool CanActivateWhilePerformingAction => false;
+        /// <summary>
+        /// 发动前读取当前阶段的费用和个人冷却策略。共享的技能实例不得保存施法者的阶段；
+        /// 多阶段技能应读取该施法者的状态，并返回本次施法的策略快照。
+        /// </summary>
+        public virtual SkillActivationPolicy GetActivationPolicy(Agent caster)
+        {
+            return new SkillActivationPolicy(ResourceCost, false, Cooldown);
+        }
         // ========== 核心方法 ==========
         /// <summary>
         /// 激活技能的主逻辑（必须由子类实现）

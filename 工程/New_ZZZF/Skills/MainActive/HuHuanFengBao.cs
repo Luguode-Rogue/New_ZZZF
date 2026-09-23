@@ -8,6 +8,7 @@ using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Extensions;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
+using New_ZZZF.Systems;
 
 namespace New_ZZZF.Skills//（法术）
 {
@@ -29,21 +30,26 @@ namespace New_ZZZF.Skills//（法术）
 
         public override bool Activate(Agent agent)
         {
+            if (agent == null || !agent.IsActive() || Mission.Current == null)
+                return FailActivation("施法者或当前任务不可用。");
 
-            Script.AgentListIFF(agent,Mission.Current.Agents,out var friendAgent,out var foeAgent);
-            foreach (var foe in foeAgent) 
+            // 每名敌人只受一次落雷；限制同时存在的表现实体，伤害仍覆盖全部敌人。
+            List<Agent> enemies = new List<Agent>();
+            foreach (Agent candidate in Mission.Current.Agents)
             {
-                List<Agent> list = Script.FindAgentsWithinSpellRange(foe.Position, 3);
-                Script.AgentListIFF(agent, list, out var FriendAgent, out var FoeAgent);
-                foreach (var item in FoeAgent)
-                {
-
-                    LeiJi.useToAgent(agent, foe);
-                }
+                if (candidate != null && candidate.IsActive() && candidate.IsHuman &&
+                    candidate != agent && agent.IsEnemyOf(candidate))
+                    enemies.Add(candidate);
             }
-                return true; 
-
-
+            int visualCount = 0;
+            float spellPowerCoefficient = MagicDamageSystem.GetSpellPowerCoefficient(agent);
+            foreach (Agent foe in enemies)
+            {
+                if (LeiJi.StrikeSingleTarget(
+                        agent, foe, spellPowerCoefficient, visualCount < 24) && visualCount < 24)
+                    visualCount++;
+            }
+            return true;
         }
        
     }

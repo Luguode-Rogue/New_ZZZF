@@ -921,26 +921,37 @@ namespace New_ZZZF
 
                 Vec3 headPosition = agent.GetEyeGlobalPosition();
                 Vec3 VheadPosition = vagent.GetEyeGlobalPosition();
-                Vec3 VAgenSpeed = Vec3.Invalid;
+                Vec3 VAgenSpeed = Vec3.Zero;
                 if (SkillSystemBehavior.ActiveComponents.TryGetValue(vagent.Index, out var data))
                 {
                     VAgenSpeed = data.Speed.speed;
                 }
                 Vec3 shotDir = CalculateProjectileFiringSolution(headPosition, VheadPosition, baseSpeed, 9.81f);
-                float timeOld = (headPosition - VheadPosition).AsVec2.Length / (baseSpeed * shotDir.AsVec2.Length);
+                float denominator = baseSpeed * shotDir.AsVec2.Length;
+                if (!IsFinitePositive(denominator))
+                    return 0;
+                float timeOld = (headPosition - VheadPosition).AsVec2.Length / denominator;
+                if (!IsFiniteNonNegative(timeOld))
+                    return 0;
                 float timeNew = float.MaxValue;
                 //VheadPosition.z -= 15 / 100f;
                 //VheadPosition.y += 15 / 100f;
 
-                while (TaleWorlds.Library.MathF.Abs(timeOld - timeNew) > 0.001f)
+                for (int iteration = 0;
+                     iteration < 4 && TaleWorlds.Library.MathF.Abs(timeOld - timeNew) > 0.001f;
+                     iteration++)
                 {
                     timeNew = timeOld;
                     Vec3 s = MultiplyVectorByScalar(VAgenSpeed, timeOld);
                     //s = vagent.LookDirection.AsVec2 * VAgenSpeed.Length * timeOld;
                     VheadPosition = vagent.GetEyeGlobalPosition() + s;
                     shotDir = CalculateProjectileFiringSolution(headPosition, VheadPosition, baseSpeed, 9.81f);
-                    timeOld = (headPosition - VheadPosition).AsVec2.Length / (baseSpeed * shotDir.AsVec2.Length);
-
+                    denominator = baseSpeed * shotDir.AsVec2.Length;
+                    if (!IsFinitePositive(denominator))
+                        return 0;
+                    timeOld = (headPosition - VheadPosition).AsVec2.Length / denominator;
+                    if (!IsFiniteNonNegative(timeOld))
+                        return 0;
                 }
 
 
@@ -956,6 +967,16 @@ namespace New_ZZZF
             }
             SysOut(2, agent);
             return 0;
+        }
+
+        private static bool IsFinitePositive(float value)
+        {
+            return value > 0f && !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private static bool IsFiniteNonNegative(float value)
+        {
+            return value >= 0f && !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         /// <summary>

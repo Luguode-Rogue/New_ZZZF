@@ -1,72 +1,156 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TaleWorlds.CampaignSystem;
-using TaleWorlds.CampaignSystem.Extensions;
-using TaleWorlds.Core;
+using New_ZZZF.Systems;
 using TaleWorlds.Library;
+using TaleWorlds.Localization;
 using TaleWorlds.MountAndBlade;
-using TaleWorlds.MountAndBlade.View.Screens;
-using TaleWorlds.ScreenSystem;
 
-namespace New_ZZZF.Skills//（法术）
+namespace New_ZZZF.Skills
 {
-    // 示例：在火球术中附加燃烧状态
-    public class LeiJi : SkillBase
+    /// <summary>首次召雷开启施法窗口；窗口内再次引雷只受法术公共冷却限制。</summary>
+    public sealed class LeiJi : SkillBase
     {
+        private const float CallWindowDuration = 25f;
+        private const float CastRange = 160f;
+        private const float MinimumAiRange = 8f;
+        private const float Radius = 3f;
+        private const float BaseDamage = 30f;
+
         public LeiJi()
         {
             SkillID = "LeiJi";
             Type = SPSkillType.Spell;
-            Cooldown = 3;
-            ResourceCost = 15;
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0043}LeiJi");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0044}快速施法时轰击视野内敌人最密集的地点；按住Shift时轰击视线指示落点。对3米范围内的敌人造成30点基础电击伤害。消耗法力值：15。冷却时间：3秒。");
-
-
+            Cooldown = 30f;
+            ResourceCost = 50f;
+            Text = new TextObject("{=ZZZF0043}雷击");
+            Description = new TextObject(
+                "在指定地点召雷，对3米范围内敌人造成30点基础电击伤害，并受法强与魔抗影响。首次施放消耗50法力、开启25秒引雷窗口及30秒个人冷却；窗口内再次施放不消耗法力、不重置个人冷却，只受法术公共冷却限制。玩家快速施法选择160米内视野中敌人最密集的地点，按住Shift时使用视线指示落点。");
         }
 
-
-        public override bool Activate(Agent agent)
+        public override SkillActivationPolicy GetActivationPolicy(Agent caster)
         {
-            if (!SpellTargetingSystem.TryResolveAreaTarget(
-                    agent, 30f, 3f, out SpellTargetingSystem.Result targeting))
-                return FailActivation("视野内没有可用目标。");
+            return SkillRecastWindowState.IsActive(caster, SkillID)
+                ? new SkillActivationPolicy(0f, true, 0f)
+                : base.GetActivationPolicy(caster);
+        }
 
-            Script.AgentListIFF(
-                agent,
-                Script.FindAgentsWithinSpellRange(targeting.Position, 3),
-                out _,
-                out List<Agent> target);
+        public override bool Activate(Agent caster)
+        {
+            if (caster == null || !caster.IsActive() || Mission.Current == null)
+                return FailActivation("施法者或当前任务不可用。");
 
-            if (target != null && target.Count > 0)
+            SpellTargetingSystem.Result targeting;
+            if (caster.IsPlayerControlled)
             {
-                foreach (var item in target)
+                if (!SpellTargetingSystem.TryResolveAreaTarget(
+                        caster, CastRange, Radius, out targeting))
+                    return FailActivation("视野内没有可用目标。");
+            }
+            else
+            {
+                // AI 已在 CheckCondition 检查可见目标；再施法直接取当前目标，
+                // 避免每秒重复运行范围选点的全场聚集度搜索。
+                Agent target = caster.GetTargetAgent();
+                if (!IsValidVictim(caster, target) ||
+                    (target.Position - caster.Position).LengthSquared > CastRange * CastRange)
+                    return FailActivation("当前目标已不可用。");
+                targeting = new SpellTargetingSystem.Result
                 {
-                    if (item == null || !item.IsActive()) continue;
-                    Script.CalculateFinalMagicDamage(agent, item, 30, DamageType.ELECTRICITY_DAMAGE);
-                    item.SetActionChannel(0, ActionIndexCache.Create("act_jump_loop"));
-                    item.PlayParticleEffect("fire_burning");
-                }
-                return true;
+                    Target = target,
+                    Position = target.Position
+                };
             }
-            // 指示施法允许玩家预先封锁空地；快速施法则在统一选点阶段已保证有目标。
-            return targeting.UsesManualIndicator;
+
+            int hitCount = StrikeArea(caster, targeting.Position);
+            if (hitCount == 0 && !targeting.UsesManualIndicator)
+                return FailActivation("目标已离开雷击范围。");
+
+            AgentSkillComponent component = caster.GetComponent<AgentSkillComponent>();
+            if (component != null && !SkillRecastWindowState.IsActive(caster, SkillID))
+                component.StateContainer.AddState(
+                    new SkillRecastWindowState(SkillID, CallWindowDuration, caster), caster);
+
+            ShowLightning(targeting.Position);
+            MagicShoot.PlayReleasePresentation(caster);
+            return true;
         }
-        public static void useToAgent(Agent caster, Agent vimAgent)
+
+        public override bool CheckCondition(Agent caster)
         {
-            SkillSystemBehavior.ActiveComponents.TryGetValue(vimAgent.Index, out var ActiveComponents);
-            if (ActiveComponents == null || ActiveComponents._beHitCount <= 5)
+            if (!base.CheckCondition(caster))
+                return false;
+            Agent target = caster.GetTargetAgent();
+            if (target == null || !target.IsActive() || target.Health <= 0f ||
+                !caster.IsEnemyOf(target))
+                return false;
+            float distanceSquared = (target.Position - caster.Position).LengthSquared;
+            return distanceSquared >= MinimumAiRange * MinimumAiRange &&
+                distanceSquared <= CastRange * CastRange &&
+                RushMovementMissionLogic.HasLineOfSight(caster, target);
+        }
+
+        private static int StrikeArea(Agent caster, Vec3 center)
+        {
+            MBList<Agent> nearby = new MBList<Agent>();
+            if (caster.Team != null)
+                Mission.Current.GetNearbyEnemyAgents(center.AsVec2, Radius, caster.Team, nearby);
+            else
+                Mission.Current.GetNearbyAgents(center.AsVec2, Radius, nearby);
+
+            int hitCount = 0;
+            float spellPowerCoefficient = MagicDamageSystem.GetSpellPowerCoefficient(caster);
+            foreach (Agent target in nearby)
             {
-
-                if (vimAgent == null || !vimAgent.IsActive()) return;
-                Script.CalculateFinalMagicDamage(caster, vimAgent, 30, DamageType.ELECTRICITY_DAMAGE);
-                vimAgent.SetActionChannel(0, ActionIndexCache.Create("act_jump_end"));
-
+                if (!IsValidVictim(caster, target) ||
+                    (target.Position + Vec3.Up - center).LengthSquared > Radius * Radius)
+                    continue;
+                ApplyDamage(caster, target, spellPowerCoefficient);
+                hitCount++;
             }
+            return hitCount;
+        }
+
+        /// <summary>供“呼唤风暴”共用同一电击伤害与落雷表现，每名敌人只调用一次。</summary>
+        public static bool StrikeSingleTarget(
+            Agent caster, Agent target, float spellPowerCoefficient, bool showVisual)
+        {
+            if (!IsValidVictim(caster, target))
+                return false;
+            ApplyDamage(caster, target, spellPowerCoefficient);
+            if (showVisual)
+                ShowLightning(target.Position + Vec3.Up);
+            return true;
+        }
+
+        private static bool IsValidVictim(Agent caster, Agent target)
+        {
+            return caster != null && target != null && target != caster &&
+                target.IsActive() && target.IsHuman && target.Health > 0f &&
+                caster.IsEnemyOf(target);
+        }
+
+        private static void ApplyDamage(Agent caster, Agent target, float spellPowerCoefficient)
+        {
+            MagicDamageSystem.Apply(
+                caster, target, BaseDamage, spellPowerCoefficient,
+                DamageType.ELECTRICITY_DAMAGE, MagicDamageFlags.Area,
+                target.Position + Vec3.Up);
+        }
+
+        private static void ShowLightning(Vec3 impactPosition)
+        {
+            SpellProjectileMissionLogic effects = SpellProjectileMissionLogic.GetForCurrentMission();
+            if (effects == null)
+                return;
+
+            // 原版没有完整的落雷粒子；短寿命火花沿折线排布，后续可替换美术资源。
+            for (int i = 0; i < 7; i++)
+            {
+                float height = 9f * (6 - i) / 6f;
+                float side = i == 0 || i == 6 ? 0f : (i % 2 == 0 ? 0.25f : -0.25f);
+                effects.SpawnTimedParticle(
+                    "psys_game_sparkle_a",
+                    impactPosition + new Vec3(side, -side, height), 0.22f);
+            }
+            effects.SpawnTimedParticle("psys_campfire_sparks", impactPosition, 0.35f);
         }
     }
 }

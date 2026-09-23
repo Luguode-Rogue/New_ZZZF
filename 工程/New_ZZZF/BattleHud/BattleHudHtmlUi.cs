@@ -291,13 +291,8 @@ namespace New_ZZZF.BattleHud
 
         private static float GetCooldown(SkillBase skill, AgentSkillComponent comp)
         {
-            if (skill != null &&
-                !string.Equals(skill.SkillID, "NullSkill", StringComparison.OrdinalIgnoreCase) &&
-                comp._cooldownTimers.TryGetValue(skill, out float timer) && timer > 0f)
-            {
-                return QuantizeTenths(timer);
-            }
-            return 0f;
+            return skill == null || string.Equals(skill.SkillID, "NullSkill", StringComparison.OrdinalIgnoreCase)
+                ? 0f : QuantizeTenths(comp.GetSkillCooldownForDisplay(skill));
         }
 
         private static object BuildState(AgentSkillComponent comp)
@@ -363,9 +358,7 @@ namespace New_ZZZF.BattleHud
                 || skill.Type == SPSkillType.CombatArt_Spell
                 || skill.Type == SPSkillType.Spell_CombatArt;
 
-            float cdRemaining = 0f;
-            if (comp._cooldownTimers.TryGetValue(skill, out float timer) && timer > 0f)
-                cdRemaining = QuantizeTenths(timer);
+            float cdRemaining = QuantizeTenths(comp.GetSkillCooldownForDisplay(skill));
 
             bool isPassive = skill.Type == SPSkillType.Passive || skill.Type == SPSkillType.Passive_Spell;
 
@@ -377,7 +370,7 @@ namespace New_ZZZF.BattleHud
                 name = skill.Text != null ? skill.Text.ToString() : (skill.SkillID ?? string.Empty),
                 cd = cdRemaining,
                 cdMax = skill.Cooldown,
-                cost = skill.ResourceCost,
+                cost = comp.GetSkillResourceCostForDisplay(skill),
                 mana = costsMana,
                 selected,
                 passive = isPassive

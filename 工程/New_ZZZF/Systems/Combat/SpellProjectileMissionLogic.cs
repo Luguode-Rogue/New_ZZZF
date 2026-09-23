@@ -43,6 +43,8 @@ namespace New_ZZZF
         public float CollisionInterval { get; set; } = 0.05f;
 
         public string MeshResourceName { get; set; }
+        /// <summary>可选的完整预制体；用于保留旧法术原有的模型外观。</summary>
+        public string PrefabResourceName { get; set; }
         public string ParticleSystemName { get; set; }
         public bool HitHumanAgentsOnly { get; set; } = true;
         public bool HitEnemiesOnly { get; set; } = true;
@@ -85,6 +87,10 @@ namespace New_ZZZF
         {
             public GameEntity Entity;
             public float RemainingLifetime;
+            public Vec3 Origin;
+            public Vec3 ExpansionOffset;
+            public float ExpansionDuration;
+            public float Elapsed;
         }
 
         private readonly List<ProjectileRecord> _projectiles = new List<ProjectileRecord>();
@@ -137,7 +143,14 @@ namespace New_ZZZF
             }
 
             Vec3 direction = request.Direction.NormalizedCopy();
-            GameEntity entity = GameEntity.CreateEmpty(Mission.Scene);
+            GameEntity entity = string.IsNullOrEmpty(request.PrefabResourceName)
+                ? GameEntity.CreateEmpty(Mission.Scene)
+                : GameEntity.Instantiate(Mission.Scene, request.PrefabResourceName, false, false);
+            if (entity == null)
+            {
+                failureReason = "投射物预制体不存在。";
+                return false;
+            }
             if (!string.IsNullOrEmpty(request.MeshResourceName))
             {
                 Mesh mesh = Mesh.GetFromResource(request.MeshResourceName);
@@ -171,6 +184,38 @@ namespace New_ZZZF
             effect.SetLocalPosition(position);
             effect.AddParticleSystemComponent(particleSystemName);
             _effects.Add(new TimedEffect { Entity = effect, RemainingLifetime = lifetime });
+        }
+
+        /// <summary>让一圈火焰从碰撞点扩散至实际伤害半径，之后统一回收实体。</summary>
+        public void SpawnExpandingParticleRing(
+            string particleSystemName, string secondaryParticleSystemName,
+            Vec3 center, float radius, int count, float expansionDuration, float lifetime)
+        {
+            if (Mission?.Scene == null || !center.IsValid ||
+                string.IsNullOrEmpty(particleSystemName) || radius <= 0f ||
+                count < 3 || expansionDuration <= 0f || lifetime < expansionDuration)
+                return;
+
+            for (int i = 0; i < count; i++)
+            {
+                double angle = 2.0 * Math.PI * i / count;
+                Vec3 offset = new Vec3(
+                    (float)Math.Cos(angle) * radius,
+                    (float)Math.Sin(angle) * radius, 0f);
+                GameEntity effect = GameEntity.CreateEmpty(Mission.Scene);
+                effect.SetLocalPosition(center);
+                effect.AddParticleSystemComponent(particleSystemName);
+                if (!string.IsNullOrEmpty(secondaryParticleSystemName))
+                    effect.AddParticleSystemComponent(secondaryParticleSystemName);
+                _effects.Add(new TimedEffect
+                {
+                    Entity = effect,
+                    RemainingLifetime = lifetime,
+                    Origin = center,
+                    ExpansionOffset = offset,
+                    ExpansionDuration = expansionDuration
+                });
+            }
         }
 
         public override void OnMissionTick(float dt)
@@ -470,10 +515,20 @@ namespace New_ZZZF
         {
             for (int i = _effects.Count - 1; i >= 0; i--)
             {
-                _effects[i].RemainingLifetime -= dt;
-                if (_effects[i].RemainingLifetime > 0f)
+                TimedEffect effect = _effects[i];
+                effect.RemainingLifetime -= dt;
+                if (effect.RemainingLifetime > 0f)
+                {
+                    if (effect.ExpansionDuration > 0f && effect.Elapsed < effect.ExpansionDuration)
+                    {
+                        effect.Elapsed += dt;
+                        float progress = effect.Elapsed >= effect.ExpansionDuration
+                            ? 1f : effect.Elapsed / effect.ExpansionDuration;
+                        effect.Entity.SetLocalPosition(effect.Origin + effect.ExpansionOffset * progress);
+                    }
                     continue;
-                _effects[i].Entity?.Remove(1);
+                }
+                effect.Entity?.Remove(1);
                 _effects.RemoveAt(i);
             }
         }

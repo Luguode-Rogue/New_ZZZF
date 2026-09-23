@@ -591,22 +591,6 @@ namespace New_ZZZF
             Script.UpdateProjectileTargets();
 
 
-            if (Agent.Main != null)
-            {
-                UsableMissionObject currentlyUsedGameObject = Agent.Main.CurrentlyUsedGameObject;
-                WeakGameEntity? nullableEntity = currentlyUsedGameObject?.GameEntity;
-                WeakGameEntity gameEntity = nullableEntity.HasValue ? nullableEntity.Value : Agent.Main.GetSteppedEntity();
-                RangedSiegeWeapon rangedSiege = null;
-
-                while (!WeakGameEntity.Invalid.Equals(gameEntity) && !gameEntity.HasScriptOfType<RangedSiegeWeapon>())
-                {
-                    gameEntity = gameEntity.Parent;
-                }
-                if (!WeakGameEntity.Invalid.Equals(gameEntity))
-                {
-                    rangedSiege = gameEntity.GetFirstScriptOfType<RangedSiegeWeapon>();
-                }
-            }
         }
 
         public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow)

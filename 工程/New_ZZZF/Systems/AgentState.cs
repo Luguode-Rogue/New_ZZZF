@@ -192,19 +192,21 @@ namespace New_ZZZF
 
         public override void OnUpdate(Agent agent, float dt)
         {
-            _timeSinceLastTick += dt;
-            while (_timeSinceLastTick >= _tickInterval)
-            {
-                _timeSinceLastTick -= _tickInterval;
-                if (agent == null || !agent.IsActive())
-                    break;
-                if (_resolvedDamagePerTick <= 0f)
-                    continue;
+            if (dt <= 0f || float.IsNaN(dt) || float.IsInfinity(dt))
+                return;
 
-                // 持续伤害只直接修改生命，避免每跳制造 Blow、受击动作、
-                // 士气事件和伤害飘字。Health 属性会按引擎规则取整并同步。
-                agent.Health = MathF.Max(0f, agent.Health - _resolvedDamagePerTick);
-            }
+            _timeSinceLastTick += dt;
+            int elapsedTicks = (int)MathF.Floor(_timeSinceLastTick / _tickInterval);
+            if (elapsedTicks <= 0)
+                return;
+
+            _timeSinceLastTick -= elapsedTicks * _tickInterval;
+            if (agent == null || !agent.IsActive() || _resolvedDamagePerTick <= 0f)
+                return;
+
+            // 一次结算积累的全部跳数，避免异常大 dt 导致主线程执行大量循环。
+            // 持续伤害仍直接修改生命，不进入 Blow、受击、士气或飘字链。
+            agent.Health = MathF.Max(0f, agent.Health - _resolvedDamagePerTick * elapsedTicks);
         }
 
         public override void OnRemove(Agent agent)

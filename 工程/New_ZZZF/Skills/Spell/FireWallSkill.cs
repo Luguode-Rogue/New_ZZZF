@@ -15,9 +15,9 @@ namespace New_ZZZF.Skills
         private const float WallLength = 15f;
         // 胶囊形区域的 Radius 是半宽，2.5米对应火墙总宽5米。
         private const float WallRadius = 2.5f;
-        private const float MaximumCastDistance = 30f;
-        private const float MinimumAiRange = 3f;
-        private const float MaximumAiRange = 20f;
+        private const float MaximumCastDistance = 160f;
+        private const float MinimumAiRange = 8f;
+        private const float MaximumAiRange = 160f;
 
         private sealed class FireWallSnapshot
         {
@@ -33,7 +33,7 @@ namespace New_ZZZF.Skills
             Difficulty = null;
             Text = new TextObject("火墙术");
             Description = new TextObject(
-                "快速施法时在视野内敌人最密集的位置生成火墙；按住Shift时改为在视线指示落点生成。火墙长15米、宽5米，持续10秒，每0.5秒对范围内的敌人造成10点基础火焰伤害，即每秒20点。伤害乘以施法者的技能法强系数并受目标魔抗减免。消耗法力：50。冷却时间：10秒。");
+                "快速施法时在160米内视野中敌人最密集的位置生成火墙；按住Shift时改为在视线指示落点生成。火墙长15米、宽5米，持续10秒，每0.5秒对范围内的敌人造成10点基础火焰伤害，即每秒20点。伤害乘以施法者的技能法强系数并受目标魔抗减免。消耗法力：50。冷却时间：10秒。");
         }
 
         public override bool Activate(Agent caster)

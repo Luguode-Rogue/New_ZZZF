@@ -156,9 +156,17 @@ namespace New_ZZZF
             public AgentSpeed(Agent Nagent)
             {
                 agent = Nagent;
+                oldPos = Nagent?.Position ?? Vec3.Zero;
+                newPos = oldPos;
+                speed = Vec3.Zero;
             }
             public void Tick(float dt)
             {
+                if (agent == null || dt <= 0f || float.IsNaN(dt) || float.IsInfinity(dt))
+                {
+                    speed = Vec3.Zero;
+                    return;
+                }
                 this.oldPos = this.newPos;
                 this.newPos = this.agent.Position;
                 this.speed = (this.newPos - this.oldPos) / dt;
@@ -190,6 +198,26 @@ namespace New_ZZZF
         private void NotifyHudTimersChanged()
         {
             HudTimersChanged?.Invoke(this);
+        }
+
+        /// <summary>阶段性技能开始或结束可重复施法窗口时刷新 HUD。</summary>
+        public void NotifySkillAvailabilityChanged()
+        {
+            NotifyHudStateChanged();
+            NotifyHudTimersChanged();
+        }
+
+        public float GetSkillCooldownForDisplay(SkillBase skill)
+        {
+            if (skill == null || skill.GetActivationPolicy(Agent).IgnoreSkillCooldown)
+                return 0f;
+            return _cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0f
+                ? remaining : 0f;
+        }
+
+        public float GetSkillResourceCostForDisplay(SkillBase skill)
+        {
+            return skill == null ? 0f : skill.GetActivationPolicy(Agent).ResourceCost;
         }
 
         private void NotifyHudSelectionChanged()
@@ -476,8 +504,9 @@ namespace New_ZZZF
                 return;
             }
 
+            SkillActivationPolicy policy = skill.GetActivationPolicy(Agent);
             string failureReason;
-            if (!CanActivateSkill(skill, out failureReason))
+            if (!CanActivateSkill(skill, policy, out failureReason))
             {
                 if (reportFailure)
                     Script.SysOut("[" + skill.SkillID + "] 发动失败：" + failureReason, Agent);
@@ -504,13 +533,14 @@ namespace New_ZZZF
                 if (skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt)
                 {
                     Agent.SetActionChannel(1, ActionIndexCache.Create("act_horse_command_follow"), false, (AnimFlags)172UL, 0, 1.5f, -0.2f, 0.4f, 0.5f);
-                    _currentMana = Math.Max(0, _currentMana - skill.ResourceCost);
+                    _currentMana = Math.Max(0, _currentMana - policy.ResourceCost);
                 }
                 else
                 {
-                    _currentStamina = Math.Max(0, _currentStamina - skill.ResourceCost);
+                    _currentStamina = Math.Max(0, _currentStamina - policy.ResourceCost);
                 }
-                _cooldownTimers[skill] = skill.Cooldown;
+                if (policy.CooldownOnSuccess > 0f)
+                    _cooldownTimers[skill] = policy.CooldownOnSuccess;
 
 
                 // 触发公共CD（仅法术）
@@ -544,7 +574,7 @@ namespace New_ZZZF
         /// <summary>
         /// 检查技能是否可激活
         /// </summary>
-        private bool CanActivateSkill(SkillBase skill, out string failureReason)
+        private bool CanActivateSkill(SkillBase skill, SkillActivationPolicy policy, out string failureReason)
         {
             failureReason = null;
             // 基础检查
@@ -566,18 +596,20 @@ namespace New_ZZZF
 
             // 资源检查
             bool hasResource = (skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt) ?
-                _currentMana >= skill.ResourceCost :
-                _currentStamina >= skill.ResourceCost;
+                _currentMana >= policy.ResourceCost :
+                _currentStamina >= policy.ResourceCost;
 
             // 冷却检查
-            bool isOnCooldown = _cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0;
+            float remaining = 0f;
+            bool isOnCooldown = !policy.IgnoreSkillCooldown &&
+                _cooldownTimers.TryGetValue(skill, out remaining) && remaining > 0;
             bool isGCDBlocked = (skill.Type == SPSkillType.Spell) && _globalCooldownTimer > 0;
             if (!hasResource)
             {
                 bool usesMana = skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt;
                 float current = usesMana ? _currentMana : _currentStamina;
                 failureReason = string.Format("{0}不足（当前 {1:0.0}，需要 {2:0.0}）。",
-                    usesMana ? "法力" : "耐力", current, skill.ResourceCost);
+                    usesMana ? "法力" : "耐力", current, policy.ResourceCost);
                 return false;
             }
             if (isOnCooldown)
@@ -722,9 +754,11 @@ namespace New_ZZZF
                 return false;
 
             bool usesMana = skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt;
-            if ((usesMana ? _currentMana : _currentStamina) < skill.ResourceCost)
+            SkillActivationPolicy policy = skill.GetActivationPolicy(Agent);
+            if ((usesMana ? _currentMana : _currentStamina) < policy.ResourceCost)
                 return false;
-            if (_cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0f)
+            if (!policy.IgnoreSkillCooldown &&
+                _cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0f)
                 return false;
             return skill.Type != SPSkillType.Spell || _globalCooldownTimer <= 0f;
         }
