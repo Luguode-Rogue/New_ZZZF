@@ -24,7 +24,19 @@ namespace New_ZZZF.Skills
 
         private sealed class FireballSnapshot
         {
+            public FireballSkill Skill;
             public float SpellPowerCoefficient;
+            public SkillDamageArea DamageArea;
+        }
+
+        public override bool TryGetDamageArea(Agent caster, int index, out SkillDamageArea area)
+        {
+            area = index == 0 ? new SkillDamageArea
+            {
+                Shape = SkillDamageAreaShape.Sphere,
+                Radius = ExplosionRadius
+            } : default;
+            return index == 0;
         }
 
         public FireballSkill()
@@ -53,6 +65,9 @@ namespace New_ZZZF.Skills
                 return FailActivation("视野内没有可用目标。");
 
             Vec3 direction = ResolveCastDirection(caster, targeting);
+            if (!TryGetDamageArea(caster, 0, out SkillDamageArea damageArea) ||
+                !damageArea.IsValid)
+                return FailActivation("火球爆炸范围参数无效。");
             SpellProjectileRequest request = new SpellProjectileRequest
             {
                 Caster = caster,
@@ -71,7 +86,9 @@ namespace New_ZZZF.Skills
                 OnImpact = OnFireballImpact,
                 Payload = new FireballSnapshot
                 {
-                    SpellPowerCoefficient = MagicDamageSystem.GetSpellPowerCoefficient(caster)
+                    Skill = this,
+                    SpellPowerCoefficient = MagicDamageSystem.GetSpellPowerCoefficient(caster),
+                    DamageArea = damageArea
                 }
             };
             if (!manager.TrySpawn(request, out string failureReason))
@@ -104,10 +121,20 @@ namespace New_ZZZF.Skills
             float spellPowerCoefficient = snapshot == null
                 ? MagicDamageSystem.GetSpellPowerCoefficient(impact.Caster)
                 : snapshot.SpellPowerCoefficient;
+            // 命中时读取实时范围；施法者若已失效，则沿用发射时的尺寸快照。
+            SkillDamageArea damageArea;
+            FireballSkill skill = snapshot?.Skill;
+            if (!impact.Caster.IsActive() ||
+                skill == null || !skill.TryGetDamageArea(impact.Caster, 0, out damageArea) ||
+                !damageArea.IsValid)
+                damageArea = snapshot?.DamageArea ?? default;
+            if (!damageArea.IsValid)
+                return;
+            float explosionRadius = damageArea.Radius;
 
             SpellProjectileMissionLogic.GetForCurrentMission()?.SpawnExpandingParticleRing(
                 "psys_blaze_vertical_1", "psys_campfire_sparks",
-                impact.Position, ExplosionRadius, 12, 0.45f, 0.9f);
+                impact.Position, explosionRadius, 12, 0.45f, 0.9f);
 
             if (impact.DirectTarget != null && impact.DirectTarget.IsActive())
             {
@@ -125,7 +152,7 @@ namespace New_ZZZF.Skills
             {
                 Mission.Current.GetNearbyEnemyAgents(
                     impact.Position.AsVec2,
-                    ExplosionRadius,
+                    explosionRadius,
                     impact.Caster.Team,
                     ExplosionTargets);
             }
@@ -133,11 +160,11 @@ namespace New_ZZZF.Skills
             {
                 Mission.Current.GetNearbyAgents(
                     impact.Position.AsVec2,
-                    ExplosionRadius,
+                    explosionRadius,
                     ExplosionTargets);
             }
 
-            float radiusSquared = ExplosionRadius * ExplosionRadius;
+            float radiusSquared = explosionRadius * explosionRadius;
             foreach (Agent target in ExplosionTargets)
             {
                 if (target == null || !target.IsActive() || !target.IsHuman ||
@@ -149,7 +176,7 @@ namespace New_ZZZF.Skills
                     continue;
 
                 float distanceRatio = MathF.Clamp(
-                    MathF.Sqrt(distanceSquared) / ExplosionRadius, 0f, 1f);
+                    MathF.Sqrt(distanceSquared) / explosionRadius, 0f, 1f);
                 float explosionBaseDamage = ExplosionCenterBaseDamage +
                     (ExplosionEdgeBaseDamage - ExplosionCenterBaseDamage) * distanceRatio;
                 MagicDamageSystem.Apply(

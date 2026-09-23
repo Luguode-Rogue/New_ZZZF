@@ -16,6 +16,23 @@ namespace New_ZZZF.Skills//（法术）
     // 示例：在火球术中附加燃烧状态
     public class HongShiZiHuoYan : SkillBase
     {
+        private const float SampleRadius = 3f;
+        private const float ConeLength = 10f;
+        private const float HalfAngle = 30f;
+
+        public override bool TryGetDamageArea(Agent caster, int index, out SkillDamageArea area)
+        {
+            // 实际伤害为七条射线、每米一个半径 3 米的球形采样；不是单个圆形 AOE。
+            area = index == 0 ? new SkillDamageArea
+            {
+                Shape = SkillDamageAreaShape.SampledCone,
+                Radius = SampleRadius,
+                Length = ConeLength,
+                HalfAngleDegrees = HalfAngle
+            } : default;
+            return index == 0;
+        }
+
         public HongShiZiHuoYan()
         {
             SkillID = "HongShiZiHuoYan";
@@ -50,17 +67,18 @@ namespace New_ZZZF.Skills//（法术）
         }
         private List<Agent> FindTarget(Agent agent)
         {
+            TryGetDamageArea(agent, 0, out SkillDamageArea damageArea);
             List<Agent> list = new List<Agent>();
             Vec3 vec3 = new Vec3();
             for (int i = -3; i <= 3; i++)
             {
-                for (global::System.Int32 j = 0; j <= 10; j++)
+                for (global::System.Int32 j = 0; j <= (int)damageArea.Length; j++)
                 {
                     Vec3 lookD= agent.LookDirection;
                     lookD=lookD.AsVec2.ToVec3();
-                    lookD.RotateAboutZ(i * 10 * (3.1415f / 180.0f));
+                    lookD.RotateAboutZ(i * (damageArea.HalfAngleDegrees / 3f) * (3.1415f / 180.0f));
                     vec3 = agent.Position + Script.MultiplyVectorByScalar(lookD, j);
-                    list.AddRange(Script.FindAgentsWithinSpellRange(vec3, 3));
+                    list.AddRange(Script.FindAgentsWithinSpellRange(vec3, damageArea.Radius));
                     vec3.z += 1f;
                     GameEntity projectile = GameEntity.CreateEmpty(Mission.Current.Scene);
                     projectile.SetLocalPosition(vec3);

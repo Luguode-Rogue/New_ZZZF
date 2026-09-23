@@ -12,7 +12,7 @@ namespace New_ZZZF.Skills
         private const float TickInterval = 0.5f;
         private const float BaseDamagePerSecond = 20f;
         private const float BaseDamagePerTick = BaseDamagePerSecond * TickInterval;
-        private const float WallLength = 15f;
+        private const float WallLength = 15f; // 包含两端圆帽的实际总长度
         // 胶囊形区域的 Radius 是半宽，2.5米对应火墙总宽5米。
         private const float WallRadius = 2.5f;
         private const float MaximumCastDistance = 160f;
@@ -36,6 +36,19 @@ namespace New_ZZZF.Skills
                 "快速施法时在160米内视野中敌人最密集的位置生成火墙；按住Shift时改为在视线指示落点生成。火墙长15米、宽5米，持续10秒，每0.5秒对范围内的敌人造成10点基础火焰伤害，即每秒20点。伤害乘以施法者的技能法强系数并受目标魔抗减免。消耗法力：50。冷却时间：10秒。");
         }
 
+        public override bool TryGetDamageArea(Agent caster, int index, out SkillDamageArea area)
+        {
+            area = index == 0 ? new SkillDamageArea
+            {
+                Shape = SkillDamageAreaShape.Capsule,
+                Radius = WallRadius,
+                // 管理器 Length 表示中轴线，两端各再延伸一个 Radius。
+                Length = WallLength - 2f * WallRadius,
+                HeightTolerance = 2.75f
+            } : default;
+            return index == 0;
+        }
+
         public override bool Activate(Agent caster)
         {
             if (caster == null || !caster.IsActive() || Mission.Current?.Scene == null)
@@ -50,6 +63,10 @@ namespace New_ZZZF.Skills
                     out SpellTargetingSystem.Result targeting))
                 return FailActivation("视野内没有可用目标。");
 
+            if (!TryGetDamageArea(caster, 0, out SkillDamageArea damageArea) ||
+                !damageArea.IsValid)
+                return FailActivation("火墙范围参数无效。");
+
             Vec3 midpoint = targeting.Position;
             // targeting.Position 在指示模式下已是摄像机射线命中的真实场景表面。
             // 禁止再用 GetGroundHeightAtPosition 覆盖 Z：该接口会取下方地形高度，
@@ -57,7 +74,7 @@ namespace New_ZZZF.Skills
             Vec3 forward = ResolveHorizontalForward(caster, midpoint);
             Vec3 wallDirection = new Vec3(-forward.y, forward.x, 0f);
             wallDirection.Normalize();
-            Vec3 start = midpoint - wallDirection * (WallLength * 0.5f);
+            Vec3 start = midpoint - wallDirection * (damageArea.Length * 0.5f);
 
             SpellAreaRequest request = new SpellAreaRequest
             {
@@ -65,9 +82,9 @@ namespace New_ZZZF.Skills
                 Center = start,
                 Direction = wallDirection,
                 Shape = SpellAreaShape.Capsule,
-                Radius = WallRadius,
-                Length = WallLength,
-                HeightTolerance = 2.75f,
+                Radius = damageArea.Radius,
+                Length = damageArea.Length,
+                HeightTolerance = damageArea.HeightTolerance,
                 Duration = Duration,
                 TickInterval = TickInterval,
                 TickImmediately = false,

@@ -142,11 +142,196 @@ namespace New_ZZZF
         /// onMissionTick里调用的，按下缩放键后的区域显示
         /// </summary>
         private static Dictionary<Agent, uint?> _contourCache = new Dictionary<Agent, uint?>(); // 新增缓存字典
+        private static readonly MBList<Agent> _previewNearbyAgents = new MBList<Agent>();
+        private static readonly HashSet<Agent> _previewAgentsInArea = new HashSet<Agent>();
+        private static readonly List<Agent> _previewAgentsToUnmark = new List<Agent>();
+        private static readonly uint _previewEnemyColor = new Color(1f, 0f, 0f, 1f).ToUnsignedInteger();
+        private static float _nextAreaContourRefreshTime;
+        private static bool _previewMarkersShown;
+        private const float AreaContourRefreshInterval = 0.1f;
+
+        /// <summary>Shift 指示只取当前法术的尺寸；不在每帧执行技能的选敌逻辑。</summary>
+        private static bool TryGetSelectedDamageArea(Agent caster, out SkillDamageArea area)
+        {
+            area = default;
+            AgentSkillComponent component = caster?.GetComponent<AgentSkillComponent>();
+            if (component == null || component.SelectedSpellSlot < 0 ||
+                component.SelectedSpellSlot >= component.SpellSlots.Length)
+                return false;
+            SkillBase skill = component.SpellSlots[component.SelectedSpellSlot];
+            return skill != null && skill.TryGetDamageArea(caster, 0, out area) &&
+                area.IsValid && area.Shape != SkillDamageAreaShape.SampledCone;
+        }
+
+        private static void ClearPreviewContours()
+        {
+            _nextAreaContourRefreshTime = 0f;
+            _previewNearbyAgents.Clear();
+            _previewAgentsInArea.Clear();
+            _previewAgentsToUnmark.Clear();
+            if (_contourCache.Count == 0)
+                return;
+            if (Mission.Current == null)
+            {
+                _contourCache.Clear();
+                return;
+            }
+            // 只访问任务中仍然活跃的 Visuals；缓存里可能留有已被原生层回收的对象。
+            foreach (Agent currentAgent in Mission.Current.Agents)
+            {
+                if (currentAgent == null || !currentAgent.IsActive() ||
+                    !_contourCache.ContainsKey(currentAgent))
+                    continue;
+                MBAgentVisuals visuals = currentAgent.AgentVisuals;
+                if (visuals != null)
+                    visuals.SetContourColor(null, true);
+            }
+            _contourCache.Clear();
+        }
+
+        private static Vec3 GetPreviewCapsuleDirection(Vec3 point, Agent caster)
+        {
+            Vec3 forward = point - caster.Position;
+            forward.z = 0f;
+            if (forward.LengthSquared < 0.001f)
+                forward = caster.LookDirection;
+            forward.z = 0f;
+            if (forward.LengthSquared < 0.001f)
+                forward = Vec3.Forward;
+            forward.Normalize();
+            return new Vec3(-forward.y, forward.x, 0f);
+        }
+
+        /// <summary>每 0.1 秒只查询指示点附近的敌人；轮廓跟随真实伤害形状。</summary>
+        private static void RefreshDamageAreaContours(Vec3 point, Agent caster, SkillDamageArea area)
+        {
+            Mission mission = Mission.Current;
+            if (mission == null || mission.CurrentTime < _nextAreaContourRefreshTime)
+                return;
+            _nextAreaContourRefreshTime = mission.CurrentTime + AreaContourRefreshInterval;
+
+            _previewNearbyAgents.Clear();
+            _previewAgentsInArea.Clear();
+            float queryRadius = area.Shape == SkillDamageAreaShape.Capsule
+                ? area.Length * 0.5f + area.Radius : area.Radius;
+            if (caster.Team != null)
+                mission.GetNearbyEnemyAgents(point.AsVec2, queryRadius, caster.Team, _previewNearbyAgents);
+            else
+                mission.GetNearbyAgents(point.AsVec2, queryRadius, _previewNearbyAgents);
+
+            Vec3 along = area.Shape == SkillDamageAreaShape.Capsule
+                ? GetPreviewCapsuleDirection(point, caster) : Vec3.Zero;
+            foreach (Agent target in _previewNearbyAgents)
+            {
+                if (target == null || !target.IsActive() || !target.IsHuman ||
+                    !caster.IsEnemyOf(target))
+                    continue;
+                Vec3 targetPoint = target.Position + Vec3.Up;
+                bool inside;
+                if (area.Shape == SkillDamageAreaShape.Capsule)
+                {
+                    if (MathF.Abs(targetPoint.z - point.z) > area.HeightTolerance)
+                        continue;
+                    Vec2 start = point.AsVec2 - along.AsVec2 * (area.Length * 0.5f);
+                    Vec2 segment = along.AsVec2 * area.Length;
+                    Vec2 offset = targetPoint.AsVec2 - start;
+                    float t = MathF.Clamp(Vec2.DotProduct(offset, segment) /
+                        (area.Length * area.Length), 0f, 1f);
+                    inside = (targetPoint.AsVec2 - (start + segment * t)).LengthSquared <=
+                        area.Radius * area.Radius;
+                }
+                else
+                {
+                    inside = (targetPoint - point).LengthSquared <= area.Radius * area.Radius;
+                }
+                if (inside)
+                    _previewAgentsInArea.Add(target);
+            }
+
+            // 只对当前 Mission.Agents 中仍活跃的实体写原生轮廓，规避移除后的 Visuals 指针。
+            _previewAgentsToUnmark.Clear();
+            if (_contourCache.Count > 0)
+            {
+                foreach (Agent currentAgent in mission.Agents)
+                {
+                    if (currentAgent == null || !currentAgent.IsActive() ||
+                        !_contourCache.ContainsKey(currentAgent) ||
+                        _previewAgentsInArea.Contains(currentAgent))
+                        continue;
+                    MBAgentVisuals visuals = currentAgent.AgentVisuals;
+                    if (visuals != null)
+                        visuals.SetContourColor(null, true);
+                    _previewAgentsToUnmark.Add(currentAgent);
+                }
+                foreach (Agent agent in _previewAgentsToUnmark)
+                    _contourCache.Remove(agent);
+            }
+            foreach (Agent agent in _previewAgentsInArea)
+            {
+                if (_contourCache.TryGetValue(agent, out uint? oldColor) &&
+                    oldColor == _previewEnemyColor)
+                    continue;
+                MBAgentVisuals visuals = agent.AgentVisuals;
+                if (visuals == null)
+                    continue;
+                visuals.SetContourColor(_previewEnemyColor, true);
+                _contourCache[agent] = _previewEnemyColor;
+            }
+        }
+
+        private static void PositionDamageAreaMarkers(Vec3 point, Agent caster, SkillDamageArea area)
+        {
+            // 与火墙结算一致：中轴线垂直于施法者至落点的水平朝向。
+            Vec3 along = GetPreviewCapsuleDirection(point, caster);
+            Vec3 across = new Vec3(-along.y, along.x, 0f);
+            int count = SkillSystemBehavior.WoW_Ring.Count;
+            foreach (var item in SkillSystemBehavior.WoW_Ring)
+            {
+                int index = (int)item.Key;
+                Vec3 markerPosition;
+                if (area.Shape == SkillDamageAreaShape.Capsule)
+                {
+                    // 16 个模型分别铺在两端圆弧和两侧直边，不把模型全挤在端点。
+                    float halfLength = area.Length * 0.5f;
+                    if (index < 4 || (index >= 8 && index < 12))
+                    {
+                        bool atStart = index < 4;
+                        float t = (index % 4) / 3f;
+                        float angle = atStart
+                            ? (float)(System.Math.PI * (0.5 + t))
+                            : (float)(System.Math.PI * (-0.5 + t));
+                        Vec3 capCenter = point + along * (atStart ? -halfLength : halfLength);
+                        markerPosition = capCenter + along * ((float)System.Math.Cos(angle) * area.Radius) +
+                                         across * ((float)System.Math.Sin(angle) * area.Radius);
+                    }
+                    else
+                    {
+                        bool lowerEdge = index < 8;
+                        float t = (index % 4 + 1) / 5f;
+                        markerPosition = point + along * ((lowerEdge ? -1f + 2f * t : 1f - 2f * t) * halfLength) +
+                                         across * (lowerEdge ? -area.Radius : area.Radius);
+                    }
+                }
+                else
+                {
+                    float angle = (float)(2.0 * System.Math.PI * index / count);
+                    markerPosition = point + new Vec3(
+                        (float)System.Math.Cos(angle) * area.Radius,
+                        (float)System.Math.Sin(angle) * area.Radius, 0f);
+                }
+                MatrixFrame frame = item.Value.GetFrame();
+                frame.origin = markerPosition;
+                frame.rotation = caster.LookRotation;
+                frame.rotation.u = Vec3.Up;
+                item.Value.SetFrame(ref frame);
+            }
+        }
 
         public static void UpdateProjectileTargets()
         {
             MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
-            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(24) && Agent.Main != null)
+            if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyDown(24) &&
+                Agent.Main != null && Mission.Current?.Scene != null)
             {
                 if (SkillSystemBehavior.WoW_Ring.Count == 0)
                 {
@@ -158,9 +343,29 @@ namespace New_ZZZF
                         SkillSystemBehavior.WoW_Ring.Add(i, gameEntity);
                     }
                 }
+                Vec3 lookP = Script.CameraLookPos();
+                if (!lookP.IsValid)
+                {
+                    if (_previewMarkersShown)
+                    {
+                        foreach (var item in SkillSystemBehavior.WoW_Ring)
+                        {
+                            MatrixFrame hidden = MatrixFrame.Identity;
+                            item.Value.SetFrame(ref hidden);
+                        }
+                        _previewMarkersShown = false;
+                    }
+                    ClearPreviewContours();
+                    return;
+                }
+                if (TryGetSelectedDamageArea(Agent.Main, out SkillDamageArea damageArea))
+                {
+                    PositionDamageAreaMarkers(lookP, Agent.Main, damageArea);
+                    _previewMarkersShown = true;
+                    RefreshDamageAreaContours(lookP, Agent.Main, damageArea);
+                }
                 else
                 {
-                    Vec3 lookP = Script.CameraLookPos();
                     Script.AgentListIFF(Agent.Main, Mission.Current.Agents, out var friendAgent, out var foeAgent);
                     foreach (var item in SkillSystemBehavior.WoW_Ring)
                     {
@@ -174,12 +379,16 @@ namespace New_ZZZF
                         matrixFrame.rotation.u = Vec3.Up;
                         item.Value.SetFrame(ref matrixFrame);
                     }
+                    _previewMarkersShown = true;
 
                     // 轮廓判定与16个指示器模型无关，每帧只执行一次。
                     foreach (var foe in foeAgent)
                     {
-                        if (foe.IsActive())
+                        if (foe != null && foe.IsActive())
                         {
+                            MBAgentVisuals visuals = foe.AgentVisuals;
+                            if (visuals == null)
+                                continue;
                             float distanceSq = lookP.DistanceSquared(foe.GetEyeGlobalPosition());
                             uint? targetColor = distanceSq <= 25 ?
                                 new Color(1f, 0f, 0f, 1f).ToUnsignedInteger() :
@@ -189,32 +398,24 @@ namespace New_ZZZF
                                 currentColor == targetColor)
                                 continue;
 
-                            foe.AgentVisuals.SetContourColor(targetColor, true);
+                            visuals.SetContourColor(targetColor, true);
                             _contourCache[foe] = targetColor;
                         }
                     }
                 }
             }
-            else if (missionScreen != null && missionScreen.SceneLayer.Input.IsGameKeyReleased(24) && Agent.Main != null)
+            else if (_previewMarkersShown || _contourCache.Count > 0)
             {
-                foreach (var item in SkillSystemBehavior.WoW_Ring)
+                if (_previewMarkersShown)
                 {
-                    MatrixFrame matrixFrame = MatrixFrame.Identity;
-                    item.Value.SetFrame(ref matrixFrame);
+                    foreach (var item in SkillSystemBehavior.WoW_Ring)
+                    {
+                        MatrixFrame matrixFrame = MatrixFrame.Identity;
+                        item.Value.SetFrame(ref matrixFrame);
+                    }
+                    _previewMarkersShown = false;
                 }
-                // 不得遍历缓存中的 Agent 去调用 AgentVisuals：死亡/移除后的
-                // 托管对象可能仍存在，但 MBAgentVisuals 的原生指针已被回收。
-                // 只对当前 Mission.Agents 中仍活跃的实体清除轮廓。
-                foreach (Agent currentAgent in Mission.Current.Agents)
-                {
-                    if (currentAgent == null || !currentAgent.IsActive() ||
-                        !_contourCache.ContainsKey(currentAgent))
-                        continue;
-                    MBAgentVisuals visuals = currentAgent.AgentVisuals;
-                    if (visuals != null)
-                        visuals.SetContourColor(null, true);
-                }
-                _contourCache.Clear();
+                ClearPreviewContours();
             }
         }
 
@@ -222,13 +423,21 @@ namespace New_ZZZF
         public static void ClearProjectileTargetVisualCache()
         {
             _contourCache.Clear();
+            _previewNearbyAgents.Clear();
+            _previewAgentsInArea.Clear();
+            _previewAgentsToUnmark.Clear();
+            _nextAreaContourRefreshTime = 0f;
+            _previewMarkersShown = false;
         }
 
         /// <summary>Agent 进入移除回调后只注销引用，禁止再访问其 AgentVisuals。</summary>
         public static void ForgetProjectileTarget(Agent agent)
         {
             if (agent != null)
+            {
                 _contourCache.Remove(agent);
+                _previewAgentsInArea.Remove(agent);
+            }
         }
         /// <summary>
         /// 玩家报错信息
@@ -449,6 +658,12 @@ namespace New_ZZZF
         ///获取目标范围内所有的agent,存放在列表里.敌我判定只有拿列表里的agent再去判定,不在这里判定
         /// </summary>
         public static List<Agent> FindAgentsWithinSpellRange(Vec3 targetLocation, int spellRange)
+        {
+            return FindAgentsWithinSpellRange(targetLocation, (float)spellRange);
+        }
+
+        /// <summary>允许伤害范围按属性得到非整数半径；与旧 int 入口使用同一三维距离判定。</summary>
+        public static List<Agent> FindAgentsWithinSpellRange(Vec3 targetLocation, float spellRange)
         {
             List<Agent> agentsWithinRange = new List<Agent>();
 

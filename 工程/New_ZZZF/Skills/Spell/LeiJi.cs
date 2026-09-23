@@ -20,9 +20,20 @@ namespace New_ZZZF.Skills
             Type = SPSkillType.Spell;
             Cooldown = 30f;
             ResourceCost = 50f;
+            CastSoundEvent = "event:/mission/combat/missile/foley/sling_release";
             Text = new TextObject("{=ZZZF0043}雷击");
             Description = new TextObject(
-                "在指定地点召雷，对3米范围内敌人造成30点基础电击伤害，并受法强与魔抗影响。首次施放消耗50法力、开启25秒引雷窗口及30秒个人冷却；窗口内再次施放不消耗法力、不重置个人冷却，只受法术公共冷却限制。玩家快速施法选择160米内视野中敌人最密集的地点，按住Shift时使用视线指示落点。");
+                "在指定地点召雷，以12根雷柱标示3米范围，对范围内敌人造成30点基础电击伤害，并受法强与魔抗影响。首次施放消耗50法力、开启25秒引雷窗口及30秒个人冷却；窗口内再次施放不消耗法力、不重置个人冷却，只受法术公共冷却限制。玩家快速施法选择160米内视野中敌人最密集的地点，按住Shift时使用视线指示落点。");
+        }
+
+        public override bool TryGetDamageArea(Agent caster, int index, out SkillDamageArea area)
+        {
+            area = index == 0 ? new SkillDamageArea
+            {
+                Shape = SkillDamageAreaShape.Sphere,
+                Radius = Radius
+            } : default;
+            return index == 0;
         }
 
         public override SkillActivationPolicy GetActivationPolicy(Agent caster)
@@ -38,10 +49,13 @@ namespace New_ZZZF.Skills
                 return FailActivation("施法者或当前任务不可用。");
 
             SpellTargetingSystem.Result targeting;
+            if (!TryGetDamageArea(caster, 0, out SkillDamageArea damageArea) ||
+                !damageArea.IsValid)
+                return FailActivation("雷击范围参数无效。");
             if (caster.IsPlayerControlled)
             {
                 if (!SpellTargetingSystem.TryResolveAreaTarget(
-                        caster, CastRange, Radius, out targeting))
+                        caster, CastRange, damageArea.Radius, out targeting))
                     return FailActivation("视野内没有可用目标。");
             }
             else
@@ -59,7 +73,7 @@ namespace New_ZZZF.Skills
                 };
             }
 
-            int hitCount = StrikeArea(caster, targeting.Position);
+            int hitCount = StrikeArea(caster, targeting.Position, damageArea.Radius);
             if (hitCount == 0 && !targeting.UsesManualIndicator)
                 return FailActivation("目标已离开雷击范围。");
 
@@ -68,8 +82,8 @@ namespace New_ZZZF.Skills
                 component.StateContainer.AddState(
                     new SkillRecastWindowState(SkillID, CallWindowDuration, caster), caster);
 
-            ShowLightning(targeting.Position);
-            MagicShoot.PlayReleasePresentation(caster);
+            ShowLightningArea(targeting.Position, damageArea.Radius);
+            MagicShoot.PlayReleasePresentation(caster, playWeaponSound: false);
             return true;
         }
 
@@ -87,20 +101,20 @@ namespace New_ZZZF.Skills
                 RushMovementMissionLogic.HasLineOfSight(caster, target);
         }
 
-        private static int StrikeArea(Agent caster, Vec3 center)
+        private static int StrikeArea(Agent caster, Vec3 center, float radius)
         {
             MBList<Agent> nearby = new MBList<Agent>();
             if (caster.Team != null)
-                Mission.Current.GetNearbyEnemyAgents(center.AsVec2, Radius, caster.Team, nearby);
+                Mission.Current.GetNearbyEnemyAgents(center.AsVec2, radius, caster.Team, nearby);
             else
-                Mission.Current.GetNearbyAgents(center.AsVec2, Radius, nearby);
+                Mission.Current.GetNearbyAgents(center.AsVec2, radius, nearby);
 
             int hitCount = 0;
             float spellPowerCoefficient = MagicDamageSystem.GetSpellPowerCoefficient(caster);
             foreach (Agent target in nearby)
             {
                 if (!IsValidVictim(caster, target) ||
-                    (target.Position + Vec3.Up - center).LengthSquared > Radius * Radius)
+                    (target.Position + Vec3.Up - center).LengthSquared > radius * radius)
                     continue;
                 ApplyDamage(caster, target, spellPowerCoefficient);
                 hitCount++;
@@ -135,22 +149,57 @@ namespace New_ZZZF.Skills
                 target.Position + Vec3.Up);
         }
 
+        private static void ShowLightningArea(Vec3 center, float radius)
+        {
+            SpellProjectileMissionLogic effects = SpellProjectileMissionLogic.GetForCurrentMission();
+            if (effects == null)
+                return;
+
+            // 原生短促的弩炮发射声暂代远距离落雷冲击；整次施法只播一声。
+            effects.QueueOneShotSound("event:/mission/siege/ballista/fire", center);
+            // 中心一根、实际伤害半径边缘十一根；仅雷击范围法术使用此布局。
+            ShowLightningColumn(effects, center);
+            for (int i = 0; i < 11; i++)
+            {
+                double angle = 2.0 * System.Math.PI * i / 11;
+                Vec3 position = center + new Vec3(
+                    (float)System.Math.Cos(angle) * radius,
+                    (float)System.Math.Sin(angle) * radius, 0f);
+                ShowLightningColumn(effects, position);
+            }
+        }
+
         private static void ShowLightning(Vec3 impactPosition)
         {
             SpellProjectileMissionLogic effects = SpellProjectileMissionLogic.GetForCurrentMission();
             if (effects == null)
                 return;
 
-            // 原版没有完整的落雷粒子；短寿命火花沿折线排布，后续可替换美术资源。
-            for (int i = 0; i < 7; i++)
+            ShowLightningColumn(effects, impactPosition);
+        }
+
+        private static void ShowLightningColumn(SpellProjectileMissionLogic effects, Vec3 impactPosition)
+        {
+            // 原版没有完整的落雷粒子；沿原有七个折点插值到三十五处火花。
+            for (int i = 0; i < 35; i++)
             {
-                float height = 9f * (6 - i) / 6f;
-                float side = i == 0 || i == 6 ? 0f : (i % 2 == 0 ? 0.25f : -0.25f);
+                float path = 6f * i / 34f;
+                int from = (int)path;
+                int to = from < 6 ? from + 1 : 6;
+                float fromSide = from == 0 || from == 6 ? 0f : (from % 2 == 0 ? 0.25f : -0.25f);
+                float toSide = to == 0 || to == 6 ? 0f : (to % 2 == 0 ? 0.25f : -0.25f);
+                float side = fromSide + (toSide - fromSide) * (path - from);
+                float height = 9f * (1f - i / 34f);
                 effects.SpawnTimedParticle(
                     "psys_game_sparkle_a",
-                    impactPosition + new Vec3(side, -side, height), 0.22f);
+                    impactPosition + new Vec3(side, -side, height), 0.22f, 15f);
             }
-            effects.SpawnTimedParticle("psys_campfire_sparks", impactPosition, 0.35f);
+            // 落点由一处扩为五处，避免五层粒子完全重叠。
+            effects.SpawnTimedParticle("psys_campfire_sparks", impactPosition, 0.35f, 15f);
+            effects.SpawnTimedParticle("psys_campfire_sparks", impactPosition + new Vec3(0.5f, 0f, 0f), 0.35f, 15f);
+            effects.SpawnTimedParticle("psys_campfire_sparks", impactPosition + new Vec3(-0.5f, 0f, 0f), 0.35f, 15f);
+            effects.SpawnTimedParticle("psys_campfire_sparks", impactPosition + new Vec3(0f, 0.5f, 0f), 0.35f, 15f);
+            effects.SpawnTimedParticle("psys_campfire_sparks", impactPosition + new Vec3(0f, -0.5f, 0f), 0.35f, 15f);
         }
     }
 }

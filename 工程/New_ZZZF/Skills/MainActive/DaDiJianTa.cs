@@ -13,6 +13,18 @@ namespace New_ZZZF
 {
     internal class DaDiJianTa : SkillBase
     {
+        private const float DamageRadius = 15f;
+
+        public override bool TryGetDamageArea(Agent caster, int index, out SkillDamageArea area)
+        {
+            area = index == 0 ? new SkillDamageArea
+            {
+                Shape = SkillDamageAreaShape.Sphere,
+                Radius = DamageRadius
+            } : default;
+            return index == 0;
+        }
+
         public DaDiJianTa()
         {
             SkillID = "DaDiJianTa";      // 必须唯一
@@ -42,7 +54,8 @@ namespace New_ZZZF
         }
         public bool DaDiJianTaUse(Agent casterAgent)
         {
-            Script.AgentListIFF(casterAgent,Script.FindAgentsWithinSpellRange(casterAgent.Position,15),out var friendAgent,out var foeAgent);
+            TryGetDamageArea(casterAgent, 0, out SkillDamageArea damageArea);
+            Script.AgentListIFF(casterAgent,Script.FindAgentsWithinSpellRange(casterAgent.Position, damageArea.Radius),out var friendAgent,out var foeAgent);
             Vec3 tarVec3 = casterAgent.Position;
             Vec2 tarVec2 = casterAgent.LookDirection.AsVec2;
             tarVec3 += Script.MultiplyVectorByScalar(casterAgent.LookDirection, 2);

@@ -14,6 +14,18 @@ namespace New_ZZZF.Skills
 {
     internal class JianQi : SkillBase
     {
+        private const float DamageRadius = 2f;
+
+        public override bool TryGetDamageArea(Agent caster, int index, out SkillDamageArea area)
+        {
+            area = index == 0 ? new SkillDamageArea
+            {
+                Shape = SkillDamageAreaShape.Sphere,
+                Radius = DamageRadius
+            } : default;
+            return index == 0;
+        }
+
         public JianQi()
         {
             SkillID = "JianQi";      // 必须唯一
@@ -119,7 +131,8 @@ namespace New_ZZZF.Skills
             // 通过属性管理器获取智力值//小兵没有智力值，改用熟练度吧
             //int intelligenceValue = character.HeroObject.GetAttributeValue(DefaultCharacterAttributes.Intelligence);
             Agent castAgent = data.CasterAgent;
-            List<Agent> list = Script.FindAgentsWithinSpellRange(missileEntity.GlobalPosition, 2);
+            TryGetDamageArea(castAgent, 0, out SkillDamageArea damageArea);
+            List<Agent> list = Script.FindAgentsWithinSpellRange(missileEntity.GlobalPosition, damageArea.Radius);
             List<Agent> FriendAgent = new List<Agent>();
             List<Agent> FoeAgent = new List<Agent>();
             Script.AgentListIFF(castAgent, list, out FriendAgent, out FoeAgent);

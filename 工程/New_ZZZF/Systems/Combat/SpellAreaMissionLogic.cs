@@ -55,6 +55,11 @@ namespace New_ZZZF
         /// 返回无效坐标时继续保留上一帧位置。
         /// </summary>
         public Func<Vec3> CenterProvider { get; set; }
+        /// <summary>
+        /// 可选：每次伤害结算前重新读取技能范围，用于明确需要随属性实时变形的区域。
+        /// 留空则使用创建时的尺寸快照（火墙等固定区域的默认行为）。
+        /// </summary>
+        public Func<SkillDamageArea> DamageAreaProvider { get; set; }
         public Func<Agent, bool> AdditionalAgentFilter { get; set; }
         public Action<SpellAreaTargetContext> OnAffectTarget { get; set; }
         public Action<int, object> OnExpired { get; set; }
@@ -202,6 +207,7 @@ namespace New_ZZZF
                 {
                     remainingQueryBudget--;
                     record.TickTimer = 0f;
+                    UpdateDynamicDamageArea(record);
                     AffectTargets(record);
                     record.TickIndex++;
 
@@ -324,6 +330,47 @@ namespace New_ZZZF
             record.Center = newCenter;
             for (int i = 0; i < record.Effects.Count; i++)
                 record.Effects[i].Entity.SetLocalPosition(record.Center + record.Effects[i].Offset);
+        }
+
+        private static void UpdateDynamicDamageArea(AreaRecord record)
+        {
+            if (record.Request.DamageAreaProvider == null)
+                return;
+            SkillDamageArea area;
+            try
+            {
+                area = record.Request.DamageAreaProvider();
+            }
+            catch (Exception)
+            {
+                return; // 属性提供者失效时保留上次有效的判定与表现。
+            }
+            if (!area.IsValid || area.Shape == SkillDamageAreaShape.SampledCone ||
+                (area.Shape == SkillDamageAreaShape.Capsule) !=
+                (record.Request.Shape == SpellAreaShape.Capsule))
+                return;
+            float length = area.Shape == SkillDamageAreaShape.Capsule ? area.Length : 0f;
+            float heightTolerance = area.Shape == SkillDamageAreaShape.Capsule
+                ? area.HeightTolerance : record.Request.HeightTolerance;
+            if (MathF.Abs(area.Radius - record.Request.Radius) < 0.001f &&
+                MathF.Abs(length - record.Request.Length) < 0.001f &&
+                MathF.Abs(heightTolerance - record.Request.HeightTolerance) < 0.001f)
+                return;
+
+            // 胶囊区以线段起点保存 Center；变长时保持原中点不动。
+            if (record.Request.Shape == SpellAreaShape.Capsule)
+                record.Center += record.Direction * ((record.Request.Length - length) * 0.5f);
+            record.Request.Radius = area.Radius;
+            record.Request.Length = length;
+            record.Request.HeightTolerance = heightTolerance;
+            int lastEffect = record.Effects.Count - 1;
+            for (int i = 0; i <= lastEffect; i++)
+            {
+                AreaEffectEntity effect = record.Effects[i];
+                if (record.Request.Shape == SpellAreaShape.Capsule && lastEffect > 0)
+                    effect.Offset = record.Direction * (length * i / lastEffect);
+                effect.Entity.SetLocalPosition(record.Center + effect.Offset);
+            }
         }
 
         private void CreateEffects(AreaRecord record)
