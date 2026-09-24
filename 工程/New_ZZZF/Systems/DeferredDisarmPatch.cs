@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
+using New_ZZZF.TacticalMap.Diagnostics;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 
@@ -15,11 +16,13 @@ namespace New_ZZZF
     {
         private readonly struct Request
         {
+            public readonly Mission Mission;
             public readonly int AgentIndex;
             public readonly EquipmentIndex WeaponIndex;
 
-            public Request(int agentIndex, EquipmentIndex weaponIndex)
+            public Request(Mission mission, int agentIndex, EquipmentIndex weaponIndex)
             {
+                Mission = mission;
                 AgentIndex = agentIndex;
                 WeaponIndex = weaponIndex;
             }
@@ -30,28 +33,33 @@ namespace New_ZZZF
 
         public static void Mark(Agent defenderAgent, EquipmentIndex weaponIndex)
         {
-            if (defenderAgent == null || !defenderAgent.IsActive() || weaponIndex == EquipmentIndex.None)
+            if (defenderAgent == null || !defenderAgent.IsActive() ||
+                defenderAgent.Mission == null || weaponIndex == EquipmentIndex.None)
                 return;
 
             lock (Sync)
             {
                 for (int i = 0; i < Pending.Count; i++)
                 {
-                    if (Pending[i].AgentIndex == defenderAgent.Index &&
+                    if (ReferenceEquals(Pending[i].Mission, defenderAgent.Mission) &&
+                        Pending[i].AgentIndex == defenderAgent.Index &&
                         Pending[i].WeaponIndex == weaponIndex)
                     {
                         return;
                     }
                 }
 
-                Pending.Add(new Request(defenderAgent.Index, weaponIndex));
+                Pending.Add(new Request(defenderAgent.Mission, defenderAgent.Index, weaponIndex));
             }
         }
 
         public static void Execute(Mission mission)
         {
             if (mission == null)
+            {
+                lock (Sync) Pending.Clear();
                 return;
+            }
 
             Request[] requests;
             lock (Sync)
@@ -65,6 +73,9 @@ namespace New_ZZZF
 
             foreach (Request request in requests)
             {
+                // Agent.Index 会在新任务中复用，旧战斗留下的请求不能作用于新 Agent。
+                if (!ReferenceEquals(request.Mission, mission))
+                    continue;
                 Agent target = mission.Agents.FirstOrDefault(agent =>
                     agent != null &&
                     agent.Index == request.AgentIndex &&
@@ -80,7 +91,10 @@ namespace New_ZZZF
                 if (primaryIndex != request.WeaponIndex && offhandIndex != request.WeaponIndex)
                     continue;
 
+                TacticalMapLog.Info("Deferred disarm DropItem begin: agent=" + request.AgentIndex +
+                    " slot=" + request.WeaponIndex);
                 target.DropItem(request.WeaponIndex, WeaponClass.Undefined);
+                TacticalMapLog.Info("Deferred disarm DropItem end: agent=" + request.AgentIndex);
             }
         }
     }
@@ -91,4 +105,3 @@ namespace New_ZZZF
     /// 保留空壳仅为避免引用残留，可直接删除。
     /// </summary>
 }
-
