@@ -60,6 +60,7 @@ namespace New_ZZZF
                 TriggerRightAttackOnEnd = !mounted,
                 UseSafeKinematicMovement = !mounted,
                 KinematicSpeed = 30.2f,
+                MaximumKinematicSlopeDegrees = 60f,
                 StopDistance = rushToIndicator
                     ? 0.75f
                     : (mounted ? 1f : GetAttackStopDistance(agent)),

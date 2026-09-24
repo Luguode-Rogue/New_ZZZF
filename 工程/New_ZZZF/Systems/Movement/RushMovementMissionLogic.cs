@@ -42,6 +42,10 @@ namespace New_ZZZF
         public bool TriggerRightAttackOnEnd;
         public bool UseSafeKinematicMovement;
         public float KinematicSpeed;
+        /// <summary>短步位移允许的最大坡角；不设置时沿用旧的固定 0.8 米高差限制。</summary>
+        public float MaximumKinematicSlopeDegrees;
+        /// <summary>短步位移连续经过有碰撞面支撑、但没有导航网格的区域时允许的最大距离。</summary>
+        public float MaximumOffNavigationDistance = 5f;
         /// <summary>可选的方向冲锋终点；有效时骑乘冲锋到达该点即结束，仍保留穿阵撞倒逻辑。</summary>
         public Vec3 DirectionalStopPosition = Vec3.Invalid;
         public Action<Agent, Agent, RushEndReason> OnEnded;
@@ -80,6 +84,7 @@ namespace New_ZZZF
             public float SightTimer;
             public float LostSightTime;
             public float StuckTime;
+            public float OffNavigationDistance;
             public Vec3 LastProgressPosition;
             public Vec3 StartPosition;
             public float DiagnosticsTimer;
@@ -591,16 +596,61 @@ namespace New_ZZZF
                 remainingDistance,
                 Math.Min(Math.Max(1f, record.Options.KinematicSpeed) * dt, 0.75f));
             Vec3 candidate = mover.Position + direction.ToVec3() * requestedStep;
-            candidate.z = Mission.Scene.GetGroundHeightAtPosition(
-                candidate, BodyFlags.CommonCollisionExcludeFlags);
+            float navigationHeightLimit = 0.35f;
+            bool hasSupportSurface = false;
+            if (record.Options.MaximumKinematicSlopeDegrees > 0f)
+            {
+                // 冲刺斩按坡角而非固定高差限制。先从当前脚面上方往下采样场景
+                // 碰撞面，优先得到坡道/城墙等实体表面，避免地形高度落在其下方。
+                float maximumRise = requestedStep * (float)Math.Tan(
+                    record.Options.MaximumKinematicSlopeDegrees * Math.PI / 180.0);
+                Vec3 sampleStart = candidate;
+                sampleStart.z = mover.Position.z + maximumRise + 0.5f;
+                Vec3 sampleEnd = candidate;
+                sampleEnd.z = mover.Position.z - maximumRise - 0.5f;
+                hasSupportSurface = Mission.Scene.RayCastForClosestEntityOrTerrain(
+                        sampleStart, sampleEnd, out _,
+                        out Vec3 surfacePoint, 0.01f,
+                        BodyFlags.CommonCollisionExcludeFlags);
+                if (hasSupportSurface)
+                    candidate.z = surfacePoint.z;
+                else
+                    candidate.z = Mission.Scene.GetGroundHeightAtPosition(
+                        candidate, BodyFlags.CommonCollisionExcludeFlags);
 
-            // 不允许用单步位移跨越过大的高度差。
-            if (Math.Abs(candidate.z - mover.Position.z) > 0.8f)
-                return false;
+                // 0.1 米只用于容纳 Agent 脚点与碰撞面的采样误差，坡角主体仍为 60°。
+                if (Math.Abs(candidate.z - mover.Position.z) > maximumRise + 0.1f)
+                    return false;
+                navigationHeightLimit = Math.Max(0.35f, maximumRise + 0.15f);
+            }
+            else
+            {
+                // 普通短步位移也采样实体表面，否则石头上的脚点会被地形高度
+                // 拉到石头下方，继而被导航判定立即中断。
+                Vec3 sampleStart = candidate;
+                sampleStart.z = mover.Position.z + 1.3f;
+                Vec3 sampleEnd = candidate;
+                sampleEnd.z = mover.Position.z - 1.3f;
+                hasSupportSurface = Mission.Scene.RayCastForClosestEntityOrTerrain(
+                    sampleStart, sampleEnd, out _, out Vec3 surfacePoint, 0.01f,
+                    BodyFlags.CommonCollisionExcludeFlags);
+                candidate.z = hasSupportSurface
+                    ? surfacePoint.z
+                    : Mission.Scene.GetGroundHeightAtPosition(
+                        candidate, BodyFlags.CommonCollisionExcludeFlags);
+                if (Math.Abs(candidate.z - mover.Position.z) > 0.8f)
+                    return false;
+            }
 
             int faceGroupId;
-            if (Mission.Scene.GetNavigationMeshForPosition(
-                    candidate, out faceGroupId, 0.35f, false) == UIntPtr.Zero)
+            bool onNavigationMesh = Mission.Scene.GetNavigationMeshForPosition(
+                candidate, out faceGroupId, navigationHeightLimit, false) != UIntPtr.Zero;
+            // 石头等实体表面未必铺有导航网格。所有短步位移可短暂经过确有落脚面的区域；
+            // 没有实体支撑或连续离开导航区域过远时仍中断，避免越过地图空洞。
+            if (!onNavigationMesh &&
+                (record.Options.MaximumOffNavigationDistance <= 0f ||
+                 !hasSupportSurface ||
+                 record.OffNavigationDistance + requestedStep > record.Options.MaximumOffNavigationDistance))
                 return false;
 
             // 从腰部高度检查本次短步前方；命中墙体或场景实体时不穿过去。
@@ -617,6 +667,9 @@ namespace New_ZZZF
             mover.LookDirection = direction.ToVec3();
             mover.SetMovementDirection(direction);
             mover.TeleportToPosition(candidate);
+            record.OffNavigationDistance = onNavigationMesh
+                ? 0f
+                : record.OffNavigationDistance + requestedStep;
             return true;
         }
 

@@ -25,10 +25,10 @@
     </Spells>
   </Troop>
   <Troop id="main_hero">
-    <MainActive>JianQiCiFu</MainActive>
+    <MainActive>JianQi</MainActive>
     <SubActive>ChongCiZhan</SubActive>
     <Passive>NullSkill</Passive>
-    <CombatArt>NullSkill</CombatArt>
+    <CombatArt>HongShiZiHuoYan</CombatArt>
     <Spells>
       <Slot1>FireWall</Slot1>
       <Slot2>LeiJi</Slot2>
@@ -145,7 +145,7 @@
     </Spells>
   </Troop>
   <Troop id="CharacterObject_3294">
-    <MainActive>NullSkill</MainActive>
+    <MainActive>JianQi</MainActive>
     <SubActive>JiFengLianZhan</SubActive>
     <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>
@@ -157,7 +157,7 @@
     </Spells>
   </Troop>
   <Troop id="CharacterObject_3295">
-    <MainActive>NullSkill</MainActive>
+    <MainActive>JianQi</MainActive>
     <SubActive>JiFengLianZhan</SubActive>
     <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>
@@ -169,7 +169,7 @@
     </Spells>
   </Troop>
   <Troop id="CharacterObject_3296">
-    <MainActive>NullSkill</MainActive>
+    <MainActive>JianQi</MainActive>
     <SubActive>JiFengLianZhan</SubActive>
     <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>
@@ -188,6 +188,30 @@
     <Spells>
       <Slot1>LiuXingFeiDan</Slot1>
       <Slot2>LeiJi</Slot2>
+      <Slot3>NullSkill</Slot3>
+      <Slot4>NullSkill</Slot4>
+    </Spells>
+  </Troop>
+  <Troop id="CharacterObject_3285">
+    <MainActive>JianQi</MainActive>
+    <SubActive>NullSkill</SubActive>
+    <Passive>NullSkill</Passive>
+    <CombatArt>NullSkill</CombatArt>
+    <Spells>
+      <Slot1>NullSkill</Slot1>
+      <Slot2>NullSkill</Slot2>
+      <Slot3>NullSkill</Slot3>
+      <Slot4>NullSkill</Slot4>
+    </Spells>
+  </Troop>
+  <Troop id="CharacterObject_3299">
+    <MainActive>JianQi</MainActive>
+    <SubActive>JiFengLianZhan</SubActive>
+    <Passive>NullSkill</Passive>
+    <CombatArt>NullSkill</CombatArt>
+    <Spells>
+      <Slot1>NullSkill</Slot1>
+      <Slot2>NullSkill</Slot2>
       <Slot3>NullSkill</Slot3>
       <Slot4>NullSkill</Slot4>
     </Spells>
