@@ -757,7 +757,25 @@ namespace New_ZZZF
         public override void OnAgentHit(Agent affectedAgent, Agent affectorAgent, in MissionWeapon affectorWeapon, in Blow blow, in AttackCollisionData attackCollisionData)
         {
             base.OnAgentHit(affectedAgent, affectorAgent, affectorWeapon, blow, attackCollisionData);
+            bool isJianQiHit = JianQiHitContext.TryConsumePrimaryHit(affectorAgent, affectedAgent);
             ExecuteHitEvents(affectorAgent, affectedAgent, affectorWeapon, blow, attackCollisionData);
+            // 剑气暴击属于受击事件，而非飞行/碰撞逻辑。第二次登记相同的物理打击，
+            // 使额外伤害也进入原生受击、击杀归属和武器命中事件链。
+            if (isJianQiHit &&
+                blow.InflictedDamage > 0 && affectedAgent != null &&
+                affectedAgent.IsActive() && affectedAgent.Health > 0f &&
+                MBRandom.RandomFloat < 0.5f)
+            {
+                InformationManager.DisplayMessage(new InformationMessage("暴击！"));
+                Blow criticalBlow = blow;
+                criticalBlow.BlowFlag |= BlowFlags.NoSound;
+                JianQiHitContext.ReportCombatLog(affectorAgent, affectedAgent,
+                    criticalBlow.InflictedDamage, attackCollisionData.AbsorbedByArmor,
+                    criticalBlow.DamageType);
+                JianQiHitContext.BeginCriticalFollowup();
+                try { affectedAgent.RegisterBlow(criticalBlow, attackCollisionData); }
+                finally { JianQiHitContext.EndCriticalFollowup(); }
+            }
             if (Agent.Main != null && affectedAgent.Index == Agent.Main.Index)
             {
                 Script.SysOut(affectedAgent.Health.ToString(), Agent.Main);

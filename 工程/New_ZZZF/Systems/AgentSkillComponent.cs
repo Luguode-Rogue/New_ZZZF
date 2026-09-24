@@ -712,7 +712,8 @@ namespace New_ZZZF
                 return;
 
             if (IsSkillReadyForAi(MainActiveSkill) &&
-                MBRandom.RandomFloat > 0.5f && MainActiveSkill.CheckCondition(Agent))
+                (MainActiveSkill is Skills.JianQi || MBRandom.RandomFloat > 0.5f) &&
+                MainActiveSkill.CheckCondition(Agent))
             {
                 TryActivateSkill(MainActiveSkill);
             }

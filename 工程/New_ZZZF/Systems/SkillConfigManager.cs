@@ -133,6 +133,13 @@ namespace New_ZZZF
         {
             if (_troopSkillMap.TryGetValue(troopId, out SkillSet skillSet))
             {
+                // 兼容此前误将剑气斩存入战技栏的配置；只在主主动为空时迁移。
+                if (skillSet != null && skillSet.CombatArt?.SkillID == "JianQi" &&
+                    (skillSet.MainActive == null || skillSet.MainActive.SkillID == "NullSkill"))
+                {
+                    skillSet.MainActive = skillSet.CombatArt;
+                    skillSet.CombatArt = ParseSkill("NullSkill");
+                }
                 return skillSet;
             }
 

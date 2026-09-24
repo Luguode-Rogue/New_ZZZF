@@ -41,6 +41,10 @@ namespace New_ZZZF
         public float WorldHitRadius { get; set; } = 0.05f;
         /// <summary>连续线段碰撞的检测周期。降频不会丢失中间飞行路径。</summary>
         public float CollisionInterval { get; set; } = 0.05f;
+        /// <summary>穿透单位并将每段实际飞行路径交给技能结算；其他投射物保持首次命中即结束。</summary>
+        public bool PiercesAgents { get; set; }
+        public float MaxTravelDistance { get; set; }
+        public Action<Vec3, Vec3> OnTravelSegment { get; set; }
 
         public string MeshResourceName { get; set; }
         /// <summary>可选的完整预制体；用于保留旧法术原有的模型外观。</summary>
@@ -81,6 +85,7 @@ namespace New_ZZZF
             public float CollisionTimer;
             public float HomingTimer;
             public float HomingDelayRemaining;
+            public float TravelledDistance;
         }
 
         private sealed class TimedEffect
@@ -145,7 +150,8 @@ namespace New_ZZZF
                 return false;
             }
             if (request.Speed <= 0f || request.Lifetime <= 0f || request.HitRadius <= 0f ||
-                request.WorldHitRadius < 0f || request.CollisionInterval <= 0f)
+                request.WorldHitRadius < 0f || request.CollisionInterval <= 0f ||
+                request.MaxTravelDistance < 0f)
             {
                 failureReason = "投射物飞行或碰撞参数无效。";
                 return false;
@@ -262,12 +268,20 @@ namespace New_ZZZF
                 UpdateHoming(record, dt);
 
                 Vec3 visualStart = record.Entity.GlobalPosition;
-                Vec3 visualEnd = visualStart + record.Direction * (request.Speed * dt);
+                float travelStep = request.Speed * dt;
+                if (request.MaxTravelDistance > 0f)
+                    travelStep = MathF.Min(travelStep,
+                        MathF.Max(0f, request.MaxTravelDistance - record.TravelledDistance));
+                Vec3 visualEnd = visualStart + record.Direction * travelStep;
+                record.TravelledDistance += travelStep;
                 record.Entity.SetGlobalFrame(
                     new MatrixFrame(Mat3.CreateMat3WithForward(record.Direction), visualEnd));
 
                 record.CollisionTimer -= dt;
-                bool checkCollision = record.CollisionTimer <= 0f || record.RemainingLifetime <= 0f;
+                bool reachedMaximumDistance = request.MaxTravelDistance > 0f &&
+                    record.TravelledDistance >= request.MaxTravelDistance;
+                bool checkCollision = request.PiercesAgents || record.CollisionTimer <= 0f ||
+                    record.RemainingLifetime <= 0f || reachedMaximumDistance;
                 if (checkCollision)
                 {
                     record.CollisionTimer += request.CollisionInterval;
@@ -275,9 +289,11 @@ namespace New_ZZZF
                     Vec3 collisionEnd = visualEnd;
                     record.LastCollisionPosition = collisionEnd;
 
-                    Agent hitAgent = FindFirstAgentOnSegment(
+                    float agentDistance = float.MaxValue;
+                    Vec3 agentHitPosition = collisionEnd;
+                    Agent hitAgent = request.PiercesAgents ? null : FindFirstAgentOnSegment(
                         request, collisionStart, collisionEnd,
-                        out float agentDistance, out Vec3 agentHitPosition);
+                        out agentDistance, out agentHitPosition);
                     bool hitWorld = Mission.Scene.RayCastForClosestEntityOrTerrain(
                         collisionStart,
                         collisionEnd,
@@ -285,6 +301,15 @@ namespace New_ZZZF
                         out Vec3 worldHitPosition,
                         request.WorldHitRadius,
                         BodyFlags.CommonCollisionExcludeFlags);
+
+                    if (request.PiercesAgents && request.OnTravelSegment != null)
+                    {
+                        Vec3 traversedEnd = hitWorld ? worldHitPosition : collisionEnd;
+                        record.Entity.SetGlobalFrame(new MatrixFrame(
+                            Mat3.CreateMat3WithForward(record.Direction), traversedEnd));
+                        try { request.OnTravelSegment(collisionStart, traversedEnd); }
+                        catch (Exception ex) { Debug.Print("[New_ZZZF][法术投射物] 穿透回调异常: " + ex); }
+                    }
 
                     if (hitAgent != null && (!hitWorld || agentDistance <= worldDistance))
                     {
@@ -300,7 +325,7 @@ namespace New_ZZZF
                     }
                 }
 
-                if (record.RemainingLifetime <= 0f)
+                if (record.RemainingLifetime <= 0f || reachedMaximumDistance)
                 {
                     if (request.InvokeImpactWhenLifetimeExpires)
                         InvokeImpact(record, visualEnd, null, SpellProjectileImpactReason.LifetimeExpired);

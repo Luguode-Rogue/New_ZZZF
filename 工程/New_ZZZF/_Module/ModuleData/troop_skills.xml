@@ -2,7 +2,7 @@
 <TroopSkills>
 	<Troop id="commander_1">
 		<!-- 主主动技能 -->
-		<MainActive>HuiJianYuanZhen</MainActive>
+		<MainActive>JianQi</MainActive>
 
 		<!-- 副主动技能 -->
 		<SubActive>ChongCiZhan</SubActive>
@@ -23,7 +23,7 @@
 		</Spells>
 
 		<!-- 战技栏 -->
-		<CombatArt>JianQi</CombatArt>
+		<CombatArt>NullSkill</CombatArt>
 	</Troop>
 	<Troop id="imperial_veteran_infantryman">
 		<!-- 主主动技能 -->
