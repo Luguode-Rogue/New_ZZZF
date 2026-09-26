@@ -101,7 +101,7 @@ namespace New_ZZZF
 
         public override bool CheckCondition(Agent caster)
         {
-            if (!base.CheckCondition(caster))
+            if (!base.CheckCondition(caster) || !AiBattleOrderGate.AllowsAggressiveSkill(caster))
                 return false;
 
             RushMovementMissionLogic movement = RushMovementMissionLogic.Current;

@@ -25,8 +25,8 @@
     </Spells>
   </Troop>
   <Troop id="main_hero">
-    <MainActive>JianQi</MainActive>
-    <SubActive>ChongCiZhan</SubActive>
+    <MainActive>TianQi</MainActive>
+    <SubActive>JiFengLianZhan</SubActive>
     <Passive>NullSkill</Passive>
     <CombatArt>HongShiZiHuoYan</CombatArt>
     <Spells>
@@ -133,10 +133,10 @@
     </Spells>
   </Troop>
   <Troop id="CharacterObject_3292">
-    <MainActive>ZhanYi</MainActive>
+    <MainActive>TianQi</MainActive>
     <SubActive>JiFengLianZhan</SubActive>
     <Passive>NullSkill</Passive>
-    <CombatArt>NullSkill</CombatArt>
+    <CombatArt>HongShiZiHuoYan</CombatArt>
     <Spells>
       <Slot1>NullSkill</Slot1>
       <Slot2>NullSkill</Slot2>
@@ -181,20 +181,20 @@
     </Spells>
   </Troop>
   <Troop id="CharacterObject_1856">
-    <MainActive>JianQiCiFu</MainActive>
+    <MainActive>JianQi</MainActive>
     <SubActive>JiFengLianZhan</SubActive>
     <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>
     <Spells>
-      <Slot1>LiuXingFeiDan</Slot1>
-      <Slot2>LeiJi</Slot2>
+      <Slot1>NullSkill</Slot1>
+      <Slot2>NullSkill</Slot2>
       <Slot3>NullSkill</Slot3>
       <Slot4>NullSkill</Slot4>
     </Spells>
   </Troop>
   <Troop id="CharacterObject_3285">
     <MainActive>JianQi</MainActive>
-    <SubActive>NullSkill</SubActive>
+    <SubActive>ChongCiZhan</SubActive>
     <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>
     <Spells>

@@ -153,12 +153,11 @@ namespace New_ZZZF.Systems.BattleEquipment
             try
             {
                 _session = new BattleEquipmentSession(player, target);
-                TacticalMapHtmlUi.Instance.SetCaptureSuspended(true);
-                BattleHudHtmlUi.Instance.SetCaptureSuspended(true);
+                TacticalMapHtmlUi.Instance.SetCaptureSuspended(true, OwnerId);
+                BattleHudHtmlUi.Instance.SetCaptureSuspended(true, OwnerId);
                 if (!HtmlUiService.Pages.Open(_pageId))
                 {
-                    ResumeOtherUi();
-                    _session = null;
+                    CleanupAfterClose();
                     return false;
                 }
                 _pageOpened = true;
@@ -173,6 +172,13 @@ namespace New_ZZZF.Systems.BattleEquipment
             catch (Exception ex)
             {
                 TacticalMapLog.Error("[BattleEquipment] Open failed.", ex);
+                try
+                {
+                    if (_registered && HtmlUiService.IsReady &&
+                        string.Equals(HtmlUiService.Pages.CurrentId, _pageId, StringComparison.OrdinalIgnoreCase))
+                        HtmlUiService.Pages.Close(_pageId);
+                }
+                catch (Exception closeEx) { TacticalMapLog.Error("[BattleEquipment] Failed to close page after open error.", closeEx); }
                 CleanupAfterClose();
                 return false;
             }
@@ -184,7 +190,8 @@ namespace New_ZZZF.Systems.BattleEquipment
             _closing = true;
             try
             {
-                if (_pageOpened && _registered && HtmlUiService.IsReady)
+                if (_pageOpened && _registered && HtmlUiService.IsReady &&
+                    string.Equals(HtmlUiService.Pages.CurrentId, _pageId, StringComparison.OrdinalIgnoreCase))
                     HtmlUiService.Pages.Close(_pageId);
             }
             catch (Exception ex) { TacticalMapLog.Error("[BattleEquipment] Close failed.", ex); }
@@ -212,8 +219,14 @@ namespace New_ZZZF.Systems.BattleEquipment
 
         private void CleanupAfterClose()
         {
+            bool hadSession = _session != null;
             _pageOpened = false;
             _session = null;
+            if (hadSession && _scope != null)
+            {
+                try { _scope.RemoveState(SessionState); }
+                catch (Exception ex) { TacticalMapLog.Error("[BattleEquipment] Session state release failed.", ex); }
+            }
             if (_pausedByUs)
             {
                 _pausedByUs = false;
@@ -224,8 +237,8 @@ namespace New_ZZZF.Systems.BattleEquipment
 
         private static void ResumeOtherUi()
         {
-            try { TacticalMapHtmlUi.Instance.SetCaptureSuspended(false); } catch { }
-            try { BattleHudHtmlUi.Instance.SetCaptureSuspended(false); } catch { }
+            try { TacticalMapHtmlUi.Instance.SetCaptureSuspended(false, OwnerId); } catch { }
+            try { BattleHudHtmlUi.Instance.SetCaptureSuspended(false, OwnerId); } catch { }
         }
 
         public void Dispose()

@@ -20,7 +20,17 @@ namespace New_ZZZF
         /// <summary>
         /// 剩余时间（秒）
         /// </summary>
-        public float Duration { get; set; }  
+        private float _duration;
+        public float Duration
+        {
+            get => _duration;
+            set
+            {
+                _duration = value;
+                if (value > MaximumDuration) MaximumDuration = value;
+            }
+        }
+        public float MaximumDuration { get; private set; }
         /// <summary>
         /// 状态来源agent（可选）
         /// </summary>
@@ -45,6 +55,23 @@ namespace New_ZZZF
     public class AgentBuffContainer
     {
         private List<AgentBuff> _activeStates = new List<AgentBuff>();
+        public event Action TimersChanged;
+
+        public bool TryGetSkillDuration(SkillBase skill, out float remaining, out float maximum)
+        {
+            remaining = 0f;
+            maximum = 0f;
+            if (skill == null) return false;
+            foreach (AgentBuff state in _activeStates)
+            {
+                if (state.Duration <= 0f || !skill.IsHudDurationState(state.StateId) ||
+                    state.Duration <= remaining)
+                    continue;
+                remaining = state.Duration;
+                maximum = state.MaximumDuration;
+            }
+            return remaining > 0f;
+        }
 
         public bool HasState(string stateId)
         {
@@ -72,6 +99,7 @@ namespace New_ZZZF
             if (state.TargetAgent == null) state.TargetAgent = owner;
 
             _activeStates.Add(state);
+            TimersChanged?.Invoke();
 
             if (state.TargetAgent == null) return; // 无有效目标则只登记不触发特效
 
@@ -93,6 +121,7 @@ namespace New_ZZZF
                 if (!string.Equals(existing.StateId, state.StateId, StringComparison.Ordinal))
                     continue;
                 _activeStates.RemoveAt(i);
+                TimersChanged?.Invoke();
                 if (target != null)
                 {
                     try { existing.OnRemove(target); }
@@ -107,14 +136,16 @@ namespace New_ZZZF
             for (int i = _activeStates.Count - 1; i >= 0; i--)
             {
                 AgentBuff state = _activeStates[i];
-                state.Duration -= dt;
-                state.Duration = TaleWorlds.Library.MathF.Clamp(state.Duration, 0f, 100f);
+                state.Duration = TaleWorlds.Library.MathF.Clamp(state.Duration - dt, 0f, 100f);
 
                 Agent target = agent ?? state.TargetAgent;
                 if (target == null || !target.IsActive())
                 {
-                    // 目标已失效：直接丢弃状态，避免后续 OnUpdate/OnRemove 触发空引用
+                    // 目标失效也要执行清理：天启等状态持有独立的场景特效实体。
                     _activeStates.RemoveAt(i);
+                    TimersChanged?.Invoke();
+                    try { state.OnRemove(target); }
+                    catch (Exception e) { /* 状态清理失败不能中断其他状态更新。 */ }
                     continue;
                 }
 
@@ -124,6 +155,7 @@ namespace New_ZZZF
                 if (state.Duration <= 0)
                 {
                     _activeStates.RemoveAt(i);
+                    TimersChanged?.Invoke();
                     try { state.OnRemove(target); }
                     catch (Exception e) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
                 }
@@ -150,6 +182,7 @@ namespace New_ZZZF
             {
                 state.OnRemove(agent);
                 _activeStates.Remove(state);
+                TimersChanged?.Invoke();
             }
         }
     }
@@ -183,11 +216,11 @@ namespace New_ZZZF
 
         public override void OnApply(Agent agent)
         {
-            // DoT 在挂载时快照目标当前魔抗，后续每跳不再重复查属性，
-            // 也不进入 Blow/受击/战斗日志链。
+            // DoT 在挂载时快照魔抗与攻击方增伤；临时免疫在每跳扣血前检查。
             MagicDamageResult result = MagicDamageSystem.Calculate(
-                agent, _baseDamagePerTick, _spellPowerCoefficient, _damageType);
-            _resolvedDamagePerTick = result.FinalDamage;
+                agent, _baseDamagePerTick, _spellPowerCoefficient, _damageType, true);
+            _resolvedDamagePerTick = result.FinalDamage *
+                MagicDamageSystem.GetOutgoingDamageMultiplier(SourceAgent);
         }
 
         public override void OnUpdate(Agent agent, float dt)
@@ -205,8 +238,8 @@ namespace New_ZZZF
                 return;
 
             // 一次结算积累的全部跳数，避免异常大 dt 导致主线程执行大量循环。
-            // 持续伤害仍直接修改生命，不进入 Blow、受击、士气或飘字链。
-            agent.Health = MathF.Max(0f, agent.Health - _resolvedDamagePerTick * elapsedTicks);
+            MagicDamageSystem.ApplyResolvedPeriodicDamage(
+                agent, _resolvedDamagePerTick * elapsedTicks);
         }
 
         public override void OnRemove(Agent agent)
@@ -272,7 +305,8 @@ namespace New_ZZZF
                 agent,
                 _baseDamagePerSecond,
                 MagicDamageSystem.GetSpellPowerCoefficient(SourceAgent),
-                DamageType.FIRE_DAMAGE).FinalDamage;
+                DamageType.FIRE_DAMAGE, true).FinalDamage *
+                MagicDamageSystem.GetOutgoingDamageMultiplier(SourceAgent);
             // 触发燃烧特效
             agent.PlayParticleEffect("du");
         }
@@ -286,7 +320,8 @@ namespace New_ZZZF
             if (_timeSinceLastTick >= 1f)
             {
                 if (agent != null && agent.IsActive() && _resolvedDamagePerSecond > 0f)
-                    agent.Health = MathF.Max(0f, agent.Health - _resolvedDamagePerSecond);
+                    MagicDamageSystem.ApplyResolvedPeriodicDamage(
+                        agent, _resolvedDamagePerSecond);
 
                 _timeSinceLastTick -= 1f; // 重置计时器
             }
@@ -362,7 +397,8 @@ namespace New_ZZZF
                 agent,
                 _baseDamagePerSecond,
                 MagicDamageSystem.GetSpellPowerCoefficient(SourceAgent),
-                DamageType.TOXIN_DAMAGE).FinalDamage;
+                DamageType.TOXIN_DAMAGE, true).FinalDamage *
+                MagicDamageSystem.GetOutgoingDamageMultiplier(SourceAgent);
             agent.PlayParticleEffect("du");
         }
 
@@ -372,7 +408,8 @@ namespace New_ZZZF
             if (_timeSinceLastTick >= 1f)
             {
                 if (agent != null && agent.IsActive() && _resolvedDamagePerSecond > 0f)
-                    agent.Health = MathF.Max(0f, agent.Health - _resolvedDamagePerSecond);
+                    MagicDamageSystem.ApplyResolvedPeriodicDamage(
+                        agent, _resolvedDamagePerSecond);
                 _timeSinceLastTick -= 1f;
             }
         }

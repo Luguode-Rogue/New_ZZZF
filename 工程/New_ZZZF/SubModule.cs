@@ -90,7 +90,7 @@ namespace New_ZZZF
                 BattleEquipmentHtmlUi.Instance.InitializeOnFrameworkReady();
                 TacticalMapLog.Info("BattleEquipment HtmlUi InitializeOnFrameworkReady registered.");
             }
-            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
+            if (NewZZZFDiag.FileLogging) HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_LOAD");
         }
 
         public override void OnNewGameCreated(Game game, object initializerObject)
@@ -205,7 +205,7 @@ namespace New_ZZZF
 
         protected override void OnSubModuleUnloaded()
         {
-            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_BEGIN");
+            if (NewZZZFDiag.FileLogging) HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_BEGIN");
             TacticalMapLog.Section("SUBMODULE UNLOAD");
             if (NewZZZFDiag.TacticalMap)
             {
@@ -229,7 +229,7 @@ namespace New_ZZZF
                 try { BattleEquipmentHtmlUi.Instance.Dispose(); }
                 catch (Exception ex) { TacticalMapLog.Error("BattleEquipment HtmlUI Dispose failed.", ex); }
             }
-            HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
+            if (NewZZZFDiag.FileLogging) HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
             base.OnSubModuleUnloaded();
         }
 
@@ -317,7 +317,7 @@ namespace New_ZZZF
 
             if (mPressed || (Input.IsKeyDown(InputKey.M) && shiftDown))
             {
-                HtmlUiInputTraceLogger.Event(
+                if (NewZZZFDiag.FileLogging) HtmlUiInputTraceLogger.Event(
                     "NEW_ZZZF_M_GATE "
                     + "mPressed=" + mPressed
                     + " shiftDown=" + shiftDown
@@ -332,7 +332,7 @@ namespace New_ZZZF
             if (customVisible)
             {
                 if (mPressed || shiftDown)
-                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_BLOCKED_BY_CUSTOM_SKILL_VISIBLE");
+                    if (NewZZZFDiag.FileLogging) HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_BLOCKED_BY_CUSTOM_SKILL_VISIBLE");
                 return;
             }
 
@@ -348,7 +348,7 @@ namespace New_ZZZF
 
                 if (normalMPressed && NewZZZFDiag.CustomSkillHtmlUi)
                 {
-                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_ACCEPTED_OPEN_HTML");
+                    if (NewZZZFDiag.FileLogging) HtmlUiInputTraceLogger.Event("NEW_ZZZF_M_ACCEPTED_OPEN_HTML");
                     if (ScreenManager.TopScreen is CustomSkillScreen)
                         ScreenManager.PopScreen();
                     CustomSkillHtmlUi.Instance.TryOpen();
@@ -357,7 +357,7 @@ namespace New_ZZZF
 
                 if (shiftMPressed && NewZZZFDiag.CustomSkillHtmlUi)
                 {
-                    HtmlUiInputTraceLogger.Event("NEW_ZZZF_SHIFT_M_ACCEPTED_OPEN_GAUNTLET");
+                    if (NewZZZFDiag.FileLogging) HtmlUiInputTraceLogger.Event("NEW_ZZZF_SHIFT_M_ACCEPTED_OPEN_GAUNTLET");
                     if (CustomSkillHtmlUi.Instance.IsVisible)
                         CustomSkillHtmlUi.Instance.Close();
                     if (!(ScreenManager.TopScreen is CustomSkillScreen))

@@ -15,67 +15,101 @@ using TaleWorlds.ScreenSystem;
 
 namespace New_ZZZF
 {
-    //传入一个施法者agent，施法者寻找一个目标，将目标强制击倒并瞬移至目标背后。短时间内大幅强化攻击伤害，并减少来自目标的伤害。
-    //动画表现：选取目标后，如果目标较远，则进入一段时间的跑动动作，使用rush类似的方法来完成。
-    //
+    // 近距离直接闪现，远距离接近后闪现；背刺、回血和短暂踉跄只在闪现成功后触发。
     internal class ShadowStep : SkillBase
     {//
         public ShadowStep()
         {
             SkillID = "ShadowStep";      // 必须唯一
             Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 0;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 消耗
+            Cooldown = 15;             // 冷却时间（秒）
+            ResourceCost = 40f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0011}ShadowStep");
+            Description = new TaleWorlds.Localization.TextObject(
+                "{=ZZZF_SHADOW_STEP_DESC}闪现至目标背后并恢复全部生命，令目标短暂踉跄，随后发动一次原生右砍。5.75秒内对目标造成双倍伤害，受到该目标的伤害减半。消耗耐力：40。冷却时间：15秒。");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
+        }
+        public override bool IsHudDurationState(string stateId)
+        {
+            return string.Equals(stateId, "暗影步增伤", StringComparison.Ordinal);
         }
         public override bool Activate(Agent agent)
         {
+            if (agent == null || !agent.IsActive())
+                return FailActivation("施法者不可用。");
             if (UseShadowStep(agent))
             { return true; }
             return false;
         }
-        public bool UseShadowStep(Agent agent)
-        {
-            Agent vimagent = null;
-            //目标选取：先判定视线落点附近是否有合适目标，如果没有，就选择一个随机的目标。
-            //不可对骑兵生效，随机目标优先选择射手（按手持远程武器判定）
-            List<Agent> agents = Script.FindAgentsWithinSpellRange(Script.AgentLookPos(agent), 10);
-            Script.AgentListIFF(agent, agents, out var friendAgent, out var foeAgent);
-            if (foeAgent.Count >= 1)
-            {
-                vimagent = foeAgent[0];
-            }
-            else
-            {
-                Script.AgentListIFF(agent, Mission.Current.Agents, out friendAgent, out foeAgent);
-                foreach (Agent item in foeAgent)
-                {
-                    if (item.IsActive() && item.Health > 0)
-                    {
-                        if (item.GetPrimaryWieldedItemIndex() != EquipmentIndex.None
-                        && item.Equipment[item.GetPrimaryWieldedItemIndex()].CurrentUsageItem.IsRangedWeapon) //手上的物品是远程武器
-                        {
-                            vimagent = item;
-                            break;
-                        }
-                        else
-                        { vimagent = item; }
-                    }
 
+        public override bool CheckCondition(Agent caster)
+        {
+            if (!base.CheckCondition(caster) || !AiBattleOrderGate.AllowsAggressiveSkill(caster))
+                return false;
+            RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
+            Agent target = SelectTarget(caster);
+            return (movement == null || !movement.IsRushing(caster)) &&
+                   IsValidTarget(caster, target);
+        }
+
+        private static bool IsValidTarget(Agent caster, Agent target)
+        {
+            return target != null && target != caster && target.IsHuman && !target.IsMount &&
+                   target.MountAgent == null &&
+                   target.IsActive() && target.Health > 0f &&
+                   caster.IsEnemyOf(target);
+        }
+
+        private static bool TryGetLandingPosition(
+            RushMovementMissionLogic movement, Agent target, out Vec3 landing)
+        {
+            Vec3 desired = target.Position - target.LookDirection * 2f;
+            // 导航网格只能作为优先落点，不能让场景中无导航的敌人使技能失效。
+            if (movement != null && movement.TryGetSafeLandingPosition(desired, out landing))
+                return true;
+            landing = desired;
+            landing.z = target.Position.z;
+            return landing.IsValid;
+        }
+
+        private static Agent SelectTarget(Agent caster)
+        {
+            Agent current = caster.GetTargetAgent();
+            if (caster.IsAIControlled && IsValidTarget(caster, current))
+                return current;
+
+            Vec3 lookPoint = caster.IsAIControlled ? Vec3.Invalid : Script.AgentLookPos(caster);
+            Agent best = null;
+            float bestScore = float.MaxValue;
+            foreach (Agent candidate in Mission.Current.Agents)
+            {
+                if (!IsValidTarget(caster, candidate))
+                    continue;
+                float distance = (candidate.Position - caster.Position).Length;
+                bool nearLook = lookPoint.IsValid &&
+                    candidate.GetEyeGlobalPosition().Distance(lookPoint) <= 10f;
+                WeaponComponentData weapon = candidate.WieldedWeapon.CurrentUsageItem;
+                float score = (nearLook ? 0f : 100f) +
+                              (weapon != null && weapon.IsRangedWeapon ? 0f : 40f) + distance * 0.01f;
+                if (score < bestScore)
+                {
+                    best = candidate;
+                    bestScore = score;
                 }
             }
-            if (vimagent == null) { Script.SysOut("无有效目标", agent); return false; }
-            //分两个情况，如果目标较远（比如超出50m），则先进入跑动状态，状态结束时，瞬移至目标附近。
-            //如果目标较近，则直接在这里传送到目标身后，并附加强制动作
-
-            // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new 暗影步增伤(5.75f, 0f, agent), };
-            foreach (var state in newStates)
-            {
-                state.TargetAgent = agent;
-                agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-            }
+            return best ?? (IsValidTarget(caster, current) ? current : null);
+        }
+        public bool UseShadowStep(Agent agent)
+        {
+            Agent vimagent = SelectTarget(agent);
+            if (!IsValidTarget(agent, vimagent))
+                return FailActivation("无有效目标。");
+            RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
+            if (movement != null && movement.IsRushing(agent))
+                return FailActivation("当前无法发动暗影步位移。");
+            if (movement == null)
+                return FinishShadowStep(agent, vimagent);
+            // 近目标直接闪现；远目标冲刺结束后闪现，不要求在 0.75 秒内跑完全程。
             if ((vimagent.GetEyeGlobalPosition() - agent.GetEyeGlobalPosition()).Length > 10)
             {
                 agent.SetTargetAgent(vimagent);
@@ -101,9 +135,6 @@ namespace New_ZZZF
                 // 调用私有 setter 方法
                 setMethod.Invoke(missionMainAgentController, new object[] { vimagent });
 #endif
-                RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
-                if (movement == null)
-                    return FailActivation("当前任务未加载强制移动管理器。");
                 RushMovementOptions movementOptions = new RushMovementOptions
                 {
                     Duration = 0.75f,
@@ -113,17 +144,19 @@ namespace New_ZZZF
                     AllowMounted = true,
                     OnEnded = (mover, target, reason) =>
                     {
-                        if (mover != null && mover.IsActive() && target != null && target.IsActive())
+                        if (mover != null && mover.IsActive() && IsValidTarget(mover, target))
                             FinishShadowStep(mover, target);
                     }
                 };
                 if (!movement.TryRushToAgent(agent, vimagent, movementOptions, out string failureReason))
-                    return FailActivation(failureReason ?? "无法接近暗影步目标。");
+                    return FinishShadowStep(agent, vimagent)
+                        ? true : FailActivation(failureReason ?? "无法接近暗影步目标。");
                 return true;
             }
             else
             {
-                FinishShadowStep(agent, vimagent);
+                if (!FinishShadowStep(agent, vimagent))
+                    return FailActivation("暗影步落点已经失效。");
                 // 旧重复锁定反射保留但停用；FinishShadowStep 已完成同一职责并带空值保护。
 #if false
                 MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
@@ -152,13 +185,27 @@ namespace New_ZZZF
             return false;
         }
 
-        private static void FinishShadowStep(Agent agent, Agent target)
+        private static bool FinishShadowStep(Agent agent, Agent target)
         {
-            agent.TeleportToPosition(target.GetEyeGlobalPosition() +
-                                     Script.MultiplyVectorByScalar(target.LookDirection, -2f));
+            RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
+            if (!IsValidTarget(agent, target) ||
+                !TryGetLandingPosition(movement, target, out Vec3 landing))
+                return false;
+            agent.TeleportToPosition(landing);
+            agent.Health = agent.HealthLimit;
             agent.SetTargetAgent(target);
+            AgentSkillComponent casterComponent = agent.GetComponent<AgentSkillComponent>();
+            casterComponent?.StateContainer.AddOrReplaceState(
+                new 暗影步增伤(5.75f, agent, target), agent);
+            AgentSkillComponent targetComponent = target.GetComponent<AgentSkillComponent>();
+            targetComponent?.StateContainer.AddOrReplaceState(
+                new ShadowStepStagger(0.75f, agent), target);
+            if (movement != null)
+                movement.QueueRightAttack(agent, target);
+            else
+                agent.MovementFlags |= Agent.MovementControlFlag.AttackRight;
             if (!agent.IsMainAgent)
-                return;
+                return true;
 
             MissionScreen missionScreen = ScreenManager.TopScreen as MissionScreen;
             MissionMainAgentController controller = missionScreen?.Mission?
@@ -168,18 +215,19 @@ namespace New_ZZZF
             MethodInfo setMethod = lockedAgentProperty?.GetSetMethod(true);
             if (controller != null && setMethod != null)
                 setMethod.Invoke(controller, new object[] { target });
+            return true;
         }
 
     }
     public class 暗影步增伤 : AgentBuff
     {
-        private float _damagePerSecond;
-        public 暗影步增伤(float duration, float dps, Agent source)
+        public Agent MarkedTarget { get; }
+        public 暗影步增伤(float duration, Agent source, Agent markedTarget)
         {
             StateId = "暗影步增伤";
             Duration = duration;
-            _damagePerSecond = 0;
             SourceAgent = source;
+            MarkedTarget = markedTarget;
         }
 
         public override void OnApply(Agent agent)
@@ -192,6 +240,40 @@ namespace New_ZZZF
 
         public override void OnRemove(Agent agent)
         {
+        }
+    }
+
+    /// <summary>闪现后的短暂控制：原生踉跄动作并暂停 NPC 战斗输入。</summary>
+    internal sealed class ShadowStepStagger : AgentBuff
+    {
+        private bool _wasPaused;
+
+        public ShadowStepStagger(float duration, Agent source)
+        {
+            StateId = "ShadowStepStagger";
+            Duration = duration;
+            SourceAgent = source;
+        }
+
+        public override void OnApply(Agent agent)
+        {
+            _wasPaused = agent.IsPaused;
+            agent.SetActionChannel(0, ActionIndexCache.act_stagger_backward, true);
+            agent.SetActionChannel(1, ActionIndexCache.act_stagger_backward, true);
+            if (agent.IsAIControlled)
+                agent.SetIsAIPaused(true);
+        }
+
+        public override void OnUpdate(Agent agent, float dt)
+        {
+            if (agent.IsAIControlled)
+                agent.SetIsAIPaused(true);
+        }
+
+        public override void OnRemove(Agent agent)
+        {
+            if (agent.IsAIControlled && !_wasPaused)
+                agent.SetIsAIPaused(false);
         }
     }
 }

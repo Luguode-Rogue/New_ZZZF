@@ -341,6 +341,7 @@ internal static class SpellForgeDiag
         @"E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord\Modules\New_ZZZF\工程\affix_debug.log";
     internal static void Log(string msg)
     {
+        if (!New_ZZZF.NewZZZFDiag.FileLogging) return;
         try { System.IO.File.AppendAllText(ForgeDiagPath, $"[{System.DateTime.Now:HH:mm:ss.fff}] [SpellForge] {msg}{System.Environment.NewLine}"); } catch { }
     }
 }

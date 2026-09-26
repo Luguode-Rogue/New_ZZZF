@@ -18,61 +18,95 @@ namespace New_ZZZF
         {
             SkillID = "JueXing";      // 必须唯一
             Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 2;             // 冷却时间（秒）
+            Cooldown = 60f;           // 冷却时间（秒）
             ResourceCost = 0f;        // 消耗
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0017}JueXing");
             Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0018}开启后获得觉醒状态，按当前耐力值增加少量的伤害加成与大量的速度加成。持续时间无限，但开启后每秒扣除4耐力，耐力不足时自动停止。每有30耐力，额外特技冷却时间加速100%，并每秒额外扣除1耐力。消耗耐力：0。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0018}开启觉醒后，武器伤害随当前耐力提高，满耐力时最多提高50%，攻击、操控及移动速度也随耐力提高。状态持续至耐力耗尽；每秒消耗4耐力，每有30耐力再额外消耗1耐力，并使副主动技能与战技的冷却速度额外提高100%。觉醒期间击杀敌人额外恢复5耐力（合计10耐力），并恢复5%最大生命值。消耗耐力：0。冷却时间：60秒。");
         }
         public override bool Activate(Agent agent)
         {
-
-            // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new JueXingBuff(10f, agent), }; // 新实例
-            foreach (var state in newStates)
-            {
-                state.TargetAgent = agent;
-                agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-            }
+            AgentSkillComponent component = agent?.GetComponent<AgentSkillComponent>();
+            if (component == null || component.StateContainer.HasState("JueXingBuff") ||
+                component._currentStamina <= 0f)
+                return FailActivation("觉醒已经生效、耐力不足或技能组件不可用。");
+            component.StateContainer.AddState(new JueXingBuff(agent), agent);
             return true;
+        }
 
+        public override bool CheckCondition(Agent caster)
+        {
+            if (!base.CheckCondition(caster)) return false;
+            AgentSkillComponent component = caster.GetComponent<AgentSkillComponent>();
+            if (component == null || component._currentStamina < 50f ||
+                component.StateContainer.HasState("JueXingBuff"))
+                return false;
+
+            Agent target = caster.GetTargetAgent();
+            float distanceSquared = float.MaxValue;
+            if (target != null && target.IsActive() && target.Health > 0f && caster.IsEnemyOf(target))
+                distanceSquared = (target.Position.AsVec2 - caster.Position.AsVec2).LengthSquared;
+            Formation enemyFormation = caster.Formation?.CachedClosestEnemyFormation?.Formation;
+            if (enemyFormation != null)
+                distanceSquared = Math.Min(distanceSquared,
+                    (enemyFormation.CachedMedianPosition.AsVec2 - caster.Position.AsVec2).LengthSquared);
+            if (distanceSquared == float.MaxValue) return false;
+
+            WeaponComponentData weapon = caster.WieldedWeapon.CurrentUsageItem;
+            float readyDistance;
+            if (weapon != null && weapon.IsRangedWeapon)
+            {
+                float missileRange = caster.GetMissileRange();
+                if (missileRange <= 0f) return false;
+                readyDistance = missileRange * 0.85f;
+            }
+            else
+            {
+                readyDistance = caster.MountAgent != null ? 30f : 15f;
+            }
+            return distanceSquared <= readyDistance * readyDistance;
         }
 
         public class JueXingBuff : AgentBuff
         {
             private float _timeSinceLastTick;
-            public JueXingBuff(float duration, Agent source)
+            public JueXingBuff(Agent source)
             {
                 StateId = "JueXingBuff";
-                Duration = duration;
+                Duration = 100f;
                 SourceAgent = source;
-                _timeSinceLastTick = 0; // 新增初始化
             }
 
             public override void OnApply(Agent agent)
             {
+                agent.UpdateAgentProperties();
             }
 
             public override void OnUpdate(Agent agent, float dt)
             {
-                SkillSystemBehavior.ActiveComponents.TryGetValue(this.SourceAgent.Index,out var agentSkillComponent);
-                if (agentSkillComponent != null&& agentSkillComponent._currentStamina > 5)
+                AgentSkillComponent component = agent?.GetComponent<AgentSkillComponent>();
+                if (component == null || component._currentStamina <= 0f)
                 {
-                    this.Duration += 1;
+                    Duration = 0f;
+                    return;
                 }
-                // 累积时间
-                _timeSinceLastTick += dt;
 
-                //每秒刷一次状态
+                float stamina = component._currentStamina;
+                float drainPerSecond = 4f + (int)(stamina / 30f);
+                component.ChangeStamina(-drainPerSecond * dt);
+                if (component._currentStamina <= 0f)
+                {
+                    Duration = 0f;
+                    return;
+                }
+
+                // 状态由耐力维持，计时器只用于兼容通用状态容器的超时移除。
+                Duration = 100f;
+                _timeSinceLastTick += dt;
                 if (_timeSinceLastTick >= 1f)
                 {
-                    ZZZF_SandboxAgentStatCalculateModel zZZF_SandboxAgentStatCalculate = MissionGameModels.Current.AgentStatCalculateModel as ZZZF_SandboxAgentStatCalculateModel;
-                    if (zZZF_SandboxAgentStatCalculate != null)
-                    {
-                        zZZF_SandboxAgentStatCalculate._dt = dt;
-                        agent.UpdateAgentProperties();
-                    }
-                    _timeSinceLastTick -= 1f; // 重置计时器
+                    _timeSinceLastTick -= (int)_timeSinceLastTick;
+                    agent.UpdateAgentProperties();
                 }
             }
 

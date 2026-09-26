@@ -443,8 +443,10 @@
   });
 
   window.addEventListener('resize', () => { scheduleRender(); reportCanvasRect(); });
-  setInterval(reportCanvasRect, 3000);
-  reportCanvasRect();
+  setInterval(() => {
+    if (runtimeState?.visible) reportCanvasRect();
+  }, 3000);
+  if (runtimeState?.visible) reportCanvasRect();
   app.state.subscribe('tacticalMap.static', applyStatic);
   app.state.subscribe('tacticalMap.runtime', applyRuntime);
   app.errors.on(error => clientLog('runtime error=' + (error?.message || error)));

@@ -15,7 +15,7 @@ namespace New_ZZZF.BattleHud
     ///  - 完整结构、属性、冷却和选槽使用独立 retained state；
     ///  - 同类变化在 MissionTick 合并，页面晚加载或重载也能从状态快照恢复；
     ///  - 属性和选槽变化不再构造、序列化完整技能状态；
-    ///  - 技能 CD/GCD 只在开始、结束或主动延长时跨桥同步，倒计时由 HTML 本地绘制；
+    ///  - 技能 CD/GCD 在变化时同步；状态持续时间开始、结束时同步，生效期间每秒校准一次；
     ///  - 资源/护盾按整数变化通知，避免每帧浮点变化跨 HTMLUI 桥。
     /// </summary>
     public sealed class BattleHudHtmlUi : IDisposable
@@ -35,7 +35,8 @@ namespace New_ZZZF.BattleHud
         private string _surfaceId;
         private bool _registered;
         private bool _shown;
-        private bool _captureSuspended;
+        private bool _missionActive;
+        private readonly HashSet<string> _captureSuspensionOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _fullDirty = true;
         private bool _vitalsDirty = true;
         private bool _timersDirty = true;
@@ -43,6 +44,7 @@ namespace New_ZZZF.BattleHud
         private AgentSkillComponent _boundComponent;
         private long _nextShowAttemptTimestamp;
         private long _nextPublishAttemptTimestamp;
+        private long _nextDurationRefreshTimestamp;
         private static readonly long RetryDelayTicks = Stopwatch.Frequency * 2L;
 
         public static BattleHudHtmlUi Instance => _instance.Value;
@@ -70,7 +72,10 @@ namespace New_ZZZF.BattleHud
             _scope = HtmlUiService.CreateScope(OwnerId);
             _scope.RegisterContentRoot(ContentRootName, uiRoot);
             _scope.RegisterRequest("getState", _ =>
-                Task.FromResult<object>(BuildState(_boundComponent)));
+            {
+                EnsureBoundComponent();
+                return Task.FromResult<object>(BuildState(_boundComponent));
+            });
             _surfaceId = _scope.RegisterSurface(new HtmlUiSurface(SurfaceName, "BattleHud/index.html")
             {
                 ContentRootId = ContentRootName,
@@ -85,7 +90,8 @@ namespace New_ZZZF.BattleHud
 
         public void OnMissionStarted()
         {
-            if (_captureSuspended || !_registered || !HtmlUiService.IsReady || _shown) return;
+            _missionActive = true;
+            if (_captureSuspensionOwners.Count > 0 || !_registered || !HtmlUiService.IsReady || _shown) return;
             long now = Stopwatch.GetTimestamp();
             if (now < _nextShowAttemptTimestamp) return;
             try
@@ -113,8 +119,11 @@ namespace New_ZZZF.BattleHud
 
         public void OnMissionEnded()
         {
+            _missionActive = false;
+            _captureSuspensionOwners.Clear();
             _nextShowAttemptTimestamp = 0L;
             _nextPublishAttemptTimestamp = 0L;
+            _nextDurationRefreshTimestamp = 0L;
             UnbindComponent();
 
             if (!_registered || !HtmlUiService.IsReady || !_shown)
@@ -139,12 +148,20 @@ namespace New_ZZZF.BattleHud
 
         public void SetCaptureSuspended(bool suspended)
         {
-            if (_captureSuspended == suspended) return;
-            _captureSuspended = suspended;
+            SetCaptureSuspended(suspended, OwnerId + ".legacy");
+        }
 
-            if (suspended)
+        public void SetCaptureSuspended(bool suspended, string ownerId)
+        {
+            string source = string.IsNullOrWhiteSpace(ownerId) ? OwnerId + ".legacy" : ownerId.Trim();
+            bool wasSuspended = _captureSuspensionOwners.Count > 0;
+            if (suspended) _captureSuspensionOwners.Add(source);
+            else _captureSuspensionOwners.Remove(source);
+            bool isSuspended = _captureSuspensionOwners.Count > 0;
+            if (wasSuspended == isSuspended) return;
+
+            if (isSuspended)
             {
-                UnbindComponent();
                 if (!_registered || !HtmlUiService.IsReady || !_shown) return;
                 try
                 {
@@ -159,20 +176,31 @@ namespace New_ZZZF.BattleHud
             }
             else
             {
-                OnMissionStarted();
+                // A paused mission may have no next tick to retry the HUD show.
+                if (_missionActive)
+                {
+                    _nextShowAttemptTimestamp = 0L;
+                    OnMissionStarted();
+                }
             }
         }
 
         /// <summary>
-        /// MissionTick 只负责主角组件绑定检查与 dirty 合并发布，不做定时轮询。
+        /// MissionTick 合并主角 HUD 通知，持续状态每秒校准一次。
         /// </summary>
         public void Tick(float dt)
         {
             _ = dt;
-            if (_captureSuspended || !_shown || !_registered || !HtmlUiService.IsReady) return;
+            if (_captureSuspensionOwners.Count > 0 || !_shown || !_registered || !HtmlUiService.IsReady) return;
 
             EnsureBoundComponent();
-            if (Stopwatch.GetTimestamp() >= _nextPublishAttemptTimestamp &&
+            long now = Stopwatch.GetTimestamp();
+            if (now >= _nextDurationRefreshTimestamp)
+            {
+                _nextDurationRefreshTimestamp = now + Stopwatch.Frequency;
+                if (HasActiveHudDuration(_boundComponent)) _timersDirty = true;
+            }
+            if (now >= _nextPublishAttemptTimestamp &&
                 (_fullDirty || _vitalsDirty || _timersDirty || _selectionDirty))
                 PublishPendingState();
         }
@@ -292,7 +320,8 @@ namespace New_ZZZF.BattleHud
 
         private static float[] BuildTimersState(AgentSkillComponent comp)
         {
-            var values = new float[9];
+            // [0] GCD，[1..8] 冷却，[9..16] 持续剩余，[17..24] 持续最大值。
+            var values = new float[25];
             if (comp == null) return values;
 
             values[0] = QuantizeTenths(comp._globalCooldownTimer);
@@ -302,6 +331,16 @@ namespace New_ZZZF.BattleHud
             values[6] = GetCooldown(comp.SubActiveSkill, comp);
             values[7] = GetCooldown(comp.PassiveSkill, comp);
             values[8] = GetCooldown(comp.CombatArtSkill, comp);
+            SkillBase[] skills = {
+                comp.SpellSlots[0], comp.SpellSlots[1], comp.SpellSlots[2], comp.SpellSlots[3],
+                comp.MainActiveSkill, comp.SubActiveSkill, comp.PassiveSkill, comp.CombatArtSkill
+            };
+            for (int i = 0; i < skills.Length; i++)
+            {
+                GetDuration(skills[i], comp, out float remaining, out float maximum);
+                values[9 + i] = remaining;
+                values[17 + i] = maximum;
+            }
             return values;
         }
 
@@ -309,6 +348,36 @@ namespace New_ZZZF.BattleHud
         {
             return skill == null || string.Equals(skill.SkillID, "NullSkill", StringComparison.OrdinalIgnoreCase)
                 ? 0f : QuantizeTenths(comp.GetSkillCooldownForDisplay(skill));
+        }
+
+        private static bool HasActiveHudDuration(AgentSkillComponent comp)
+        {
+            if (comp == null) return false;
+            foreach (SkillBase skill in comp.SpellSlots)
+                if (IsActiveHudDuration(skill, comp)) return true;
+            return IsActiveHudDuration(comp.MainActiveSkill, comp) ||
+                   IsActiveHudDuration(comp.SubActiveSkill, comp) ||
+                   IsActiveHudDuration(comp.CombatArtSkill, comp);
+        }
+
+        private static bool IsActiveHudDuration(SkillBase skill, AgentSkillComponent comp)
+        {
+            return skill != null && skill.Type != SPSkillType.Passive &&
+                   skill.Type != SPSkillType.Passive_Spell &&
+                   comp.StateContainer.TryGetSkillDuration(skill, out _, out _);
+        }
+
+        private static void GetDuration(SkillBase skill, AgentSkillComponent comp,
+            out float remaining, out float maximum)
+        {
+            remaining = 0f;
+            maximum = 0f;
+            if (skill == null || skill.Type == SPSkillType.Passive ||
+                skill.Type == SPSkillType.Passive_Spell ||
+                !comp.StateContainer.TryGetSkillDuration(skill, out float active, out float activeMaximum))
+                return;
+            remaining = QuantizeTenths(active);
+            maximum = Math.Max(remaining, activeMaximum);
         }
 
         private static object BuildState(AgentSkillComponent comp)
@@ -361,6 +430,8 @@ namespace New_ZZZF.BattleHud
                     name = string.Empty,
                     cd = 0f,
                     cdMax = 0f,
+                    dur = 0f,
+                    durMax = 0f,
                     cost = 0f,
                     mana = false,
                     selected,
@@ -375,6 +446,7 @@ namespace New_ZZZF.BattleHud
                 || skill.Type == SPSkillType.Spell_CombatArt;
 
             float cdRemaining = QuantizeTenths(comp.GetSkillCooldownForDisplay(skill));
+            GetDuration(skill, comp, out float durationRemaining, out float durationMaximum);
 
             bool isPassive = skill.Type == SPSkillType.Passive || skill.Type == SPSkillType.Passive_Spell;
 
@@ -386,6 +458,8 @@ namespace New_ZZZF.BattleHud
                 name = skill.Text != null ? skill.Text.ToString() : (skill.SkillID ?? string.Empty),
                 cd = cdRemaining,
                 cdMax = skill.Cooldown,
+                dur = durationRemaining,
+                durMax = durationMaximum,
                 cost = comp.GetSkillResourceCostForDisplay(skill),
                 mana = costsMana,
                 selected,
@@ -407,6 +481,7 @@ namespace New_ZZZF.BattleHud
 
         public void Dispose()
         {
+            _captureSuspensionOwners.Clear();
             UnbindComponent();
             try
             {

@@ -32,7 +32,7 @@ namespace New_ZZZF.TacticalMap.UI
         private TacticalMapController _controller;
         private bool _registered;
         private bool _pageOpened;
-        private bool _captureSuspended;
+        private readonly HashSet<string> _captureSuspensionOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private float _publishAccum;
         private string _lastRuntimeSignature;
         private int _lastTerrainSignature;
@@ -77,12 +77,13 @@ namespace New_ZZZF.TacticalMap.UI
                     ContentRootId = ContentRootName,
                     HotReload = true,
                     DefaultInputMode = HtmlUiInputMode.Passive,
-                    CloseOnEscape = false
+                    CloseOnEscape = false,
+                    Closed = OnPageClosed
                 });
 
                 RegisterCommands();
                 _registered = true;
-                HtmlUiLogger.Info("TacticalMap HtmlUI registered. Root=" + uiRoot);
+                if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Info("TacticalMap HtmlUI registered. Root=" + uiRoot);
                 if (_controller != null) OpenForMission();
             }
             catch (Exception ex)
@@ -100,6 +101,7 @@ namespace New_ZZZF.TacticalMap.UI
             _scope.RegisterCommand("toggleInteractive", _ => ToggleInteractive());
             _scope.RegisterCommand("setInteractive", payload =>
             {
+                if (!IsCurrentPage()) return;
                 bool value = payload?["value"]?.Value<bool>() ?? false;
                 SetInteractive(value);
             });
@@ -112,6 +114,7 @@ namespace New_ZZZF.TacticalMap.UI
             });
             _scope.RegisterCommand("canvasRect", payload =>
             {
+                if (!IsCurrentPage()) return;
                 TacticalMapNativeMouseInterceptor.UpdateCanvasRect(
                     payload?["x"]?.Value<float>() ?? 0f,
                     payload?["y"]?.Value<float>() ?? 0f,
@@ -121,6 +124,7 @@ namespace New_ZZZF.TacticalMap.UI
             });
             _scope.RegisterCommand("selectFormation", payload =>
             {
+                if (!IsCurrentPage()) return;
                 string name = payload?["name"]?.Value<string>();
                 if (string.IsNullOrWhiteSpace(name))
                     _controller?.HandleHtmlClearFormationSelection();
@@ -130,29 +134,38 @@ namespace New_ZZZF.TacticalMap.UI
             });
             _scope.RegisterCommand("move", payload =>
             {
+                if (!IsCurrentPage()) return;
                 TacticalMapController controller = _controller;
                 if (controller != null) ExecuteUv("move", payload, controller.HandleHtmlMoveClick);
             });
             _scope.RegisterCommand("face", payload =>
             {
+                if (!IsCurrentPage()) return;
                 TacticalMapController controller = _controller;
                 if (controller != null) ExecuteUv("face", payload, controller.HandleHtmlFaceClick);
             });
             _scope.RegisterCommand("camera", payload =>
             {
+                if (!IsCurrentPage()) return;
                 TacticalMapController controller = _controller;
                 if (controller != null) ExecuteUv("camera", payload, controller.HandleHtmlCameraClick);
             });
             _scope.RegisterCommand("refresh", _ => PublishState(true));
-            _scope.RegisterRequest("getState", payload => { var r = BuildRuntimeState(out string sig); return Task.FromResult<object>(r); });
+            _scope.RegisterRequest("getState", payload =>
+            {
+                if (!IsCurrentPage() || _controller == null) return Task.FromResult<object>(null);
+                var r = BuildRuntimeState(out string sig);
+                return Task.FromResult<object>(r);
+            });
             // 静态大图（地形照片 / 风险层 / NavMesh 的 Base64）走 Request 按需拉取：
             // 避免每次进战斗把数 MB Base64 塞进 State 广播（双重 JSON 序列化 + ~20MB LOH 字符串尖峰）。
-            _scope.RegisterRequest("getMapData", _ => Task.FromResult<object>(BuildMapDataState()));
+            _scope.RegisterRequest("getMapData", _ => Task.FromResult<object>(
+                IsCurrentPage() && _controller != null ? BuildMapDataState() : null));
         }
 
-        private static void ExecuteUv(string command, JToken payload, Action<float, float> handler)
+        private void ExecuteUv(string command, JToken payload, Action<float, float> handler)
         {
-            if (handler == null || payload == null) return;
+            if (!IsCurrentPage() || handler == null || payload == null) return;
             float u = payload["u"]?.Value<float>() ?? -1f;
             float v = payload["v"]?.Value<float>() ?? -1f;
             TacticalMapLog.Info("HTML " + command + " click u=" + u.ToString("0.000") + " v=" + v.ToString("0.000"));
@@ -173,48 +186,85 @@ namespace New_ZZZF.TacticalMap.UI
         {
             try
             {
-                if (_pageOpened && _registered && HtmlUiService.IsReady)
+                if (IsCurrentPage() && _registered && HtmlUiService.IsReady)
                     HtmlUiService.Pages.Close(_pageId);
             }
             catch (Exception ex) { TacticalMapLog.Error("TacticalMap HtmlUI close failed.", ex); }
 
             _pageOpened = false;
             _controller = null;
+            _captureSuspensionOwners.Clear();
             _mode = TacticalMapUiMode.CompactPassive;
             _publishAccum = 0f;
             _lastRuntimeSignature = null;
             _lastTerrainSignature = 0;
-            try { HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden); } catch { }
+            TacticalMapNativeMouseInterceptor.Tick(null, System.Drawing.Rectangle.Empty);
+            Core.TacticalMapCursorPatch.MouseRequested = false;
+        }
+
+        private bool IsCurrentPage()
+        {
+            return _registered && HtmlUiService.IsReady && !string.IsNullOrEmpty(_pageId) &&
+                string.Equals(HtmlUiService.Pages.CurrentId, _pageId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void OnPageClosed()
+        {
+            _pageOpened = false;
+            _mode = TacticalMapUiMode.CompactPassive;
+            _publishAccum = 0f;
+            _lastRuntimeSignature = null;
+            TacticalMapNativeMouseInterceptor.Tick(null, System.Drawing.Rectangle.Empty);
+            Core.TacticalMapCursorPatch.MouseRequested = false;
         }
 
         public void SetCaptureSuspended(bool suspended)
         {
-            if (_captureSuspended == suspended) return;
-            _captureSuspended = suspended;
-            if (suspended)
+            SetCaptureSuspended(suspended, OwnerId + ".legacy");
+        }
+
+        public void SetCaptureSuspended(bool suspended, string ownerId)
+        {
+            string source = string.IsNullOrWhiteSpace(ownerId) ? OwnerId + ".legacy" : ownerId.Trim();
+            bool wasSuspended = _captureSuspensionOwners.Count > 0;
+            if (suspended) _captureSuspensionOwners.Add(source);
+            else _captureSuspensionOwners.Remove(source);
+            bool isSuspended = _captureSuspensionOwners.Count > 0;
+            if (wasSuspended == isSuspended) return;
+
+            if (isSuspended)
             {
                 try
                 {
-                    if (_pageOpened && _registered && HtmlUiService.IsReady)
+                    if (IsCurrentPage())
                         HtmlUiService.Pages.Close(_pageId);
                 }
                 catch (Exception ex) { TacticalMapLog.Error("TacticalMap capture hide failed.", ex); }
-                _pageOpened = false;
-                try { HtmlUiService.SetInputMode(HtmlUiInputMode.Hidden); } catch { }
+                if (_pageOpened && !IsCurrentPage()) OnPageClosed();
             }
-            else if (_controller != null && _registered && HtmlUiService.IsReady)
+            else
             {
+                // MissionTick may not run while another page has paused the battle.
+                // Reopen as soon as the last capture owner releases the map.
                 OpenForMission();
             }
         }
 
         private void OpenForMission()
         {
-            if (_captureSuspended || _controller == null || !_registered || !HtmlUiService.IsReady || _pageOpened) return;
+            if (_captureSuspensionOwners.Count > 0 || _controller == null || !_registered || !HtmlUiService.IsReady) return;
+            if (IsCurrentPage())
+            {
+                _pageOpened = true;
+                return;
+            }
+            _pageOpened = false;
+            if (HtmlUiService.Pages.CurrentId != null) return;
             try
             {
                 if (!HtmlUiService.Pages.Open(_pageId)) return;
-                _pageOpened = true;
+                _pageOpened = IsCurrentPage();
+                if (!_pageOpened) return;
                 ApplyInputMode();
                 PublishState(true);
             }
@@ -222,16 +272,23 @@ namespace New_ZZZF.TacticalMap.UI
             {
                 _pageOpened = false;
                 TacticalMapLog.Error("TacticalMap HtmlUI open failed.", ex);
-                HtmlUiLogger.Error("TacticalMap HtmlUI open failed.", ex);
+                if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("TacticalMap HtmlUI open failed.", ex);
             }
         }
 
         public void Tick(float dt)
         {
-            if (_captureSuspended) return;
+            if (_captureSuspensionOwners.Count > 0) return;
             if (_controller == null) return;
-            if (!_pageOpened && _registered && HtmlUiService.IsReady) OpenForMission();
-            if (!_pageOpened) return;
+            if (!IsCurrentPage())
+            {
+                _pageOpened = false;
+                TacticalMapNativeMouseInterceptor.Tick(null, System.Drawing.Rectangle.Empty);
+                Core.TacticalMapCursorPatch.MouseRequested = false;
+                if (_registered && HtmlUiService.IsReady && HtmlUiService.Pages.CurrentId == null)
+                    OpenForMission();
+            }
+            if (!_pageOpened || !IsCurrentPage()) return;
 
             // Native mouse path: Chromium input is unreliable while the game owns the foreground,
             // so interactive clicks are polled here instead (see TacticalMapNativeMouseInterceptor).
@@ -261,6 +318,7 @@ namespace New_ZZZF.TacticalMap.UI
 
         public void SetInteractive(bool interactive)
         {
+            if (!IsCurrentPage()) return;
             TacticalMapUiMode next = interactive ? TacticalMapUiMode.FullInteractive : TacticalMapUiMode.CompactPassive;
             if (_mode == next) return;
             _mode = next;
@@ -270,6 +328,7 @@ namespace New_ZZZF.TacticalMap.UI
 
         private void ApplyInputMode()
         {
+            if (!IsCurrentPage()) return;
             // 交互模式需要可见的系统光标（战斗中引擎默认隐藏指针），退出后由补丁撤销。
             Core.TacticalMapCursorPatch.MouseRequested = IsInteractive;
             try
@@ -290,7 +349,7 @@ namespace New_ZZZF.TacticalMap.UI
         /// <summary>供拍照底图完成等外部事件强制重发布地图静态状态。</summary>
         public void PublishState(bool force)
         {
-            if (!_pageOpened || !_registered || _controller == null) return;
+            if (!_pageOpened || !IsCurrentPage() || _controller == null) return;
             try
             {
                 long pubStart = System.Diagnostics.Stopwatch.GetTimestamp();

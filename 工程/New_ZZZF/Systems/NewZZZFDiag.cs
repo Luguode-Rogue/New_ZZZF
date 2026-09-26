@@ -18,6 +18,9 @@ namespace New_ZZZF
     {
         // ---- 各子系统开关（默认全开 = 与原行为一致） ----
 
+        /// <summary>控制输出到文件的诊断日志</summary>
+        public static bool FileLogging = true;
+
         /// <summary>TacticalMap：Bootstrap/HtmlUi 初始化、mission 挂载、N 键切换、Tick</summary>
         public static bool TacticalMap = true;
 
@@ -122,6 +125,8 @@ namespace New_ZZZF
                     new XComment(" New_ZZZF 闪退排查 —— 子系统开关（false=禁用该子系统，重启游戏生效）"),
                     new XComment(" 排查矩阵：① 全 false 测基线；② 仅开 HarmonyPatchAll；③ 逐组开 Behavior"),
                     new XElement("NewZZZFDiag",
+                        new XComment(" 输出到文件的日志（false=禁用文件日志）"),
+                        new XElement("FileLogging", FileLogging.ToString().ToLowerInvariant()),
                         new XComment(" TacticalMap 战术地图（初始化/挂载/N键/Tick）"),
                         new XElement("TacticalMap", TacticalMap.ToString().ToLowerInvariant()),
                         new XComment(" 技能 HTML 界面（CustomSkillHtmlUi 初始化/Tick/M键）"),
@@ -160,7 +165,8 @@ namespace New_ZZZF
             if (root == null)
                 return;
 
-            if (TryParseBool(root.Element("TacticalMap")?.Value, out bool v)) TacticalMap = v;
+            if (TryParseBool(root.Element("FileLogging")?.Value, out bool v)) FileLogging = v;
+            if (TryParseBool(root.Element("TacticalMap")?.Value, out v)) TacticalMap = v;
             if (TryParseBool(root.Element("CustomSkillHtmlUi")?.Value, out v)) CustomSkillHtmlUi = v;
             if (TryParseBool(root.Element("SkillSystemBehavior")?.Value, out v)) SkillSystemBehavior = v;
             if (TryParseBool(root.Element("MountedSlashCamera")?.Value, out v)) MountedSlashCamera = v;

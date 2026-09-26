@@ -38,6 +38,7 @@ namespace New_ZZZF.TacticalMap.Terrain
     /// </summary>
     public sealed class TerrainPhotoTileCapture
     {
+        private const string CaptureSuspensionOwnerId = "New_ZZZF.TacticalMap.TerrainPhotoTileCapture";
         public static readonly TerrainPhotoTileCapture Instance = new TerrainPhotoTileCapture();
 
         private const int Revision = 53;
@@ -350,8 +351,8 @@ namespace New_ZZZF.TacticalMap.Terrain
                 {
                     _previousUiHidden = MBDebug.DisableAllUI;
                     MBDebug.DisableAllUI = true;
-                    try { TacticalMapHtmlUi.Instance.SetCaptureSuspended(true); } catch { }
-                    try { BattleHudHtmlUi.Instance.SetCaptureSuspended(true); } catch { }
+                    try { TacticalMapHtmlUi.Instance.SetCaptureSuspended(true, CaptureSuspensionOwnerId); } catch { }
+                    try { BattleHudHtmlUi.Instance.SetCaptureSuspended(true, CaptureSuspensionOwnerId); } catch { }
                     HideAgents();
                     _presentationChanged = true;
                     return;
@@ -659,8 +660,8 @@ namespace New_ZZZF.TacticalMap.Terrain
             _presentationChanged = false;
             _uiHidden = false;
             RestoreAgents();
-            try { TacticalMapHtmlUi.Instance.SetCaptureSuspended(false); } catch { }
-            try { BattleHudHtmlUi.Instance.SetCaptureSuspended(false); } catch { }
+            try { TacticalMapHtmlUi.Instance.SetCaptureSuspended(false, CaptureSuspensionOwnerId); } catch { }
+            try { BattleHudHtmlUi.Instance.SetCaptureSuspended(false, CaptureSuspensionOwnerId); } catch { }
         }
 
         private bool FailAndRestore(string reason)

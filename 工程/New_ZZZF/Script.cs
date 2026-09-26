@@ -28,6 +28,182 @@ namespace New_ZZZF
 {
     public class Script
     {
+        private const int EggShellSides = 24;
+        private const int EggShellLayers = 12;
+        private const float EggShellRadius = 0.82f;
+        private const float EggShellHalfHeight = 1.04f;
+        private static readonly Dictionary<uint, Mesh> EggShellMeshes = new Dictionary<uint, Mesh>();
+        private const int BellShieldLayers = 18;
+        private static readonly Dictionary<uint, Mesh> BellShieldMeshes = new Dictionary<uint, Mesh>();
+
+        /// <summary>
+        /// 创建包围单位的半透明蛋壳。默认白色、34% 不透明度；Color.Alpha 可调整透明度。
+        /// 调用者持有返回的实体，在效果结束时 Remove(0)。
+        /// </summary>
+        public static GameEntity CreateEggShellVisual(Agent agent, Color? color = null)
+        {
+            if (agent == null || !agent.IsActive() || agent.Mission?.Scene == null)
+                return null;
+
+            Color tint = color ?? new Color(1f, 1f, 1f, 0.34f);
+            uint colorKey = tint.ToUnsignedInteger();
+            if (!EggShellMeshes.TryGetValue(colorKey, out Mesh mesh) || mesh == null || !mesh.IsValid)
+            {
+                Material material = Material.GetFromResource("vertex_color_lighting")?.CreateCopy();
+                if (material == null || !material.IsValid)
+                    return null;
+                material.SetAlphaBlendMode(Material.MBAlphaBlendMode.Modulate);
+
+                MeshBuilder builder = new MeshBuilder();
+                for (int lat = 0; lat < EggShellLayers; lat++)
+                {
+                    float top = (float)Math.PI * lat / EggShellLayers;
+                    float bottom = (float)Math.PI * (lat + 1) / EggShellLayers;
+                    for (int side = 0; side < EggShellSides; side++)
+                    {
+                        float left = (float)(Math.PI * 2.0 * side / EggShellSides);
+                        float right = (float)(Math.PI * 2.0 * (side + 1) / EggShellSides);
+                        AddEggShellQuad(builder, EggShellPoint(top, left), EggShellPoint(top, right),
+                            EggShellPoint(bottom, right), EggShellPoint(bottom, left), colorKey);
+                    }
+                }
+
+                mesh = builder.Finalize();
+                if (mesh == null || !mesh.IsValid)
+                    return null;
+                mesh.SetMaterial(material);
+                mesh.Color = new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger();
+                mesh.CullingMode = MBMeshCullingMode.None;
+                mesh.UpdateBoundingBox();
+                EggShellMeshes[colorKey] = mesh;
+            }
+
+            GameEntity shell = GameEntity.CreateEmptyDynamic(agent.Mission.Scene, false);
+            if (shell == null)
+                return null;
+            shell.AddMesh(mesh);
+            shell.SetFactorColor(new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger());
+            shell.SetVisibilityExcludeParents(true);
+            shell.SetReadyToRender(true);
+            UpdateEggShellVisual(shell, agent);
+            return shell;
+        }
+
+        /// <summary>
+        /// 创建钟形半透明护盾：圆顶、窄肩、向下渐宽并在底缘外扩，底部敞开。
+        /// 保留蛋壳版本；颜色参数与蛋壳版本相同，默认半透明白色。
+        /// 调用者持有返回实体，在效果结束时 Remove(0)。
+        /// </summary>
+        public static GameEntity CreateBellShieldVisual(Agent agent, Color? color = null)
+        {
+            if (agent == null || !agent.IsActive() || agent.Mission?.Scene == null)
+                return null;
+
+            Color tint = color ?? new Color(1f, 1f, 1f, 0.34f);
+            uint colorKey = tint.ToUnsignedInteger();
+            if (!BellShieldMeshes.TryGetValue(colorKey, out Mesh mesh) || mesh == null || !mesh.IsValid)
+            {
+                Material material = Material.GetFromResource("vertex_color_lighting")?.CreateCopy();
+                if (material == null || !material.IsValid)
+                    return null;
+                material.SetAlphaBlendMode(Material.MBAlphaBlendMode.Modulate);
+
+                MeshBuilder builder = new MeshBuilder();
+                for (int layer = 0; layer < BellShieldLayers; layer++)
+                {
+                    float top = (float)layer / BellShieldLayers;
+                    float bottom = (float)(layer + 1) / BellShieldLayers;
+                    for (int side = 0; side < EggShellSides; side++)
+                    {
+                        float left = (float)(Math.PI * 2.0 * side / EggShellSides);
+                        float right = (float)(Math.PI * 2.0 * (side + 1) / EggShellSides);
+                        AddEggShellQuad(builder, BellShieldPoint(top, left), BellShieldPoint(top, right),
+                            BellShieldPoint(bottom, right), BellShieldPoint(bottom, left), colorKey);
+                    }
+                }
+
+                mesh = builder.Finalize();
+                if (mesh == null || !mesh.IsValid)
+                    return null;
+                mesh.SetMaterial(material);
+                mesh.Color = new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger();
+                mesh.CullingMode = MBMeshCullingMode.None;
+                mesh.UpdateBoundingBox();
+                BellShieldMeshes[colorKey] = mesh;
+            }
+
+            GameEntity bell = GameEntity.CreateEmptyDynamic(agent.Mission.Scene, false);
+            if (bell == null)
+                return null;
+            bell.AddMesh(mesh);
+            bell.SetFactorColor(new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger());
+            bell.SetVisibilityExcludeParents(true);
+            bell.SetReadyToRender(true);
+            UpdateEggShellVisual(bell, agent);
+            return bell;
+        }
+
+        /// <summary>更新蛋壳位置；持续效果每帧调用即可跟随步行或骑乘单位。</summary>
+        public static void UpdateEggShellVisual(GameEntity shell, Agent agent)
+        {
+            if (shell == null || agent == null || !agent.IsActive())
+                return;
+            MatrixFrame frame = MatrixFrame.Identity;
+            frame.origin = agent.GetEyeGlobalPosition() - new Vec3(0f, 0f, 0.72f);
+            shell.SetGlobalFrame(frame);
+        }
+
+        private static Vec3 EggShellPoint(float latitude, float longitude)
+        {
+            float sin = (float)Math.Sin(latitude);
+            float cos = (float)Math.Cos(latitude);
+            float width = EggShellRadius * sin * (1f - 0.14f * cos);
+            return new Vec3(width * (float)Math.Cos(longitude),
+                width * (float)Math.Sin(longitude), EggShellHalfHeight * cos);
+        }
+
+        private static Vec3 BellShieldPoint(float heightFraction, float longitude)
+        {
+            float radius;
+            if (heightFraction <= 0.2f)
+            {
+                // 钟顶圆拱，至肩部逐渐转为近乎竖直的钟身。
+                radius = 0.55f * (float)Math.Sin(heightFraction / 0.2f * Math.PI * 0.5);
+            }
+            else if (heightFraction <= 0.75f)
+            {
+                radius = 0.55f + 0.10f * (heightFraction - 0.2f) / 0.55f;
+            }
+            else if (heightFraction <= 0.94f)
+            {
+                float spread = (heightFraction - 0.75f) / 0.19f;
+                radius = 0.65f + 0.18f * spread * spread;
+            }
+            else
+            {
+                // 外翻的钟口，不用不透明描边。
+                radius = 0.83f + 0.12f * (heightFraction - 0.94f) / 0.06f;
+            }
+
+            return new Vec3(radius * (float)Math.Cos(longitude),
+                radius * (float)Math.Sin(longitude),
+                EggShellHalfHeight * (1f - 2f * heightFraction));
+        }
+
+        private static void AddEggShellQuad(MeshBuilder builder, Vec3 a, Vec3 b, Vec3 c,
+            Vec3 d, uint color)
+        {
+            Vec3 normal = (a + b + c + d) * 0.25f;
+            normal = new Vec3(normal.X, normal.Y, normal.Z / EggShellHalfHeight);
+            normal.Normalize();
+            int first = builder.AddFaceCorner(a, normal, new Vec2(0f, 0f), color);
+            int second = builder.AddFaceCorner(b, normal, new Vec2(1f, 0f), color);
+            int third = builder.AddFaceCorner(c, normal, new Vec2(1f, 1f), color);
+            int fourth = builder.AddFaceCorner(d, normal, new Vec2(0f, 1f), color);
+            builder.AddFace(first, second, third);
+            builder.AddFace(first, third, fourth);
+        }
+
         public static bool FindTarAgents(Agent castAgent, int selectRannge, out List<Agent> target, Vec3 agentLookPos = default)
         {
             ///通用搜寻施法目标的方法
@@ -1294,7 +1470,7 @@ namespace New_ZZZF
             return true;
         }
 
-        private static bool TryGetActualAmmoWeapon(
+        internal static bool TryGetActualAmmoWeapon(
             Agent shooter, MissionWeapon shotWeapon, out MissionWeapon ammoWeapon)
         {
             ammoWeapon = MissionWeapon.Invalid;
@@ -1399,8 +1575,9 @@ namespace New_ZZZF
         /// <param name="StartPos"></param>
         /// <param name="StartDirOrEndPos"></param>
         /// <param name="MissileRealSpeed"></param>
+        /// <param name="forceTargetPosition">明确按世界坐标目标点求弹道，并保留传入的高度。</param>
         /// <returns></returns>
-        public static int FireProjectileFromAgentWithWeaponAtPosition(Agent shotAgent, MissionWeapon ShotWeapon, MissionWeapon AmmoWeapon, Vec3 StartPos, Vec3 StartDirOrEndPos, float MissileRealSpeed = -1)
+        public static int FireProjectileFromAgentWithWeaponAtPosition(Agent shotAgent, MissionWeapon ShotWeapon, MissionWeapon AmmoWeapon, Vec3 StartPos, Vec3 StartDirOrEndPos, float MissileRealSpeed = -1, bool forceTargetPosition = false)
         {
             if (shotAgent == null || shotAgent.Mission == null || ShotWeapon.IsEmpty ||
                 ShotWeapon.CurrentUsageItem == null || AmmoWeapon.IsEmpty ||
@@ -1467,14 +1644,14 @@ namespace New_ZZZF
             }
 
 
-            if (Math.Round(StartDirOrEndPos.Length) == 1)
+            if (!forceTargetPosition && Math.Round(StartDirOrEndPos.Length) == 1)
             {
                 Mission.Current.AddCustomMissile(shotAgent, AmmoWeapon, StartPos, StartDirOrEndPos, shotAgent.LookRotation, MissilePanelSpeed, MissileRealSpeed, true, null, index);
             }
             else
             {
 
-                if (ShotWeapon.CurrentUsageItem.IsConsumable)
+                if (ShotWeapon.CurrentUsageItem.IsConsumable && !forceTargetPosition)
                 { StartDirOrEndPos.z -= 0.5f; }
                 Vec3 shotDir = CalculateProjectileFiringSolution(StartPos, StartDirOrEndPos, MissileRealSpeed, 9.81f);
                 if (shotDir == Vec3.Invalid || shotDir.x.Equals(float.NaN) || shotDir.y.Equals(float.NaN) || shotDir.z.Equals(float.NaN))

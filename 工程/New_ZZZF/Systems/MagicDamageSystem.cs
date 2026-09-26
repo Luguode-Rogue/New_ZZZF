@@ -60,6 +60,11 @@ namespace New_ZZZF.Systems
             return component == null ? 1f : MathF.Max(0f, component.MagicPowerCoefficient);
         }
 
+        public static float GetOutgoingDamageMultiplier(Agent caster)
+        {
+            return TianQi.IsProtected(caster) ? 2f : 1f;
+        }
+
         /// <summary>
         /// 结算并施加一次魔法伤害。
         ///
@@ -88,16 +93,37 @@ namespace New_ZZZF.Systems
             if (result.FinalDamage <= 0f)
                 return result;
 
+            result.FinalDamage *= GetOutgoingDamageMultiplier(caster);
+
             // RegisterBlow 只接受整数伤害。正数伤害至少登记1点，确保极低伤害也能
             // 进入原生受击、飘字和监听链；Result同步为真正交给引擎的伤害值。
             int inflictedDamage = Math.Max(1, (int)Math.Round(result.FinalDamage));
             result.FinalDamage = inflictedDamage;
+            if (TianQi.TryTriggerEmergency(victim, inflictedDamage))
+            {
+                result.FinalDamage = 0f;
+                result.WasImmune = true;
+                return result;
+            }
             float healthBefore = victim.Health;
             RegisterNativeMagicBlow(
                 caster, victim, inflictedDamage, flags, impactPosition);
             result.WasFatal = healthBefore > 0f && victim.Health < 1f;
 
             return result;
+        }
+
+        /// <summary>
+        /// 旧持续伤害使用挂载时快照的魔抗结果且直接扣血。统一在这里检查天启，
+        /// 不改变这类状态原有的伤害快照、击杀事件和飘字行为。
+        /// </summary>
+        public static void ApplyResolvedPeriodicDamage(Agent victim, float damage)
+        {
+            if (victim == null || !victim.IsActive() || damage <= 0f ||
+                float.IsNaN(damage) || float.IsInfinity(damage) ||
+                TianQi.IsProtected(victim) || TianQi.TryTriggerEmergency(victim, damage))
+                return;
+            victim.Health = MathF.Max(0f, victim.Health - damage);
         }
 
         /// <summary>
@@ -108,7 +134,8 @@ namespace New_ZZZF.Systems
             Agent victim,
             float baseDamage,
             float spellPowerCoefficient,
-            DamageType damageType)
+            DamageType damageType,
+            bool ignoreTemporaryImmunity = false)
         {
             MagicDamageResult result = new MagicDamageResult
             {
@@ -121,7 +148,8 @@ namespace New_ZZZF.Systems
                 return result;
 
             AgentSkillComponent victimComponent = victim.GetComponent<AgentSkillComponent>();
-            if (victimComponent != null && victimComponent.StateContainer.HasState("TianQiBuff"))
+            if (!ignoreTemporaryImmunity && victimComponent != null &&
+                victimComponent.StateContainer.HasState("TianQiBuff"))
             {
                 result.WasImmune = true;
                 return result;

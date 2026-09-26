@@ -178,6 +178,15 @@ namespace New_ZZZF
         {
             return new SkillActivationPolicy(ResourceCost, false, Cooldown);
         }
+        /// <summary>战斗 HUD 识别本技能施加在施法者身上的持续状态；特殊命名可重写。</summary>
+        public virtual bool IsHudDurationState(string stateId)
+        {
+            if (string.IsNullOrEmpty(SkillID) || string.IsNullOrEmpty(stateId))
+                return false;
+            return string.Equals(stateId, SkillID + "Buff", StringComparison.Ordinal) ||
+                   string.Equals(stateId, SkillID + "BuffToSelf", StringComparison.Ordinal) ||
+                   string.Equals(stateId, SkillID + "BuffApplyToSelf", StringComparison.Ordinal);
+        }
         /// <summary>
         /// 查询当前施法者的第 index 个伤害区域，供 Shift 指示、伤害结算和其他机制共用。
         /// 默认没有区域；未来属性/Buff 改变范围时在技能重写中实时计算，不缓存到共享技能实例。
@@ -237,6 +246,30 @@ namespace New_ZZZF
             return _hasAiConditionOverride.Value;
         }
 
+    }
+
+    /// <summary>只允许主动进攻的编队命令触发突进类技能的 NPC 自动施放。</summary>
+    internal static class AiBattleOrderGate
+    {
+        public static bool AllowsAggressiveSkill(Agent agent)
+        {
+            if (agent?.Formation == null)
+                return false;
+
+            MovementOrder.MovementOrderEnum order =
+                agent.Formation.GetReadonlyMovementOrderReference().OrderEnum;
+            return order == MovementOrder.MovementOrderEnum.Charge ||
+                   order == MovementOrder.MovementOrderEnum.ChargeToTarget ||
+                   order == MovementOrder.MovementOrderEnum.Advance ||
+                   order == MovementOrder.MovementOrderEnum.AttackEntity ||
+                   (agent.Formation.IsAIControlled &&
+                    (agent.Formation.AI.ActiveBehavior is BehaviorCharge ||
+                     agent.Formation.AI.ActiveBehavior is BehaviorAdvance ||
+                     agent.Formation.AI.ActiveBehavior is BehaviorCautiousAdvance ||
+                     agent.Formation.AI.ActiveBehavior is BehaviorAssaultWalls ||
+                     agent.Formation.AI.ActiveBehavior is BehaviorSallyOut ||
+                     agent.Formation.AI.ActiveBehavior is BehaviorEliminateEnemyInsideCastle));
+        }
     }
 
     public class SkillDifficulty

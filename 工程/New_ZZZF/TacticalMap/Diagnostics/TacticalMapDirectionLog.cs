@@ -28,7 +28,7 @@ namespace New_ZZZF.TacticalMap.Diagnostics
 
         public static void Info(string message)
         {
-            if (!Enabled) return;
+            if (!Enabled || !NewZZZFDiag.FileLogging) return;
             EnsureInitialized();
             if (string.IsNullOrEmpty(_logPath)) return;
 
@@ -38,6 +38,7 @@ namespace New_ZZZF.TacticalMap.Diagnostics
                 {
                     if (!_sessionStarted)
                     {
+                        Directory.CreateDirectory(Path.GetDirectoryName(_logPath));
                         File.WriteAllText(_logPath, string.Empty, new UTF8Encoding(false));
                         _sessionStarted = true;
                         WriteUnlocked("===== TACTICAL MAP DIRECTION DEBUG SESSION =====");
@@ -61,7 +62,6 @@ namespace New_ZZZF.TacticalMap.Diagnostics
                     string assemblyDir = Path.GetDirectoryName(assemblyPath) ?? ".";
                     string moduleDir = Path.GetFullPath(Path.Combine(assemblyDir, "..", ".."));
                     string logDirectory = Path.Combine(moduleDir, "Logs");
-                    Directory.CreateDirectory(logDirectory);
                     _logPath = Path.Combine(logDirectory, "New_ZZZF_TacticalMap_DirectionDebug.log");
                 }
                 catch { _logPath = null; }

@@ -875,11 +875,20 @@ namespace New_ZZZF
             catch (Exception ex) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
         }
 
-        private void QueueRightAttack(Agent attacker, Agent target)
+        /// <summary>供抵达后的技能复用冲刺斩的原生单次右砍输入。</summary>
+        public void QueueRightAttack(Agent attacker, Agent target)
         {
+            if (attacker == null || !attacker.IsActive())
+                return;
             _pendingRightAttacks[attacker.Index] = target;
             if (attacker.IsAIControlled)
                 attacker.SetHasOnAiInputSetCallback(true);
+        }
+
+        /// <summary>将闪现落点投射到地面和导航网格，避免在眼部高度或障碍内传送。</summary>
+        public bool TryGetSafeLandingPosition(Vec3 desired, out Vec3 result)
+        {
+            return TryGetNavigablePosition(desired, out result);
         }
 
         public Agent.EventControlFlag OnCollectPlayerEventControlFlags()

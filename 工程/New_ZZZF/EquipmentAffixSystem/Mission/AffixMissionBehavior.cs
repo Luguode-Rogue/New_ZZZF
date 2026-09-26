@@ -73,20 +73,14 @@ namespace New_ZZZF
             var characterObject = agent.Character as CharacterObject;
             var hero = characterObject?.HeroObject;
 
-            AgentAffixContext ctx;
-            lock (_agentAffixCache)
-            {
-                if (!_agentAffixCache.TryGetValue(agent.Index, out ctx))
-                    ctx = new AgentAffixContext();
-            }
+            // 在本地构造完整快照，再一次性发布。伤害模型可能并行读取缓存，
+            // 不能在锁外修改已经公开的 SlotToInstanceId 字典。
+            AgentAffixContext ctx = new AgentAffixContext();
 
             for (int i = 0; i <= (int)EquipmentIndex.HorseHarness; i++)
             {
                 var slot = (EquipmentIndex)i;
                 var element = agent.SpawnEquipment[slot];
-
-                // 每次重新扫描都先清理该槽位，避免换装后继续使用旧 InstanceId。
-                ctx.SlotToInstanceId.Remove(slot);
 
                 if (element.IsEmpty || element.Item == null)
                     continue;

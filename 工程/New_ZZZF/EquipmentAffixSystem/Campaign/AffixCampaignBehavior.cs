@@ -730,7 +730,8 @@ namespace New_ZZZF
 
         /// <summary>
         /// 获取词缀对指定属性的伤害倍率（实例优先）。
-        /// instanceId 非空时走实例路径，为空或未找到时回退到模板查找。
+        /// 只按实例计算战斗伤害。未绑定实例时不施加词缀，避免给同模板的
+        /// 普通武器串词缀，也避免每次攻击遍历全部历史实例记录。
         /// </summary>
         public static float GetAffixDamageMultiplier(string? instanceId, ItemObject item, string statKey)
         {
@@ -747,10 +748,7 @@ namespace New_ZZZF
                 }
             }
 
-            // 回退到模板查找
-#pragma warning disable CS0618 // 过渡回退
-            return GetAffixDamageMultiplier(item, statKey);
-#pragma warning restore CS0618
+            return 1f;
         }
 
         /// <summary>

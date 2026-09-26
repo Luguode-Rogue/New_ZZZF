@@ -68,16 +68,43 @@ namespace New_ZZZF
             }
 
             Agent victim = attackInformation.VictimAgent;
+            // 暗影步状态原先只有名称和时长；在统一伤害结算中落实对标记目标的增伤和减伤。
+            if (attacker != null && victim != null &&
+                SkillSystemBehavior.ActiveComponents.TryGetValue(attacker.Index, out var shadowAttacker))
+            {
+                var shadowState = shadowAttacker.StateContainer.GetState("暗影步增伤") as 暗影步增伤;
+                if (shadowState != null && shadowState.MarkedTarget == victim)
+                    damage *= 2f;
+            }
+            if (attacker != null && victim != null &&
+                SkillSystemBehavior.ActiveComponents.TryGetValue(victim.Index, out var shadowVictim))
+            {
+                var shadowState = shadowVictim.StateContainer.GetState("暗影步增伤") as 暗影步增伤;
+                if (shadowState != null && shadowState.MarkedTarget == attacker)
+                    damage *= 0.5f;
+            }
             if (victim != null &&
                 SkillSystemBehavior.ActiveComponents.TryGetValue(victim.Index, out var victimComponent))
             {
                 if (victimComponent.StateContainer.HasState("JianRenBuQuuBuff"))
                     damage = 1f;
                 else if (victimComponent.StateContainer.HasState("TianQiBuff"))
-                    damage = 1f;
+                    damage = 0f;
             }
 
             return damage;
+        }
+
+        public static float ApplyTianQiHitProtection(in AttackInformation attackInformation,
+            float finalDamage)
+        {
+            if (finalDamage > 0f && TianQi.IsProtected(attackInformation.AttackerAgent))
+                finalDamage *= 2f;
+            Agent victim = attackInformation.VictimAgent;
+            if (TianQi.IsProtected(victim) ||
+                TianQi.TryTriggerEmergency(victim, MathF.Round(finalDamage)))
+                return 0f;
+            return finalDamage;
         }
     }
 
@@ -237,11 +264,9 @@ namespace New_ZZZF
             if (result != null)
             {
                 if (result.StateContainer.HasState("ZhanYiBuff"))
-                    native *= 1 + result._currentStamina / 100 * 2;
+                    native *= 1.25f + 0.75f * MathF.Clamp(result._currentStamina / 100f, 0f, 1f);
                 if (result.StateContainer.HasState("JueXingBuff"))
                     native *= 1 + result._currentStamina / 100 / 2;
-                if (result.StateContainer.HasState("TianQiBuff"))
-                    native *= 2;
                 if (result.StateContainer.HasState("ZhanHaoBuff"))
                     native *= 1.2f;
                 if (result.StateContainer.HasState("WeiYaBuff"))
@@ -720,6 +745,7 @@ namespace New_ZZZF
             AgentDrivenProperties agentDrivenProperties)
         {
             base.UpdateAgentStats(agent, agentDrivenProperties);
+            AggressiveAi.AiDefenseThreatAdjustment.Apply(agent, agentDrivenProperties);
             if (agent != null && agent.IsHuman &&
                 RushMovementMissionLogic.IsMountedChongCiZhanCharge(agent))
             {
@@ -823,6 +849,17 @@ namespace New_ZZZF
                 in armorContext,
                 adjustedDamage);
         }
+
+        public override float ApplyGeneralDamageModifiers(
+            in AttackInformation attackInformation,
+            in AttackCollisionData collisionData,
+            float baseDamage)
+        {
+            float finalDamage = base.ApplyGeneralDamageModifiers(
+                in attackInformation, in collisionData, baseDamage);
+            return DamageCalculationRules.ApplyTianQiHitProtection(
+                in attackInformation, finalDamage);
+        }
     }
 
     public class WOW_CustomAgentApplyDamageModel : CustomAgentApplyDamageModel
@@ -891,6 +928,17 @@ namespace New_ZZZF
                 in attackInformation,
                 in collisionData,
                 baseDamage);
+        }
+
+        public override float ApplyGeneralDamageModifiers(
+            in AttackInformation attackInformation,
+            in AttackCollisionData collisionData,
+            float baseDamage)
+        {
+            float finalDamage = base.ApplyGeneralDamageModifiers(
+                in attackInformation, in collisionData, baseDamage);
+            return DamageCalculationRules.ApplyTianQiHitProtection(
+                in attackInformation, finalDamage);
         }
     }
 }

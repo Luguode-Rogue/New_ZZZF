@@ -27,6 +27,7 @@ namespace New_ZZZF.TacticalMap.Diagnostics
 
         public static void Initialize()
         {
+            if (!NewZZZFDiag.FileLogging) return;
             EnsureInitialized();
             if (string.IsNullOrEmpty(_logPath)) return;
 
@@ -35,6 +36,7 @@ namespace New_ZZZF.TacticalMap.Diagnostics
                 if (_sessionStarted) return;
                 try
                 {
+                    Directory.CreateDirectory(Path.GetDirectoryName(_logPath));
                     File.WriteAllText(_logPath, string.Empty, new UTF8Encoding(false));
                     _sessionStarted = true;
                     WriteUnlocked("BOOT", "===== NEW GAME SESSION =====");
@@ -67,7 +69,6 @@ namespace New_ZZZF.TacticalMap.Diagnostics
                     string assemblyDir = Path.GetDirectoryName(assemblyPath) ?? ".";
                     string moduleDir = Path.GetFullPath(Path.Combine(assemblyDir, "..", ".."));
                     string logDirectory = Path.Combine(moduleDir, "Logs");
-                    Directory.CreateDirectory(logDirectory);
                     _logPath = Path.Combine(logDirectory, "New_ZZZF_TacticalMap.log");
                 }
                 catch { _logPath = null; }
@@ -77,6 +78,7 @@ namespace New_ZZZF.TacticalMap.Diagnostics
 
         private static void Write(string level, string message)
         {
+            if (!NewZZZFDiag.FileLogging) return;
             EnsureInitialized();
             if (string.IsNullOrEmpty(_logPath)) return;
 
@@ -94,6 +96,7 @@ namespace New_ZZZF.TacticalMap.Diagnostics
                 _writesInWindow++;
                 try
                 {
+                    Directory.CreateDirectory(Path.GetDirectoryName(_logPath));
                     if (!_sessionStarted)
                     {
                         File.WriteAllText(_logPath, string.Empty, new UTF8Encoding(false));

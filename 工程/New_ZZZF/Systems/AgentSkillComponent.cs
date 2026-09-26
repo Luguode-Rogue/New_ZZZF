@@ -58,6 +58,7 @@ namespace New_ZZZF
         private float _currentStaminaValue = 100f;
         private float _globalCooldownTimerValue;
         private float _shieldStrengthValue;
+        private GameEntity _shieldStrengthVisual;
         private int _lifeResurgenceCountValue;
 
         /// <summary>技能结构等低频完整状态变化。</summary>
@@ -121,14 +122,37 @@ namespace New_ZZZF
             get => _shieldStrengthValue;
             set
             {
-                if (ToHudWholeBucket(_shieldStrengthValue) == ToHudWholeBucket(value))
-                {
-                    _shieldStrengthValue = value;
-                    return;
-                }
+                bool visibilityChanged = (_shieldStrengthValue > 0f) != (value > 0f);
+                bool hudChanged = ToHudWholeBucket(_shieldStrengthValue) != ToHudWholeBucket(value);
                 _shieldStrengthValue = value;
-                NotifyHudVitalsChanged();
+                if (visibilityChanged)
+                    UpdateShieldStrengthVisual();
+                if (hudChanged)
+                    NotifyHudVitalsChanged();
             }
+        }
+
+        private void UpdateShieldStrengthVisual()
+        {
+            if (_shieldStrengthValue <= 0f)
+            {
+                ReleaseShieldStrengthVisual();
+                return;
+            }
+            if (Agent == null || !Agent.IsActive())
+                return;
+            if (_shieldStrengthVisual == null)
+                _shieldStrengthVisual = Script.CreateBellShieldVisual(Agent,
+                    new Color(1f, 0.79f, 0.2f, 0.34f));
+            else
+                Script.UpdateEggShellVisual(_shieldStrengthVisual, Agent);
+        }
+
+        internal void ReleaseShieldStrengthVisual()
+        {
+            if (_shieldStrengthVisual != null)
+                _shieldStrengthVisual.Remove(0);
+            _shieldStrengthVisual = null;
         }
         public int _lifeResurgenceCount
         {
@@ -230,6 +254,7 @@ namespace New_ZZZF
         {
             MaxHP = agent.Health;
             Speed = new AgentSpeed(agent);
+            StateContainer.TimersChanged += NotifyHudTimersChanged;
             // 将 AI 检查均匀分散到 0.5 秒窗口，避免整支部队在同一帧做战术判断。
             _aiDecisionTimer = (agent.Index % 10) * (AiDecisionInterval / 10f);
         }
@@ -369,6 +394,8 @@ namespace New_ZZZF
         public void Tick(float dt)
         {
             if (!Agent.IsActive()) return;
+            if (_shieldStrengthValue > 0f)
+                UpdateShieldStrengthVisual();
 
             // 主角在冲刺斩期间会暂时切换为 AI Controller，让原生导航负责移动。
             // 身份仍然是 MainAgent，不能因此进入普通士兵的自动施法逻辑。
@@ -596,11 +623,12 @@ namespace New_ZZZF
                 failureReason = "施法者当前不可用。";
                 return false;
             }
-            if (Agent.IsPerformingAction() && !skill.CanActivateWhilePerformingAction)
-            {
-                failureReason = "角色正在执行其他动作。";
-                return false;
-            }
+            // 不以当前攻防动作拦截技能；各技能自行判断能否在该时机发动。
+            // if (Agent.IsPerformingAction() && !skill.CanActivateWhilePerformingAction)
+            // {
+            //     failureReason = "角色正在执行其他动作。";
+            //     return false;
+            // }
 
             // 资源检查
             bool hasResource = (skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt) ?
@@ -644,6 +672,11 @@ namespace New_ZZZF
             if (_cooldownTimers.Count == 0)
                 return;
 
+            // 觉醒仅加速正常逐帧流逝的副主动和战技冷却；其他技能主动调用的
+            // UpdateCooldowns(dt, skillType) 保持其原有的固定减时语义。
+            int awakeningTiers = skillType == SPSkillType.None && StateContainer.HasState("JueXingBuff")
+                ? (int)(_currentStamina / 30f) : 0;
+
             // 复用键缓存，避免每个角色每次更新都创建 List 和 Dictionary 副本。
             _cooldownKeysScratch.Clear();
             foreach (SkillBase key in _cooldownTimers.Keys)
@@ -664,7 +697,9 @@ namespace New_ZZZF
                 if (skillType != SPSkillType.None && !matchedType)
                     continue;
 
-                float remainingTime = value - dt;
+                bool accelerated = awakeningTiers > 0 &&
+                    (ReferenceEquals(key, SubActiveSkill) || ReferenceEquals(key, CombatArtSkill));
+                float remainingTime = value - dt * (accelerated ? 1 + awakeningTiers : 1);
                 if (remainingTime <= 0f)
                 {
                     _cooldownTimers.Remove(key);
@@ -705,6 +740,7 @@ namespace New_ZZZF
         //依次调用所有装备的技能的ai施法检查
         private void HandleAIBehaviorOfTick()
         {
+            AggressiveAi.AiDefenseThreatAdjustment.RefreshForCurrentTarget(Agent);
             // 强制移动期间不再运行普通 AI 技能轮询。否则冲刺斩临时接管移动时，
             // 同一 Agent 仍可能通过其他技能槽连续发动技能并打断冲锋。
             RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
@@ -712,13 +748,18 @@ namespace New_ZZZF
                 return;
 
             if (IsSkillReadyForAi(MainActiveSkill) &&
-                (MainActiveSkill is Skills.JianQi || MBRandom.RandomFloat > 0.5f) &&
+                (MainActiveSkill is Skills.JianQi || MainActiveSkill is Skills.ConeOfArrows ||
+                 MainActiveSkill is ZhanYi || MainActiveSkill is JueXing ||
+                 MainActiveSkill is TianQi ||
+                 MBRandom.RandomFloat > 0.5f) &&
                 MainActiveSkill.CheckCondition(Agent))
             {
                 TryActivateSkill(MainActiveSkill);
             }
             else if (IsSkillReadyForAi(SubActiveSkill) &&
-                     MBRandom.RandomFloat > 0.5f && SubActiveSkill.CheckCondition(Agent))
+                     (SubActiveSkill is JiFengLianZhan && StateContainer.HasState("JueXingBuff") ||
+                      MBRandom.RandomFloat > 0.5f) &&
+                     SubActiveSkill.CheckCondition(Agent))
             {
                 TryActivateSkill(SubActiveSkill);
             }
@@ -759,8 +800,9 @@ namespace New_ZZZF
             if (skill == null || !skill.IsValid || skill.Type == SPSkillType.None ||
                 Agent == null || !Agent.IsActive())
                 return false;
-            if (Agent.IsPerformingAction() && !skill.CanActivateWhilePerformingAction)
-                return false;
+            // 不以当前攻防动作拦截 NPC 技能候选。
+            // if (Agent.IsPerformingAction() && !skill.CanActivateWhilePerformingAction)
+            //     return false;
 
             bool usesMana = skill.Type == SPSkillType.Spell || skill.Type == SPSkillType.Spell_CombatArt;
             SkillActivationPolicy policy = skill.GetActivationPolicy(Agent);
@@ -783,6 +825,7 @@ namespace New_ZZZF
         {
             RushMovementMissionLogic.Current?.ApplyPendingAiAttack(Agent, ref movementFlag);
             JiFengLianZhanMissionLogic.Current?.ApplyPendingAiAttack(Agent, ref movementFlag);
+            AggressiveAi.AiDefenseThreatAdjustment.SuppressDefenseInput(Agent, ref movementFlag);
         }
     }
 }

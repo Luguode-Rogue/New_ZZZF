@@ -42,10 +42,14 @@ body{pointer-events:none;user-select:none}
 .skill{position:relative;width:100%;height:56px;border:1px solid rgba(211,174,92,.25);border-radius:9px;
   background:rgba(8,6,4,.72);overflow:hidden}
 .skill.selected{border-color:var(--gold);box-shadow:0 0 0 1px rgba(232,195,110,.55),0 0 10px rgba(232,195,110,.25)}
-.skill .cdFill{position:absolute;left:0;right:0;bottom:0;height:100%;background:rgba(10,8,5,.78);
+.skill .cdFill{position:absolute;left:0;right:0;bottom:0;height:100%;background:rgba(105,105,105,.48);
   border-top:1px solid rgba(232,195,110,.35);transform:scaleY(0);transform-origin:center bottom;transition:transform .10s linear;will-change:transform}
+.skill .durationFill{position:absolute;left:0;right:0;bottom:0;height:100%;background:rgba(235,135,36,.48);
+  border-top:1px solid rgba(255,186,97,.8);transform:scaleY(0);transform-origin:center bottom;transition:transform .10s linear;will-change:transform}
 .skill .cdText{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:15px;font-weight:700;color:#ffe3a0;text-shadow:0 1px 3px rgba(0,0,0,.95)}
+.skill .cdText.duration{color:#ffba61}
+.skill .cdText.cooldown{color:#d6d9dc}
 .skill .name{position:absolute;left:0;right:0;bottom:3px;text-align:center;font-size:9px;line-height:1.15;
   color:var(--text);text-shadow:0 1px 2px rgba(0,0,0,.95);padding:0 3px;
   overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
@@ -92,7 +96,11 @@ body{pointer-events:none;user-select:none}
   let lastStructureSig = '';
   let latestState = null;
   let countdownInterval = 0;
+  let surfaceVisible = false;
+  let pageActive = true;
+  const surfaceId = window.game.surface && window.game.surface.id;
   const localCooldowns = new Map();
+  const localDurations = new Map();
   let localGcd = { remaining: 0, max: 0, stamp: 0 };
   const fmt = v => Math.round(Number(v) || 0);
   const nowMs = () => (window.performance && typeof window.performance.now === 'function')
@@ -120,10 +128,20 @@ body{pointer-events:none;user-select:none}
       } else {
         localCooldowns.delete(slot);
       }
+      const dur = Math.max(0, Number(compact ? state[9 + i] : s.dur) || 0);
+      const durMax = Math.max(dur, Number(compact ? state[17 + i] : s.durMax) || 0);
+      if (dur > 0.001) {
+        localDurations.set(slot, { remaining: dur, max: durMax, stamp: now });
+      } else {
+        localDurations.delete(slot);
+      }
     }
 
     for (const slot of Array.from(localCooldowns.keys())) {
       if (!seen.has(slot)) localCooldowns.delete(slot);
+    }
+    for (const slot of Array.from(localDurations.keys())) {
+      if (!seen.has(slot)) localDurations.delete(slot);
     }
 
     const gcd = Math.max(0, Number(compact ? state[0] : state.gcd) || 0);
@@ -147,14 +165,17 @@ body{pointer-events:none;user-select:none}
     for (const timer of localCooldowns.values()) {
       if (remainingOf(timer, now) > 0.001) return true;
     }
+    for (const timer of localDurations.values()) {
+      if (remainingOf(timer, now) > 0.001) return true;
+    }
     return false;
   }
 
   function updateCountdownLoop() {
     const active = hasActiveCountdown(nowMs());
-    if (active && !countdownInterval) {
+    if (active && surfaceVisible && pageActive && !countdownInterval) {
       countdownInterval = window.setInterval(() => {
-        if (!latestState || !latestState.available) {
+        if (!surfaceVisible || !pageActive || !latestState || !latestState.available) {
           window.clearInterval(countdownInterval);
           countdownInterval = 0;
           return;
@@ -169,10 +190,24 @@ body{pointer-events:none;user-select:none}
           countdownInterval = 0;
         }
       }, 100);
-    } else if (!active && countdownInterval) {
+    } else if ((!active || !surfaceVisible || !pageActive) && countdownInterval) {
       window.clearInterval(countdownInterval);
       countdownInterval = 0;
     }
+  }
+
+  function applySurfaceVisibility(surfaces, forceRefresh) {
+    const surface = Array.isArray(surfaces) && surfaces.find(item => item && item.id === surfaceId);
+    const nextVisible = !surfaceId || !!(surface && surface.visible);
+    if (surfaceVisible === nextVisible && !forceRefresh) return;
+    const becameVisible = !surfaceVisible && nextVisible;
+    surfaceVisible = nextVisible;
+    if (surfaceVisible && latestState && latestState.available && (becameVisible || forceRefresh)) {
+      const now = nowMs();
+      updateSkillCells(latestState, now);
+      updateGcdBadge(now);
+    }
+    updateCountdownLoop();
   }
 
   function renderBar(fillId, textId, cur, max) {
@@ -217,15 +252,17 @@ body{pointer-events:none;user-select:none}
       cell.innerHTML =
         '<div class="key">' + (SLOT_KEYS[slot] || '') + '</div>' +
         (!empty && !s.passive ? '<div class="cost">' + fmt(s.cost) + '</div>' : '') +
-        '<div class="cdFill"></div><div class="cdText"></div>' +
+        '<div class="cdFill"></div><div class="durationFill"></div><div class="cdText"></div>' +
         '<div class="name"></div>';
       skillbar.appendChild(cell);
       skillCellRefs.set(slot, {
         cell,
         fill: cell.querySelector('.cdFill'),
+        durationFill: cell.querySelector('.durationFill'),
         text: cell.querySelector('.cdText'),
         name: cell.querySelector('.name'),
         fillValue: null,
+        durationFillValue: null,
         textValue: null,
         nameValue: null,
         opacityValue: null
@@ -244,6 +281,7 @@ body{pointer-events:none;user-select:none}
       const s = skillsBySlot[slot];
       if (!s) continue;
       const fill = refs.fill;
+      const durationFill = refs.durationFill;
       const text = refs.text;
       const name = refs.name;
       toggleClass(cell, 'selected', !!s.selected);
@@ -251,6 +289,7 @@ body{pointer-events:none;user-select:none}
       if (s.empty) {
         if (refs.nameValue !== '空') { name.textContent = '空'; refs.nameValue = '空'; }
         if (refs.fillValue !== 0) { fill.style.transform = 'scaleY(0)'; refs.fillValue = 0; }
+        if (refs.durationFillValue !== 0) { durationFill.style.transform = 'scaleY(0)'; refs.durationFillValue = 0; }
         if (refs.textValue !== '') { text.textContent = ''; refs.textValue = ''; }
         toggleClass(cell, 'gcd', false);
         continue;
@@ -261,6 +300,7 @@ body{pointer-events:none;user-select:none}
 
       if (s.passive) {
         if (refs.fillValue !== 0) { fill.style.transform = 'scaleY(0)'; refs.fillValue = 0; }
+        if (refs.durationFillValue !== 0) { durationFill.style.transform = 'scaleY(0)'; refs.durationFillValue = 0; }
         if (refs.textValue !== '') { text.textContent = ''; refs.textValue = ''; }
         toggleClass(cell, 'gcd', false);
         if (refs.opacityValue !== '1') { cell.style.opacity = '1'; refs.opacityValue = '1'; }
@@ -273,9 +313,20 @@ body{pointer-events:none;user-select:none}
       const gcdRatio = (gcd && s.mana) ? Math.min(1, gcdRemaining / gcdMax) : 0;
       const ratio = Math.max(cd > 0 ? cd / cdMax : 0, gcdRatio);
       const fillValue = Math.round(Math.min(1, ratio) * 100) / 100;
-      const textValue = cd > 0.05 ? (cd >= 10 ? String(Math.round(cd)) : cd.toFixed(1)) : '';
+      const durationTimer = localDurations.get(s.slot);
+      const duration = remainingOf(durationTimer, now);
+      const durationRatio = durationTimer ? duration / Math.max(0.01, durationTimer.max) : 0;
+      const durationFillValue = Math.round(Math.min(1, durationRatio) * 100) / 100;
+      const showingDuration = duration > 0.05;
+      const showingCooldown = !showingDuration && cd > 0.05;
+      const displayTime = showingDuration ? duration : cd;
+      const textValue = showingDuration || showingCooldown
+        ? (displayTime >= 10 ? String(Math.ceil(displayTime)) : displayTime.toFixed(1)) : '';
       if (refs.fillValue !== fillValue) { fill.style.transform = 'scaleY(' + fillValue + ')'; refs.fillValue = fillValue; }
+      if (refs.durationFillValue !== durationFillValue) { durationFill.style.transform = 'scaleY(' + durationFillValue + ')'; refs.durationFillValue = durationFillValue; }
       if (refs.textValue !== textValue) { text.textContent = textValue; refs.textValue = textValue; }
+      toggleClass(text, 'duration', showingDuration);
+      toggleClass(text, 'cooldown', showingCooldown);
       toggleClass(cell, 'gcd', cd <= 0.01 && gcd && s.mana);
 
       const pool = s.mana ? Number(state.mana) : Number(state.stamina);
@@ -334,6 +385,7 @@ body{pointer-events:none;user-select:none}
     latestState = state;
     if (!state || !state.available) {
       localCooldowns.clear();
+      localDurations.clear();
       localGcd = { remaining: 0, max: 0, stamp: nowMs() };
       updateCountdownLoop();
       hud.classList.add('hidden');
@@ -385,12 +437,27 @@ body{pointer-events:none;user-select:none}
         window.game.surface.ready({ component: 'BattleHud' }).catch(() => {});
     } catch (_) {}
   };
+  window.addEventListener('pagehide', () => {
+    pageActive = false;
+    updateCountdownLoop();
+  });
+  window.addEventListener('pageshow', () => {
+    pageActive = true;
+    try { applySurfaceVisibility(window.game.state.get('framework.surfaces'), true); } catch (_) { updateCountdownLoop(); }
+  });
+  if (window.game.state && typeof window.game.state.watch === 'function') {
+    window.game.state.watch('framework.surfaces', applySurfaceVisibility);
+  } else if (window.game.state && typeof window.game.state.subscribe === 'function') {
+    window.game.state.subscribe('framework.surfaces', applySurfaceVisibility);
+    try { applySurfaceVisibility(window.game.state.get('framework.surfaces')); } catch (_) {}
+  }
   if (typeof app.state.watch === 'function') {
     app.state.watch('battleHud', render);
     app.state.watch('battleHud.vitals', applyVitalsState);
     app.state.watch('battleHud.timers', applyTimersState);
     app.state.watch('battleHud.selection', applySelectionState);
-    window.game.ready().then(reportReady).catch(() => {});
+    window.game.ready().then(() => { reportReady(); requestCurrentState(); })
+      .catch(() => { requestCurrentState(); });
   } else {
     // 旧版 Framework 的兼容回退；新版由 watch 负责无竞态首屏水合。
     app.state.subscribe('battleHud', render);

@@ -11,7 +11,6 @@ using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using static New_ZZZF.ZhanYi;
 using static New_ZZZF.JueXing;
-using static New_ZZZF.TianQi;
 using static New_ZZZF.GuWu;
 using static New_ZZZF.FengBaoZhiLi;
 using static New_ZZZF.ZhanHao;
@@ -47,6 +46,7 @@ namespace New_ZZZF.Systems
             if (agent.IsHuman)
             {
                 this.UpdateHumanStats(agent, agentDrivenProperties, _dt);
+                AggressiveAi.AiDefenseThreatAdjustment.Apply(agent, agentDrivenProperties);
 
                 // 沿用模组中“按住空格加速跑”的已验证实现：base 每次重算后直接
                 // 设置本次最终速度倍率。仅处理徒步冲刺斩，不触碰任何坐骑属性。
@@ -98,16 +98,10 @@ namespace New_ZZZF.Systems
                     ZhanYiBuff buff = result.StateContainer.GetState("ZhanYiBuff") as ZhanYiBuff;
                     if (buff != null)
                     {
-                        //原来代码不写这边，需要手动清，写在这边就不要手动清理了，每次走完base的设置后，会自动给你重置成原版应有的数值
-                        //agent.AgentDrivenProperties.SwingSpeedMultiplier -= buff.enduranceRecord;
-                        //agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier -= buff.enduranceRecord;
-                        //agent.AgentDrivenProperties.MaxSpeedMultiplier -= buff.enduranceRecord;
-
                         SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
                         if (agentSkillComponent != null)
                         {
-                            agentSkillComponent.ChangeStamina(5);
-
+                            // 属性重算只读耐力；每秒回复由 ZhanYiBuff 的状态计时负责。
                             agent.AgentDrivenProperties.SwingSpeedMultiplier += agentSkillComponent._currentStamina / 100;
                             agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier += agentSkillComponent._currentStamina / 100;
                             agent.AgentDrivenProperties.MaxSpeedMultiplier += agentSkillComponent._currentStamina / 100;
@@ -122,8 +116,6 @@ namespace New_ZZZF.Systems
                         SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
                         if (agentSkillComponent != null)
                         {
-                            agentSkillComponent.ChangeStamina(-5);
-
                             agent.AgentDrivenProperties.SwingSpeedMultiplier += agentSkillComponent._currentStamina / 100;
                             agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier += agentSkillComponent._currentStamina / 100;
                             agent.AgentDrivenProperties.HandlingMultiplier += agentSkillComponent._currentStamina / 100;
@@ -139,15 +131,6 @@ namespace New_ZZZF.Systems
                         SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
 
                         agent.AgentDrivenProperties.WeaponInaccuracy /= 2;
-
-                    }
-                }
-                if (result.StateContainer.HasState("TianQiBuff"))
-                {
-                    TianQiBuff buff = result.StateContainer.GetState("TianQiBuff") as TianQiBuff;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
 
                     }
                 }

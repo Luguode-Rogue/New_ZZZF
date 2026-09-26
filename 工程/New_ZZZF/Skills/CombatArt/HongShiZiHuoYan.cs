@@ -62,7 +62,9 @@ namespace New_ZZZF.Skills
 
         public override bool CheckCondition(Agent caster)
         {
-            if (!base.CheckCondition(caster) || caster.IsPerformingAction())
+            // 当前攻防动作不作为 NPC 使用战技的限制。
+            // if (!base.CheckCondition(caster) || caster.IsPerformingAction())
+            if (!base.CheckCondition(caster))
                 return false;
             Agent target = caster.GetTargetAgent();
             if (target == null || !target.IsActive() || !target.IsHuman ||

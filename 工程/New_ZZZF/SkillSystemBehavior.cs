@@ -399,7 +399,7 @@ namespace New_ZZZF
                     if (currentPos.Distance(targetPos) < 0.5f)
                     {
                         DestroyProjectile(missileEntity);
-
+                        continue;
                     }
 
 
@@ -415,6 +415,7 @@ namespace New_ZZZF
                         {
                             Script.SysOut("撞击地面", data.CasterAgent);
                             DestroyProjectile(missileEntity);
+                            continue;
                         }
                     }
                     newPosition.z = 1;
@@ -425,6 +426,7 @@ namespace New_ZZZF
                         {
                             Script.SysOut("撞击地面", data.CasterAgent);
                             DestroyProjectile(missileEntity);
+                            continue;
                         }
                     }
                 }//ai
@@ -602,20 +604,24 @@ namespace New_ZZZF
                 var comp = affectedAgent.GetComponent<AgentSkillComponent>();
                 if (comp != null)
                 {
+                    comp.ReleaseShieldStrengthVisual();
                     _activeComponents.Remove(comp);
                 }
                 // OnAgentRemoved 阶段的 AgentVisuals 原生指针可能已回收，
                 // 只清理托管缓存，不再调用 SetContourColor。
                 Script.ForgetProjectileTarget(affectedAgent);
                 ActiveComponents.Remove(affectedAgent.Index);
+                WoW_AgentMissileSpeedData.Remove(affectedAgent.Index);
             }
         }
         public override void OnAfterMissionCreated()
         {
             base.OnAfterMissionCreated();
+            Mission.OnMissileRemovedEvent -= HandleMissileRemoved;
+            Mission.OnMissileRemovedEvent += HandleMissileRemoved;
             //WoW_Agents.Clear();
             WoW_MissileIndex.Clear();
-            //WoW_WeaponMissile.Clear();
+            WoW_WeaponMissile.Clear();
             //WoW_SmartMisslie.Clear();
             WoW_ProjectileDB.Clear();
             WoW_Ring.Clear();
@@ -628,10 +634,13 @@ namespace New_ZZZF
         }
         protected override void OnEndMission()
         {
+            Mission.OnMissileRemovedEvent -= HandleMissileRemoved;
+            foreach (AgentSkillComponent component in _activeComponents)
+                component.ReleaseShieldStrengthVisual();
             base.OnEndMission();
             //WoW_Agents.Clear();
             WoW_MissileIndex.Clear();
-            //WoW_WeaponMissile.Clear();
+            WoW_WeaponMissile.Clear();
             //WoW_SmartMisslie.Clear();
             WoW_ProjectileDB.Clear();
             WoW_Ring.Clear();
@@ -677,11 +686,6 @@ namespace New_ZZZF
                             victim.Health += Math.Max(blow.InflictedDamage, victimSkillComponent.MaxHP);
                         }
                     }
-                    if (victimSkillComponent.StateContainer.HasState("TianQiBuff"))
-                    {
-                        victim.Health = MathF.Clamp(victim.Health + blow.InflictedDamage, 0, victimSkillComponent.MaxHP);
-                    }
-
                 }
                 //击杀事件处理
                 if (attackerSkillComponent != null)
@@ -691,12 +695,15 @@ namespace New_ZZZF
                         attackerSkillComponent.ChangeStamina(5);
                         if (attackerSkillComponent.StateContainer.HasState("JueXingBuff"))
                         {
-                            attackerSkillComponent.StateContainer.UpdateStates(attacker, 0f);
                             attackerSkillComponent.ChangeStamina(5);
+                            attacker.Health = MathF.Clamp(
+                                attacker.Health + attackerSkillComponent.MaxHP * 0.05f,
+                                0f, attackerSkillComponent.MaxHP);
                         }
                         if (attackerSkillComponent.StateContainer.HasState("ZhanYiBuff"))
                         {
-                            attackerSkillComponent.StateContainer.UpdateStates(attacker, 0f);
+                            (attackerSkillComponent.StateContainer.GetState("ZhanYiBuff") as ZhanYi.ZhanYiBuff)
+                                ?.ExtendAfterKill();
                             attacker.Health += (attackerSkillComponent.MaxHP - attacker.Health) * 0.5f;
                         }
                         if (attackerSkillComponent.StateContainer.HasState("KongNueCiFuBuff"))
@@ -738,13 +745,18 @@ namespace New_ZZZF
         public override void OnMissileHit(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
         {
             base.OnMissileHit(attacker, victim, isCanceled, collisionData);
-            if (WoW_MissileIndex.Contains(collisionData.AffectorWeaponSlotOrMissileIndex))
-            {
-                WoW_MissileIndex.Remove(collisionData.AffectorWeaponSlotOrMissileIndex);
-                WoW_WeaponMissile.Remove(collisionData.AffectorWeaponSlotOrMissileIndex);
+        }
 
-            }
+        public override void OnMissileRemoved(int missileIndex)
+        {
+            base.OnMissileRemoved(missileIndex);
+            HandleMissileRemoved(missileIndex);
+        }
 
+        private static void HandleMissileRemoved(int missileIndex)
+        {
+            WoW_MissileIndex.Remove(missileIndex);
+            WoW_WeaponMissile.Remove(missileIndex);
         }
         /// <summary>
         /// 完成了agent的伤害扣血流程后，进入这里
@@ -805,48 +817,32 @@ namespace New_ZZZF
             base.OnAgentShootMissile(shooterAgent, weaponIndex, position, velocity, orientation, hasRigidBody, forcedMissileIndex);
             MissionWeapon missionWeapon = shooterAgent.Equipment[weaponIndex];
             float speed = velocity.Length;
-            AgentMissileSpeedData agentMissileSpeedData = new AgentMissileSpeedData(missionWeapon, speed, shooterAgent);
-            if (!WoW_AgentMissileSpeedData.ContainsKey(shooterAgent.Index))
+            if (!WoW_AgentMissileSpeedData.TryGetValue(shooterAgent.Index, out var list))
             {
-                List<AgentMissileSpeedData> list = new List<AgentMissileSpeedData>();
-                list.Add(agentMissileSpeedData);
+                list = new List<AgentMissileSpeedData>();
                 WoW_AgentMissileSpeedData.Add(shooterAgent.Index, list);
             }
-            else
+
+            for (int i = 0; i < list.Count; i++)
             {
-                WoW_AgentMissileSpeedData.TryGetValue(shooterAgent.Index, out var list);
-                bool flag = false;
-                foreach (AgentMissileSpeedData item in list)
+                AgentMissileSpeedData item = list[i];
+                if (item.Weapon.Item.Id == missionWeapon.Item.Id)
                 {
-                    if (item.Weapon.Item.Id == missionWeapon.Item.Id)
-                    {
-                        continue;
-                    }
-
-                    flag = true;
-                    break;
-
-
+                    item.Weapon = missionWeapon;
+                    item.MissileSpeed = speed;
+                    return;
                 }
-                if (flag)
-                {
-                    list.Add(agentMissileSpeedData);
-                }
-
             }
-
-
-
-
+            list.Add(new AgentMissileSpeedData(missionWeapon, speed, shooterAgent));
         }
         public static void DestroyProjectile(GameEntity proj)
         {
-            if (WoW_ProjectileDB.TryGetValue(proj, out ProjectileData data))
+            if (proj == null || !WoW_ProjectileDB.TryGetValue(proj, out ProjectileData data))
+                return;
+
+            if (data.Name != null && data.Name == "LingHunDanMu")
             {
-                if (data.Name != null && data.Name == "LingHunDanMu")
-                {
-                    LingHunDanMu.LingHunDanMuDamage(proj);
-                }
+                LingHunDanMu.LingHunDanMuDamage(proj);
             }
             proj.Remove(1);
             WoW_CustomGameEntity.Remove(proj);

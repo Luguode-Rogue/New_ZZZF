@@ -22,6 +22,7 @@ namespace New_ZZZF.TacticalMap.Terrain
     /// </summary>
     public sealed class SinglePhotoProofProbe
     {
+        private const string CaptureSuspensionOwnerId = "New_ZZZF.TacticalMap.SinglePhotoProofProbe";
         public static readonly SinglePhotoProofProbe Instance = new SinglePhotoProofProbe();
 
         private const int Revision = 40;
@@ -154,8 +155,8 @@ namespace New_ZZZF.TacticalMap.Terrain
                     {
                         _previousUiHidden = MBDebug.DisableAllUI;
                         MBDebug.DisableAllUI = true;
-                        TacticalMapHtmlUi.Instance.SetCaptureSuspended(true);
-                        BattleHudHtmlUi.Instance.SetCaptureSuspended(true);
+                        TacticalMapHtmlUi.Instance.SetCaptureSuspended(true, CaptureSuspensionOwnerId);
+                        BattleHudHtmlUi.Instance.SetCaptureSuspended(true, CaptureSuspensionOwnerId);
                         _presentationChanged = true;
                         return false;
                     }
@@ -358,8 +359,8 @@ namespace New_ZZZF.TacticalMap.Terrain
             }
             if (_presentationChanged) MBDebug.DisableAllUI = _previousUiHidden;
             _presentationChanged = false;
-            try { TacticalMapHtmlUi.Instance.SetCaptureSuspended(false); } catch { }
-            try { BattleHudHtmlUi.Instance.SetCaptureSuspended(false); } catch { }
+            try { TacticalMapHtmlUi.Instance.SetCaptureSuspended(false, CaptureSuspensionOwnerId); } catch { }
+            try { BattleHudHtmlUi.Instance.SetCaptureSuspended(false, CaptureSuspensionOwnerId); } catch { }
         }
 
         private bool FailAndRestore(string reason)

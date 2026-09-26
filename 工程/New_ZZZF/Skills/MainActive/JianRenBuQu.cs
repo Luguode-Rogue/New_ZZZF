@@ -26,6 +26,10 @@ namespace New_ZZZF
             Description = new TaleWorlds.Localization.TextObject(
                 "{=ZZZF0061}群体状态，使自己与友军受到的普攻伤害、物理伤害、爆炸伤害降低为1。消耗耐力：60。持续时间：45秒。冷却时间：30秒。");
         }
+        public override bool IsHudDurationState(string stateId)
+        {
+            return string.Equals(stateId, "JianRenBuQuuBuff", StringComparison.Ordinal);
+        }
         public override bool Activate(Agent agent)
         {
             List<Agent> values= Script.GetTargetedInRange(agent, agent.GetEyeGlobalPosition(),50, true);

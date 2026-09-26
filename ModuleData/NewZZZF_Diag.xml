@@ -2,6 +2,8 @@
 <!-- New_ZZZF 闪退排查 —— 子系统开关（false=禁用该子系统，重启游戏生效）-->
 <!-- 排查矩阵：① 全 false 测基线；② 仅开 HarmonyPatchAll；③ 逐组开 Behavior-->
 <NewZZZFDiag>
+  <!-- 输出到文件的日志（false=禁用文件日志）-->
+  <FileLogging>true</FileLogging>
   <!-- TacticalMap 战术地图（初始化/挂载/N键/Tick）-->
   <TacticalMap>false</TacticalMap>
   <!-- 技能 HTML 界面（CustomSkillHtmlUi 初始化/Tick/M键）-->

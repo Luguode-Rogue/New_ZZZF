@@ -68,17 +68,17 @@ namespace New_ZZZF.GUI
             });
             RegisterCommands();
             _registered = true;
-            HtmlUiLogger.Info("CustomSkill HtmlUI v4 registered with authoritative page lifecycle callbacks. Root=" + uiRoot);
+            if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Info("CustomSkill HtmlUI v4 registered with authoritative page lifecycle callbacks. Root=" + uiRoot);
         }
 
         private void OnPageOpened()
         {
-            HtmlUiLogger.Info("CustomSkill page Opened callback.");
+            if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Info("CustomSkill page Opened callback.");
         }
 
         private void OnPageClosed()
         {
-            HtmlUiLogger.Info("CustomSkill page Closed callback. Releasing consumer state.");
+            if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Info("CustomSkill page Closed callback. Releasing consumer state.");
             ReleaseLocalState();
         }
 
@@ -153,7 +153,7 @@ namespace New_ZZZF.GUI
             {
                 string message = payload?["message"]?.Value<string>() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(message))
-                    HtmlUiLogger.Info("CustomSkill JS: " + message);
+                    if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Info("CustomSkill JS: " + message);
             });
             _scope.RegisterCommand("close", _ => Execute(Close));
             _scope.RegisterRequest("getState", _ => Task.FromResult<object>(BuildState()));
@@ -163,7 +163,7 @@ namespace New_ZZZF.GUI
         {
             if (!_visible && action != Close) return;
             try { action?.Invoke(); }
-            catch (Exception ex) { HtmlUiLogger.Error("CustomSkillHtmlUi command failed.", ex); }
+            catch (Exception ex) { if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkillHtmlUi command failed.", ex); }
             PublishState(true);
         }
 
@@ -171,7 +171,7 @@ namespace New_ZZZF.GUI
         {
             if (!_visible) return;
             try { action?.Invoke(); }
-            catch (Exception ex) { HtmlUiLogger.Error("CustomSkillHtmlUi lightweight command failed.", ex); }
+            catch (Exception ex) { if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkillHtmlUi lightweight command failed.", ex); }
             PublishState(false);
         }
 
@@ -205,12 +205,12 @@ namespace New_ZZZF.GUI
                 }
 
                 PublishState(true);
-                HtmlUiLogger.Info("CustomSkill HtmlUI opened: full-capture multi-level UI.");
+                if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Info("CustomSkill HtmlUI opened: full-capture multi-level UI.");
                 return true;
             }
             catch (Exception ex)
             {
-                HtmlUiLogger.Error("CustomSkill HtmlUI open failed.", ex);
+                if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkill HtmlUI open failed.", ex);
                 try { HtmlUiService.Pages.Close(_pageId); } catch { }
                 ReleaseLocalState();
                 return false;
@@ -269,13 +269,14 @@ namespace New_ZZZF.GUI
             }
             catch (Exception ex)
             {
-                HtmlUiLogger.Error("CustomSkill HtmlUi page close failed.", ex);
+                if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkill HtmlUi page close failed.", ex);
                 ReleaseLocalState();
             }
         }
 
         private void ReleaseLocalState()
         {
+            bool hadSession = _visible || _vm != null;
             _forgeVm = null;
             _view = "main";
             _catalogSearch = string.Empty;
@@ -283,7 +284,7 @@ namespace New_ZZZF.GUI
             if (_activeStateDisabled && Game.Current != null)
             {
                 try { Game.Current.GameStateManager.UnregisterActiveStateDisableRequest(this); }
-                catch (Exception ex) { HtmlUiLogger.Error("CustomSkill HtmlUi active-state release failed.", ex); }
+                catch (Exception ex) { if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkill HtmlUi active-state release failed.", ex); }
                 _activeStateDisabled = false;
             }
 
@@ -291,9 +292,14 @@ namespace New_ZZZF.GUI
             if (_vm != null)
             {
                 try { _vm.OnFinalize(); }
-                catch (Exception ex) { HtmlUiLogger.Error("CustomSkill HtmlUi VM finalize failed.", ex); }
+                catch (Exception ex) { if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkill HtmlUi VM finalize failed.", ex); }
             }
             _vm = null;
+            if (hadSession && _scope != null)
+            {
+                try { _scope.RemoveState(StateKey); }
+                catch (Exception ex) { if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkill HtmlUi state release failed.", ex); }
+            }
             _lastSignature = null;
             _publishAccum = 0f;
             InvalidateStateCaches();
@@ -323,7 +329,7 @@ namespace New_ZZZF.GUI
                 _lastSignature = signature;
                 _scope.SetState(StateKey, state);
             }
-            catch (Exception ex) { HtmlUiLogger.Error("CustomSkillHtmlUi state publish failed.", ex); }
+            catch (Exception ex) { if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkillHtmlUi state publish failed.", ex); }
         }
 
         private string BuildCheapModelStamp()
@@ -535,7 +541,7 @@ namespace New_ZZZF.GUI
         {
             Close();
             try { _scope?.Dispose(); }
-            catch (Exception ex) { HtmlUiLogger.Error("CustomSkill HtmlUi scope dispose failed.", ex); }
+            catch (Exception ex) { if (New_ZZZF.NewZZZFDiag.FileLogging) HtmlUiLogger.Error("CustomSkill HtmlUi scope dispose failed.", ex); }
             _scope = null;
             _registered = false;
         }
