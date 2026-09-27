@@ -100,7 +100,9 @@ namespace New_ZZZF
 
         public class TianQiBuff : AgentBuff
         {
-            private GameEntity _shield;
+            private const float LuminousShellScale = 1.02f;
+            private GameEntity _litShield;
+            private GameEntity _luminousShield;
 
             public TianQiBuff(float duration, Agent source)
             {
@@ -111,28 +113,45 @@ namespace New_ZZZF
 
             public override void OnApply(Agent agent)
             {
-                _shield = Script.CreateEggShellVisual(agent,
-                    new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.24f), selfLuminous: true);
+                // 受光层在白天呈现金色；外侧自发光层补足夜晚和阴影中的可见度。
+                _litShield = Script.CreateEggShellVisual(agent,
+                    new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.24f));
+                _luminousShield = Script.CreateEggShellVisual(agent,
+                    new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.34f),
+                    selfLuminous: true, visualScale: LuminousShellScale);
             }
 
             public override void OnUpdate(Agent agent, float dt)
             {
                 // 场景实体暂不可用时，下一帧再尝试创建。
-                if (_shield == null)
-                    _shield = Script.CreateEggShellVisual(agent,
-                        new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.24f), selfLuminous: true);
+                if (_litShield == null)
+                    _litShield = Script.CreateEggShellVisual(agent,
+                        new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.34f));
                 else
-                    Script.UpdateEggShellVisual(_shield, agent);
+                    Script.UpdateEggShellVisual(_litShield, agent);
+
+                if (_luminousShield == null)
+                    _luminousShield = Script.CreateEggShellVisual(agent,
+                        new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.24f),
+                        selfLuminous: true, visualScale: LuminousShellScale);
+                else
+                    Script.UpdateEggShellVisual(_luminousShield, agent, LuminousShellScale);
             }
 
             public override void OnRemove(Agent agent)
             {
-                if (_shield != null)
+                if (_litShield != null)
                 {
-                    AgentAttachedVisualVisibility.Unregister(_shield);
-                    _shield.Remove(0);
+                    AgentAttachedVisualVisibility.Unregister(_litShield);
+                    _litShield.Remove(0);
                 }
-                _shield = null;
+                if (_luminousShield != null)
+                {
+                    AgentAttachedVisualVisibility.Unregister(_luminousShield);
+                    _luminousShield.Remove(0);
+                }
+                _litShield = null;
+                _luminousShield = null;
             }
         }
     }

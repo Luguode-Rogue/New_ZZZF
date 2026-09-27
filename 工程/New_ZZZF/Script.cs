@@ -41,7 +41,8 @@ namespace New_ZZZF
         /// 创建包围单位的半透明蛋壳。默认白色、34% 不透明度；Color.Alpha 可调整透明度。
         /// 调用者持有返回的实体，在效果结束时 Remove(0)。
         /// </summary>
-        public static GameEntity CreateEggShellVisual(Agent agent, Color? color = null, bool selfLuminous = false)
+        public static GameEntity CreateEggShellVisual(Agent agent, Color? color = null,
+            bool selfLuminous = false, float visualScale = 1f)
         {
             if (agent == null || !agent.IsActive() || agent.Mission?.Scene == null)
                 return null;
@@ -94,7 +95,7 @@ namespace New_ZZZF
                 new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger());
             shell.SetVisibilityExcludeParents(true);
             shell.SetReadyToRender(true);
-            UpdateEggShellVisual(shell, agent);
+            UpdateEggShellVisual(shell, agent, visualScale);
             AgentAttachedVisualVisibility.Register(agent, shell);
             return shell;
         }
@@ -155,11 +156,13 @@ namespace New_ZZZF
         }
 
         /// <summary>更新蛋壳位置；持续效果每帧调用即可跟随步行或骑乘单位。</summary>
-        public static void UpdateEggShellVisual(GameEntity shell, Agent agent)
+        public static void UpdateEggShellVisual(GameEntity shell, Agent agent, float visualScale = 1f)
         {
             if (shell == null || agent == null || !agent.IsActive())
                 return;
             MatrixFrame frame = MatrixFrame.Identity;
+            if (visualScale != 1f)
+                frame.rotation.ApplyScaleLocal(visualScale);
             frame.origin = agent.GetEyeGlobalPosition() - new Vec3(0f, 0f, 0.72f);
             shell.SetGlobalFrame(frame);
         }
