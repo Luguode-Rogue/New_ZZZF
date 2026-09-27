@@ -146,6 +146,7 @@ namespace New_ZZZF
         public override void OnMissionTick(float dt)
         {
             base.OnMissionTick(dt);
+            AgentAttachedVisualVisibility.Tick(Mission);
             //base.Mission.GetMissionBehavior<MissionHideoutCinematicView>();
             if ((Mission.Current.Mode == MissionMode.Deployment || Mission.Current.Mode == MissionMode.Conversation || Mission.Current.Mode == MissionMode.Deployment) && Mission.Current.Mode != MissionMode.Battle) { return; }
             //代码测试区
@@ -612,6 +613,7 @@ namespace New_ZZZF
                 // OnAgentRemoved 阶段的 AgentVisuals 原生指针可能已回收，
                 // 只清理托管缓存，不再调用 SetContourColor。
                 Script.ForgetProjectileTarget(affectedAgent);
+                AgentAttachedVisualVisibility.ForgetOwner(affectedAgent);
                 ActiveComponents.Remove(affectedAgent.Index);
                 WoW_AgentMissileSpeedData.Remove(affectedAgent.Index);
             }
@@ -628,6 +630,8 @@ namespace New_ZZZF
             WoW_ProjectileDB.Clear();
             WoW_Ring.Clear();
             Script.ClearProjectileTargetVisualCache();
+            AgentAttachedVisualVisibility.Clear();
+            AgentExtensions.ClearParticleEffectCache();
             //WoW_gameEntityOwnedByAgent.Clear();
             WoW_CustomGameEntity.Clear();
             WoW_AgentMissileSpeedData.Clear();
@@ -647,6 +651,8 @@ namespace New_ZZZF
             WoW_ProjectileDB.Clear();
             WoW_Ring.Clear();
             Script.ClearProjectileTargetVisualCache();
+            AgentAttachedVisualVisibility.Clear();
+            AgentExtensions.ClearParticleEffectCache();
             //WoW_gameEntityOwnedByAgent.Clear();
             WoW_CustomGameEntity.Clear();
             WoW_AgentMissileSpeedData.Clear();

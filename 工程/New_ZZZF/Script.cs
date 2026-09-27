@@ -33,6 +33,7 @@ namespace New_ZZZF
         private const float EggShellRadius = 0.82f;
         private const float EggShellHalfHeight = 1.04f;
         private static readonly Dictionary<uint, Mesh> EggShellMeshes = new Dictionary<uint, Mesh>();
+        private static readonly Dictionary<uint, Mesh> LuminousEggShellMeshes = new Dictionary<uint, Mesh>();
         private const int BellShieldLayers = 18;
         private static readonly Dictionary<uint, Mesh> BellShieldMeshes = new Dictionary<uint, Mesh>();
 
@@ -40,19 +41,23 @@ namespace New_ZZZF
         /// 创建包围单位的半透明蛋壳。默认白色、34% 不透明度；Color.Alpha 可调整透明度。
         /// 调用者持有返回的实体，在效果结束时 Remove(0)。
         /// </summary>
-        public static GameEntity CreateEggShellVisual(Agent agent, Color? color = null)
+        public static GameEntity CreateEggShellVisual(Agent agent, Color? color = null, bool selfLuminous = false)
         {
             if (agent == null || !agent.IsActive() || agent.Mission?.Scene == null)
                 return null;
 
             Color tint = color ?? new Color(1f, 1f, 1f, 0.34f);
             uint colorKey = tint.ToUnsignedInteger();
-            if (!EggShellMeshes.TryGetValue(colorKey, out Mesh mesh) || mesh == null || !mesh.IsValid)
+            Dictionary<uint, Mesh> meshes = selfLuminous ? LuminousEggShellMeshes : EggShellMeshes;
+            if (!meshes.TryGetValue(colorKey, out Mesh mesh) || mesh == null || !mesh.IsValid)
             {
-                Material material = Material.GetFromResource("vertex_color_lighting")?.CreateCopy();
+                // 鼓舞验证过的材质在阴影中仍可见；恒定 UV 取中心颜色，避免粒子纹理把蛋壳切成碎片。
+                Material material = Material.GetFromResource(
+                    selfLuminous ? "prt_shd_sparks" : "vertex_color_lighting")?.CreateCopy();
                 if (material == null || !material.IsValid)
                     return null;
-                material.SetAlphaBlendMode(Material.MBAlphaBlendMode.Modulate);
+                if (!selfLuminous)
+                    material.SetAlphaBlendMode(Material.MBAlphaBlendMode.Modulate);
 
                 MeshBuilder builder = new MeshBuilder();
                 for (int lat = 0; lat < EggShellLayers; lat++)
@@ -64,7 +69,8 @@ namespace New_ZZZF
                         float left = (float)(Math.PI * 2.0 * side / EggShellSides);
                         float right = (float)(Math.PI * 2.0 * (side + 1) / EggShellSides);
                         AddEggShellQuad(builder, EggShellPoint(top, left), EggShellPoint(top, right),
-                            EggShellPoint(bottom, right), EggShellPoint(bottom, left), colorKey);
+                            EggShellPoint(bottom, right), EggShellPoint(bottom, left), colorKey,
+                            selfLuminous);
                     }
                 }
 
@@ -72,20 +78,24 @@ namespace New_ZZZF
                 if (mesh == null || !mesh.IsValid)
                     return null;
                 mesh.SetMaterial(material);
-                mesh.Color = new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger();
+                // 自发光蛋壳只在顶点染色一次，避免金色在暗处被重复相乘而发暗。
+                mesh.Color = selfLuminous ? new Color(1f, 1f, 1f, 1f).ToUnsignedInteger() :
+                    new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger();
                 mesh.CullingMode = MBMeshCullingMode.None;
                 mesh.UpdateBoundingBox();
-                EggShellMeshes[colorKey] = mesh;
+                meshes[colorKey] = mesh;
             }
 
             GameEntity shell = GameEntity.CreateEmptyDynamic(agent.Mission.Scene, false);
             if (shell == null)
                 return null;
             shell.AddMesh(mesh);
-            shell.SetFactorColor(new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger());
+            shell.SetFactorColor(selfLuminous ? new Color(1f, 1f, 1f, 1f).ToUnsignedInteger() :
+                new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger());
             shell.SetVisibilityExcludeParents(true);
             shell.SetReadyToRender(true);
             UpdateEggShellVisual(shell, agent);
+            AgentAttachedVisualVisibility.Register(agent, shell);
             return shell;
         }
 
@@ -140,6 +150,7 @@ namespace New_ZZZF
             bell.SetVisibilityExcludeParents(true);
             bell.SetReadyToRender(true);
             UpdateEggShellVisual(bell, agent);
+            AgentAttachedVisualVisibility.Register(agent, bell);
             return bell;
         }
 
@@ -191,15 +202,16 @@ namespace New_ZZZF
         }
 
         private static void AddEggShellQuad(MeshBuilder builder, Vec3 a, Vec3 b, Vec3 c,
-            Vec3 d, uint color)
+            Vec3 d, uint color, bool constantUv = false)
         {
             Vec3 normal = (a + b + c + d) * 0.25f;
             normal = new Vec3(normal.X, normal.Y, normal.Z / EggShellHalfHeight);
             normal.Normalize();
-            int first = builder.AddFaceCorner(a, normal, new Vec2(0f, 0f), color);
-            int second = builder.AddFaceCorner(b, normal, new Vec2(1f, 0f), color);
-            int third = builder.AddFaceCorner(c, normal, new Vec2(1f, 1f), color);
-            int fourth = builder.AddFaceCorner(d, normal, new Vec2(0f, 1f), color);
+            Vec2 centerUv = new Vec2(0.5f, 0.5f);
+            int first = builder.AddFaceCorner(a, normal, constantUv ? centerUv : new Vec2(0f, 0f), color);
+            int second = builder.AddFaceCorner(b, normal, constantUv ? centerUv : new Vec2(1f, 0f), color);
+            int third = builder.AddFaceCorner(c, normal, constantUv ? centerUv : new Vec2(1f, 1f), color);
+            int fourth = builder.AddFaceCorner(d, normal, constantUv ? centerUv : new Vec2(0f, 1f), color);
             builder.AddFace(first, second, third);
             builder.AddFace(first, third, fourth);
         }

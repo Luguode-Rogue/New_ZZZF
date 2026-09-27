@@ -54,6 +54,13 @@ namespace New_ZZZF
     {
 
         private static readonly Dictionary<string, GameEntity> _activeParticles = new Dictionary<string, GameEntity>();
+
+        internal static void ClearParticleEffectCache()
+        {
+            // 场景卸载时只丢弃引用，不访问已经失效的原生实体。
+            _activeParticles.Clear();
+        }
+
         public static bool IsPerformingAction(this Agent agent)
         {
             // 在此实现您的判断逻辑
@@ -65,6 +72,8 @@ namespace New_ZZZF
             if (agent == null || !agent.IsActive()) return;
             if (agent.AgentVisuals == null || agent.Mission == null || agent.Mission.Scene == null) return;
             if (string.IsNullOrEmpty(effectName)) return;
+            string key = agent.Index + effectName;
+            if (_activeParticles.ContainsKey(key)) return;
 
             // 加载预制件
             MatrixFrame attachFrame = agent.AgentVisuals.GetBoneEntitialFrame(0, true);
@@ -76,12 +85,8 @@ namespace New_ZZZF
             // 示例路径（根据实际mod路径调整）
             particleEntity.AddParticleSystemComponent("psys_burning_projectile_default_coll"); // 使用游戏内置火焰特效
 
-            if (_activeParticles.TryGetValue(agent.Index + effectName, out var gameEntity))
-            { }
-            else
-            {
-                _activeParticles.Add(agent.Index + effectName, particleEntity);
-            }
+            _activeParticles.Add(key, particleEntity);
+            AgentAttachedVisualVisibility.Register(agent, particleEntity);
         }
 
         public static void Damage(this Agent agent, float damageAmount)
@@ -96,7 +101,9 @@ namespace New_ZZZF
             string key = agent.Index + effectName;
             if (_activeParticles.TryGetValue(key, out GameEntity entity))
             {
+                AgentAttachedVisualVisibility.Unregister(entity);
                 entity.RemoveAllParticleSystems();
+                entity.Remove(0);
                 _activeParticles.Remove(key);
             }
         }

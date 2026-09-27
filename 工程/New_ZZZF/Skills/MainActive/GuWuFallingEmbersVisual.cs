@@ -74,6 +74,7 @@ namespace New_ZZZF
                     entity.SetFactorColor(new Color(1f, 1f, 1f, 1f).ToUnsignedInteger());
                     entity.SetVisibilityExcludeParents(true);
                     entity.SetReadyToRender(true);
+                    AgentAttachedVisualVisibility.Register(agent, entity);
                 }
 
                 GuWuFallingEmbersVisual visual = new GuWuFallingEmbersVisual(clouds, lingering);
@@ -84,7 +85,14 @@ namespace New_ZZZF
             {
                 foreach (Cloud cloud in clouds)
                 {
-                    try { cloud?.Entity?.Remove(0); }
+                    try
+                    {
+                        if (cloud?.Entity != null)
+                        {
+                            AgentAttachedVisualVisibility.Unregister(cloud.Entity);
+                            cloud.Entity.Remove(0);
+                        }
+                    }
                     catch (Exception) { /* 继续清理其余实体。 */ }
                 }
                 return null;
@@ -138,7 +146,14 @@ namespace New_ZZZF
             _removed = true;
             foreach (Cloud cloud in _clouds)
             {
-                try { cloud?.Entity?.Remove(0); }
+                try
+                {
+                    if (cloud?.Entity != null)
+                    {
+                        AgentAttachedVisualVisibility.Unregister(cloud.Entity);
+                        cloud.Entity.Remove(0);
+                    }
+                }
                 catch (Exception) { /* 单个实体失效不阻碍清理其余粒子。 */ }
             }
         }

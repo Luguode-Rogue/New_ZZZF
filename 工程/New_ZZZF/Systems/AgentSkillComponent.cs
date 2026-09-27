@@ -151,7 +151,10 @@ namespace New_ZZZF
         internal void ReleaseShieldStrengthVisual()
         {
             if (_shieldStrengthVisual != null)
+            {
+                AgentAttachedVisualVisibility.Unregister(_shieldStrengthVisual);
                 _shieldStrengthVisual.Remove(0);
+            }
             _shieldStrengthVisual = null;
         }
         public int _lifeResurgenceCount

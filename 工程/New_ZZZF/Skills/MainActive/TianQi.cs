@@ -112,7 +112,7 @@ namespace New_ZZZF
             public override void OnApply(Agent agent)
             {
                 _shield = Script.CreateEggShellVisual(agent,
-                    new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.34f));
+                    new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.24f), selfLuminous: true);
             }
 
             public override void OnUpdate(Agent agent, float dt)
@@ -120,7 +120,7 @@ namespace New_ZZZF
                 // 场景实体暂不可用时，下一帧再尝试创建。
                 if (_shield == null)
                     _shield = Script.CreateEggShellVisual(agent,
-                        new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.34f));
+                        new TaleWorlds.Library.Color(1f, 0.79f, 0.2f, 0.24f), selfLuminous: true);
                 else
                     Script.UpdateEggShellVisual(_shield, agent);
             }
@@ -128,7 +128,10 @@ namespace New_ZZZF
             public override void OnRemove(Agent agent)
             {
                 if (_shield != null)
+                {
+                    AgentAttachedVisualVisibility.Unregister(_shield);
                     _shield.Remove(0);
+                }
                 _shield = null;
             }
         }
