@@ -193,7 +193,7 @@
     </Spells>
   </Troop>
   <Troop id="CharacterObject_3285">
-    <MainActive>JianQi</MainActive>
+    <MainActive>ChaoFeng</MainActive>
     <SubActive>ChongCiZhan</SubActive>
     <Passive>NullSkill</Passive>
     <CombatArt>NullSkill</CombatArt>

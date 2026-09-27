@@ -36,6 +36,7 @@ namespace AggressiveAi
             public float NoAttackAfterParry;
             public bool Suppressed;
             public bool GroupMode;
+            public bool Taunted;
             public readonly MBList<Agent> NearbyEnemies = new MBList<Agent>();
         }
 
@@ -93,13 +94,17 @@ namespace AggressiveAi
             Baseline baseline, bool force)
         {
             if (properties == null) return false;
-            bool groupMode = IsDominatingWeakGroup(agent, properties, baseline.NearbyEnemies);
-            bool suppress = groupMode || HasArmorAdvantage(agent, properties);
-            if (!force && suppress == baseline.Suppressed && groupMode == baseline.GroupMode)
+            bool taunted = agent.GetComponent<New_ZZZF.AgentSkillComponent>()?.StateContainer
+                .HasState("ChaoFengBuffApplyToEnemy") == true;
+            bool groupMode = !taunted && IsDominatingWeakGroup(agent, properties, baseline.NearbyEnemies);
+            bool suppress = taunted || groupMode || HasArmorAdvantage(agent, properties);
+            if (!force && suppress == baseline.Suppressed && groupMode == baseline.GroupMode &&
+                taunted == baseline.Taunted)
                 return false;
-            bool enteringGroup = groupMode && !baseline.GroupMode;
+            bool enteringAggression = (groupMode || taunted) && !(baseline.GroupMode || baseline.Taunted);
             baseline.Suppressed = suppress;
             baseline.GroupMode = groupMode;
+            baseline.Taunted = taunted;
 
             // 护甲占优时压低防御概率；独自面对弱敌群时再从输入层彻底禁止格挡。
             float defendFactor = suppress ? 0f : 1f;
@@ -115,12 +120,13 @@ namespace AggressiveAi
             properties.AiDecideOnAttackContinueAction = suppress ? 1f : baseline.ContinueAttack;
             properties.AiDecideOnAttackingContinue = suppress ? 1f : baseline.ContinueAttacking;
             // 只在单兵碾压弱敌群时加快原生 AI 的决策频率，避免普遍抬高战场开销。
-            properties.AiCheckDecideSimpleBehaviorInterval = groupMode ? 0.1f : baseline.DecideInterval;
-            properties.AiCheckDoSimpleBehaviorInterval = groupMode ? 0.1f : baseline.DoInterval;
-            properties.AIHoldingReadyMaxDuration = groupMode ? 0f : baseline.HoldingReady;
-            properties.AISetNoAttackTimerAfterBeingHitAbility = groupMode ? 0f : baseline.NoAttackAfterHit;
-            properties.AISetNoAttackTimerAfterBeingParriedAbility = groupMode ? 0f : baseline.NoAttackAfterParry;
-            if (enteringGroup)
+            bool relentless = groupMode || taunted;
+            properties.AiCheckDecideSimpleBehaviorInterval = relentless ? 0.1f : baseline.DecideInterval;
+            properties.AiCheckDoSimpleBehaviorInterval = relentless ? 0.1f : baseline.DoInterval;
+            properties.AIHoldingReadyMaxDuration = relentless ? 0f : baseline.HoldingReady;
+            properties.AISetNoAttackTimerAfterBeingHitAbility = relentless ? 0f : baseline.NoAttackAfterHit;
+            properties.AISetNoAttackTimerAfterBeingParriedAbility = relentless ? 0f : baseline.NoAttackAfterParry;
+            if (enteringAggression)
             {
                 // 回调由多个技能共用，不能在离开此状态时关掉；非群战状态下回调直接返回。
                 agent.SetHasOnAiInputSetCallback(true);
@@ -135,10 +141,32 @@ namespace AggressiveAi
 
         public static void SuppressDefenseInput(Agent agent, ref Agent.MovementControlFlag movementFlags)
         {
-            if (agent != null && Baselines.TryGetValue(agent, out Baseline baseline) &&
-                baseline.GroupMode)
-                movementFlags &= ~(Agent.MovementControlFlag.DefendMask |
-                                   Agent.MovementControlFlag.DefendBlock);
+            if (agent == null || !Baselines.TryGetValue(agent, out Baseline baseline) ||
+                !(baseline.GroupMode || baseline.Taunted))
+                return;
+
+            movementFlags &= ~(Agent.MovementControlFlag.DefendMask |
+                               Agent.MovementControlFlag.DefendBlock);
+            if (!baseline.Taunted ||
+                New_ZZZF.RushMovementMissionLogic.Current?.IsRushing(agent) == true ||
+                New_ZZZF.JiFengLianZhanMissionLogic.Current?.IsActive(agent) == true ||
+                (movementFlags & Agent.MovementControlFlag.AttackMask) !=
+                    Agent.MovementControlFlag.None)
+                return;
+
+            // 近战空档持续推动原生攻击输入；已有攻击动作、远程装填和技能攻击不被打断。
+            Agent target = agent.GetTargetAgent();
+            WeaponComponentData weapon = agent.WieldedWeapon.CurrentUsageItem;
+            if (target == null || !target.IsActive() || !agent.IsEnemyOf(target) ||
+                weapon == null || !weapon.IsMeleeWeapon ||
+                (target.Position.AsVec2 - agent.Position.AsVec2).LengthSquared > 9f)
+                return;
+            Agent.ActionCodeType action = agent.GetCurrentActionType(1);
+            if (action == Agent.ActionCodeType.AttackMeleeAllBegin ||
+                action == Agent.ActionCodeType.ReadyMelee ||
+                action == Agent.ActionCodeType.ReleaseMelee)
+                return;
+            movementFlags |= Agent.MovementControlFlag.AttackRight;
         }
 
         private static bool IsDominatingWeakGroup(Agent agent, AgentDrivenProperties properties,

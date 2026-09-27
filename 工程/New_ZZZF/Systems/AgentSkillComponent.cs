@@ -754,6 +754,7 @@ namespace New_ZZZF
                 (MainActiveSkill is Skills.JianQi || MainActiveSkill is Skills.ConeOfArrows ||
                  MainActiveSkill is ZhanYi || MainActiveSkill is JueXing ||
                  MainActiveSkill is TianQi || MainActiveSkill is GuWu ||
+                 MainActiveSkill is ChaoFeng ||
                  MBRandom.RandomFloat > 0.5f) &&
                 MainActiveSkill.CheckCondition(Agent))
             {
