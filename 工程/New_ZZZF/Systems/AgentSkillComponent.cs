@@ -750,7 +750,7 @@ namespace New_ZZZF
             if (IsSkillReadyForAi(MainActiveSkill) &&
                 (MainActiveSkill is Skills.JianQi || MainActiveSkill is Skills.ConeOfArrows ||
                  MainActiveSkill is ZhanYi || MainActiveSkill is JueXing ||
-                 MainActiveSkill is TianQi ||
+                 MainActiveSkill is TianQi || MainActiveSkill is GuWu ||
                  MBRandom.RandomFloat > 0.5f) &&
                 MainActiveSkill.CheckCondition(Agent))
             {

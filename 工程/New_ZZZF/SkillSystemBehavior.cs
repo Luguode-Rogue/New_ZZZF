@@ -604,6 +604,8 @@ namespace New_ZZZF
                 var comp = affectedAgent.GetComponent<AgentSkillComponent>();
                 if (comp != null)
                 {
+                    // 鼓舞的落尘是独立场景实体；Agent 离场时立即释放。
+                    comp.StateContainer.RemoveState("GuWuBuff", affectedAgent);
                     comp.ReleaseShieldStrengthVisual();
                     _activeComponents.Remove(comp);
                 }

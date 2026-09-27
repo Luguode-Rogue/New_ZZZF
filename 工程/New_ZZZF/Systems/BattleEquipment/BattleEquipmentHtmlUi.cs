@@ -71,6 +71,7 @@ namespace New_ZZZF.Systems.BattleEquipment
                     HotReload = true,
                     DefaultInputMode = HtmlUiInputMode.Captured,
                     CloseOnEscape = true,
+                    EscapeRequested = Close,
                     Closed = OnPageClosed
                 });
 

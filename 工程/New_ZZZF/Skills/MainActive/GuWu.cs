@@ -1,12 +1,8 @@
-﻿using New_ZZZF.Systems;
+using New_ZZZF.Systems;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using TaleWorlds.Core;
 using TaleWorlds.Engine;
-using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 
@@ -14,110 +10,169 @@ namespace New_ZZZF
 {
     internal class GuWu : SkillBase
     {
+        private const float BuffDuration = 30f;
+        private const int Range = 50;
+        private const float AiRefreshThreshold = 10f;
+        private static readonly string[] MaleYells =
+        {
+            "event:/voice/combat/male/01/yell", "event:/voice/combat/male/02/yell",
+            "event:/voice/combat/male/03/yell", "event:/voice/combat/male/04/yell",
+            "event:/voice/combat/male/05/yell"
+        };
+        private static readonly string[] FemaleYells =
+        {
+            "event:/voice/combat/female/01/yell", "event:/voice/combat/female/02/yell",
+            "event:/voice/combat/female/03/yell", "event:/voice/combat/female/04/yell",
+            "event:/voice/combat/female/05/yell"
+        };
+
         public GuWu()
         {
-            SkillID = "GuWu";      // 必须唯一
-            Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 2;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 消耗
+            SkillID = "GuWu";
+            Type = SPSkillType.MainActive;
+            Cooldown = 60f;
+            ResourceCost = 50f;
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0021}GuWu");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0022}群体状态，使用后附近士兵获得鼓舞状态，提升射击精度，每秒增加1点耐力，并且回复少量已损生命值。持续时间：30秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject(
+                "{=ZZZF0022}使50米内友军获得鼓舞：射击误差降低20%，每秒恢复1点耐力和5%已损生命值，持续30秒。重复施放时保留较长的剩余时间。施放者立即恢复30%最大生命值。消耗耐力：50。冷却时间：60秒。");
         }
-        
-        /// <summary>
-        /// NPC AI逻辑：鼓舞是群体增益技能，当有友军且他们缺少buff时释放
-        /// </summary>
+
         public override bool CheckCondition(Agent caster)
         {
-            // 1. 基础条件检查
-            if (!base.CheckCondition(caster)) return false;
-            
-            // 2. 检查周围是否有友军
-            List<Agent> allies = Script.GetTargetedInRange(caster, caster.GetEyeGlobalPosition(), 50, true);
-            if (allies == null || allies.Count == 0) return false;
-            
-            // 3. 检查友军是否已有buff（避免重复释放）
-            int alliesWithoutBuff = 0;
-            foreach (var ally in allies)
+            if (!base.CheckCondition(caster))
+                return false;
+
+            List<Agent> allies = GetAlliesInRange(caster);
+            int needingBuff = 0;
+            foreach (Agent ally in allies)
             {
-                if (ally.IsActive())
-                {
-                    var skillComponent = ally.GetComponent<AgentSkillComponent>();
-                    if (skillComponent != null && !skillComponent.StateContainer.HasState("GuWuBuff"))
-                    {
-                        alliesWithoutBuff++;
-                    }
-                }
+                AgentSkillComponent component = ally.GetComponent<AgentSkillComponent>();
+                if (component == null)
+                    continue;
+                GuWuBuff current = component.StateContainer.GetState("GuWuBuff") as GuWuBuff;
+                if (current == null || current.Duration <= AiRefreshThreshold)
+                    needingBuff++;
+                if (needingBuff >= 2)
+                    return true;
             }
-            
-            // 4. 至少有一定数量的友军缺少buff
-            return alliesWithoutBuff >= 2;
+            return false;
         }
-        
+
         public override bool Activate(Agent agent)
         {
-            List<Agent> values= Script.GetTargetedInRange(agent, agent.GetEyeGlobalPosition(),50, true);
-            if (values!=null&&values.Count>0)
+            if (agent == null || !agent.IsActive())
+                return FailActivation("施法者不可用。");
+
+            List<Agent> allies = GetAlliesInRange(agent);
+            int affected = 0;
+            foreach (Agent ally in allies)
             {
-                foreach (var item in values)
-                {
-                    // 每次创建新的状态实例
-                    List<AgentBuff> newStates = new List<AgentBuff> { new GuWuBuff(30f, agent), }; // 新实例
-                    foreach (var state in newStates)
-                    {
-                        state.TargetAgent = item;
-                        item.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                    }
-                }
+                AgentSkillComponent component = ally.GetComponent<AgentSkillComponent>();
+                if (component == null)
+                    continue;
 
-                return true;
+                GuWuBuff current = component.StateContainer.GetState("GuWuBuff") as GuWuBuff;
+                float longestRemaining = component.StateContainer.GetLongestStateDuration("GuWuBuff");
+                float newDuration = MathF.Max(BuffDuration, longestRemaining);
+                if (current != null)
+                    newDuration += MathF.Max(0f,
+                        GetAdditionalRefreshDuration(agent, ally, longestRemaining));
+
+                component.StateContainer.AddOrReplaceState(new GuWuBuff(newDuration, agent), ally);
+                affected++;
             }
+            if (affected == 0)
+                return FailActivation("范围内没有可鼓舞的单位。");
 
-            return false;
+            string[] yells = agent.IsFemale ? FemaleYells : MaleYells;
+            try { SoundManager.StartOneShotEvent(yells[MBRandom.RandomInt(yells.Length)], agent.Position); }
+            catch (Exception) { /* 音频资源失效时不影响鼓舞生效。 */ }
+
+            float maximumHealth = agent.HealthLimit > 0f
+                ? agent.HealthLimit : agent.GetComponent<AgentSkillComponent>()?.MaxHP ?? agent.Health;
+            if (agent.Health < maximumHealth)
+                agent.Health = MathF.Min(maximumHealth,
+                    agent.Health + maximumHealth * 0.3f);
+            return true;
+        }
+
+        /// <summary>
+        /// 特殊刷新条件的扩展点：先取旧剩余时间和新施放时间的较长者，再加返回的秒数。
+        /// 默认不额外延长；只在目标已有鼓舞时调用。
+        /// </summary>
+        protected virtual float GetAdditionalRefreshDuration(
+            Agent caster, Agent target, float longestRemaining)
+        {
+            return 0f;
+        }
+
+        private static List<Agent> GetAlliesInRange(Agent caster)
+        {
+            List<Agent> allies = Script.GetTargetedInRange(
+                caster, caster.GetEyeGlobalPosition(), Range, true) ?? new List<Agent>();
+            // 不依赖 IsFriendOf 对自身的判定；手动施放至少能鼓舞施法者。
+            if (caster.IsHuman && !allies.Contains(caster))
+                allies.Add(caster);
+            return allies;
         }
 
         public class GuWuBuff : AgentBuff
         {
             private float _timeSinceLastTick;
+            private GuWuFallingEmbersVisual _visual;
+            private GuWuFallingEmbersVisual _lingeringVisual;
+
             public GuWuBuff(float duration, Agent source)
             {
                 StateId = "GuWuBuff";
                 Duration = duration;
                 SourceAgent = source;
-                _timeSinceLastTick = 0; // 新增初始化
             }
 
             public override void OnApply(Agent agent)
             {
+                agent?.UpdateAgentProperties();
+                _visual = GuWuFallingEmbersVisual.Create(agent);
             }
 
             public override void OnUpdate(Agent agent, float dt)
             {
-                SkillSystemBehavior.ActiveComponents.TryGetValue(this.SourceAgent.Index,out var agentSkillComponent);
-                if (agentSkillComponent == null) { return; }
-                // 累积时间
-                _timeSinceLastTick += dt;
+                if (agent == null || !agent.IsActive() || dt <= 0f)
+                    return;
 
-                //每秒刷一次状态
-                if (_timeSinceLastTick >= 1f)
+                if (_visual != null && !_visual.Update(agent, dt))
                 {
-                    
-                    ZZZF_SandboxAgentStatCalculateModel zZZF_SandboxAgentStatCalculate = MissionGameModels.Current.AgentStatCalculateModel as ZZZF_SandboxAgentStatCalculateModel;
-                    if (zZZF_SandboxAgentStatCalculate != null)
-                    {
-                        zZZF_SandboxAgentStatCalculate._dt = dt;
-                        agentSkillComponent.ChangeStamina(1);
-                        agent.Health += (agentSkillComponent.MaxHP - agent.Health) * 0.1f;
-                        agent.UpdateAgentProperties();
-                    }
-                    _timeSinceLastTick -= 1f; // 重置计时器
+                    _visual = null;
+                    _lingeringVisual = GuWuFallingEmbersVisual.CreateLingering(agent);
+                }
+                _lingeringVisual?.Update(agent, dt);
+
+                AgentSkillComponent component = agent.GetComponent<AgentSkillComponent>();
+                if (component == null)
+                    return;
+
+                _timeSinceLastTick += dt;
+                while (_timeSinceLastTick >= 1f)
+                {
+                    _timeSinceLastTick -= 1f;
+                    component.ChangeStamina(1f);
+                    float maximumHealth = agent.HealthLimit > 0f
+                        ? agent.HealthLimit : component.MaxHP;
+                    float missingHealth = MathF.Max(0f, maximumHealth - agent.Health);
+                    if (missingHealth > 0f)
+                        agent.Health = MathF.Min(maximumHealth,
+                            agent.Health + missingHealth * 0.05f);
                 }
             }
 
             public override void OnRemove(Agent agent)
             {
-                agent.UpdateAgentProperties();
+                _visual?.Remove();
+                _visual = null;
+                _lingeringVisual?.Remove();
+                _lingeringVisual = null;
+                if (agent != null && agent.IsActive())
+                    agent.UpdateAgentProperties();
             }
         }
     }

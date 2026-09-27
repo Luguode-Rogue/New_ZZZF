@@ -82,6 +82,17 @@ namespace New_ZZZF
             }
             return false;
         }
+        public float GetLongestStateDuration(string stateId)
+        {
+            float longest = 0f;
+            foreach (AgentBuff state in _activeStates)
+            {
+                if (string.Equals(state.StateId, stateId, StringComparison.Ordinal) &&
+                    state.Duration > longest)
+                    longest = state.Duration;
+            }
+            return longest;
+        }
         public void AddState(AgentBuff state)
         {
             AddState(state, null);
@@ -136,7 +147,8 @@ namespace New_ZZZF
             for (int i = _activeStates.Count - 1; i >= 0; i--)
             {
                 AgentBuff state = _activeStates[i];
-                state.Duration = TaleWorlds.Library.MathF.Clamp(state.Duration - dt, 0f, 100f);
+                // 允许刷新规则在原有较长持续时间上继续增加时长。
+                state.Duration = TaleWorlds.Library.MathF.Max(0f, state.Duration - dt);
 
                 Agent target = agent ?? state.TargetAgent;
                 if (target == null || !target.IsActive())

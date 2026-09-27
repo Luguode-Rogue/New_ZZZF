@@ -11,7 +11,6 @@ using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 using static New_ZZZF.ZhanYi;
 using static New_ZZZF.JueXing;
-using static New_ZZZF.GuWu;
 using static New_ZZZF.FengBaoZhiLi;
 using static New_ZZZF.ZhanHao;
 using static New_ZZZF.WeiYa;
@@ -125,14 +124,7 @@ namespace New_ZZZF.Systems
                 }
                 if (result.StateContainer.HasState("GuWuBuff"))
                 {
-                    GuWuBuff buff = result.StateContainer.GetState("GuWuBuff") as GuWuBuff;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-
-                        agent.AgentDrivenProperties.WeaponInaccuracy /= 2;
-
-                    }
+                    agentDrivenProperties.WeaponInaccuracy *= 0.8f;
                 }
                 if (result.StateContainer.HasState("KongNueCiFuBuff"))
                 {
