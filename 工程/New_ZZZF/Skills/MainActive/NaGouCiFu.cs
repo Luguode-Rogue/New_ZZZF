@@ -1,109 +1,100 @@
-﻿using New_ZZZF.Systems;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using TaleWorlds.Core;
 using TaleWorlds.Engine;
-using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
-using MathF = TaleWorlds.Library.MathF;
 
 namespace New_ZZZF
 {
     internal class NaGouCiFu : SkillBase
     {
+        private readonly MBList<Agent> _nearby = new MBList<Agent>();
         public NaGouCiFu()
         {
-            SkillID = "NaGouCiFu";      // 必须唯一
-            Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 2;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 消耗
+            SkillID = "NaGouCiFu"; Type = SPSkillType.MainActive; Cooldown = 60f; ResourceCost = 60f;
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0039}NaGouCiFu");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject(
-                "{=ZZZF0040}群体状态，使用后附近士兵获得瘟疫赐福，每秒扣除10%最大血量并转化为护盾，但获得3次死而复生的机会。扣除生命值不会致死，且转化护盾会继续持续5秒。" +
-                "提高50%造成的伤害，降低50%移动速度，受到物理伤害时50%免疫此次伤害。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0040}赐福50米内友军60秒：获得3次通用复活；护甲腐朽，无视目标50%护甲，移速-30%。每秒将最大生命10%转为等额护盾，生命至少保留1，首次耗尽后额外产盾5秒。受到物理伤害时50%概率免伤并回复该次应受伤害量。重施刷新较长时间。耐力60，冷却60秒。");
         }
-        public override bool Activate(Agent agent)
+        private static bool IsAlly(Agent caster, Agent target) => target != null && target.IsActive() && target.IsHuman &&
+            (target == caster || caster.IsFriendOf(target)) && (target.Position - caster.Position).LengthSquared <= 2500f &&
+            target.GetComponent<AgentSkillComponent>() != null;
+        public override bool CheckCondition(Agent caster)
         {
-            List<Agent> values= Script.GetTargetedInRange(agent, agent.GetEyeGlobalPosition(),50, true);
-            if (values!=null&&values.Count>0)
+            if (!base.CheckCondition(caster) || caster.Mission == null) return false;
+            _nearby.Clear(); caster.Mission.GetNearbyAgents(caster.Position.AsVec2, 50f, _nearby);
+            int needs = 0; bool fighting = false; bool injured = false;
+            foreach (Agent target in _nearby)
             {
-                foreach (var item in values)
-                {
-                    // 每次创建新的状态实例
-                    List<AgentBuff> newStates = new List<AgentBuff> { new NaGouCiFuBuff(60f, agent), }; // 新实例
-                    foreach (var state in newStates)
-                    {
-                        state.TargetAgent = item;
-                        item.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                    }
-                }
-
-                return true;
+                if (target == null || !target.IsActive()) continue;
+                if (caster.IsEnemyOf(target) && (target.Position - caster.Position).LengthSquared <= 625f) fighting = true;
+                if (!IsAlly(caster, target)) continue;
+                AgentSkillComponent component = target.GetComponent<AgentSkillComponent>();
+                bool needsBuff = component.StateContainer.GetLongestStateDuration("NaGouCiFuBuff") <= 10f || component._lifeResurgenceCount == 0;
+                if (!needsBuff) continue;
+                needs++;
+                injured |= target.Health < target.HealthLimit * 0.65f;
+                fighting |= target.IsPerformingAction() && component._beHitTime > 0f;
             }
-
-            return false;
+            return fighting && (needs >= 2 || injured && needs > 0);
         }
-
+        public override bool Activate(Agent caster)
+        {
+            if (caster == null || !caster.IsActive() || caster.Mission == null) return FailActivation("施法者不可用。");
+            _nearby.Clear(); caster.Mission.GetNearbyAgents(caster.Position.AsVec2, 50f, _nearby);
+            if (!_nearby.Contains(caster)) _nearby.Add(caster);
+            int count = 0;
+            foreach (Agent target in _nearby)
+            {
+                if (!IsAlly(caster, target)) continue;
+                AgentBuffContainer states = target.GetComponent<AgentSkillComponent>().StateContainer;
+                var old = states.GetState("NaGouCiFuBuff") as NaGouCiFuBuff;
+                states.AddOrReplaceState(new NaGouCiFuBuff(Math.Max(60f, states.GetLongestStateDuration("NaGouCiFuBuff")), caster,
+                    old?.ExtraShieldSeconds ?? 0, old?.ReachedMinimum ?? false), target);
+                count++;
+            }
+            if (count == 0) return FailActivation("范围内没有友军。");
+            try { SoundManager.StartOneShotEvent("event:/voice/combat/" + (caster.IsFemale ? "female" : "male") + "/0" + (MBRandom.RandomInt(4) + 1) + "/yell", caster.Position); }
+            catch (Exception) { }
+            return true;
+        }
         public class NaGouCiFuBuff : AgentBuff
         {
-            private int _timeCount = 0;
-            private float _timeSinceLastTick;
-            public NaGouCiFuBuff(float duration, Agent source)
-            {
-                StateId = "NaGouCiFuBuff";
-                Duration = duration;
-                SourceAgent = source;
-                _timeSinceLastTick = 0; // 新增初始化
-            }
-
+            internal int ExtraShieldSeconds;
+            internal bool ReachedMinimum;
+            private float _timer;
+            private NaGouFallingEmbersVisual _visual;
+            public override bool BypassesSkillProtection => true;
+            public override string BattleHudName => "纳垢赐福";
+            public NaGouCiFuBuff(float duration, Agent source, int extraSeconds = 0, bool reachedMinimum = false)
+            { StateId = "NaGouCiFuBuff"; Duration = duration; SourceAgent = source; ExtraShieldSeconds = extraSeconds; ReachedMinimum = reachedMinimum; }
             public override void OnApply(Agent agent)
             {
-                SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                agentSkillComponent._lifeResurgenceCount += 3;
-                
+                agent.GetComponent<AgentSkillComponent>()._lifeResurgenceCount += 3;
+                agent.UpdateAgentProperties();
+                _visual = NaGouFallingEmbersVisual.CreateLingering(agent);
             }
-
             public override void OnUpdate(Agent agent, float dt)
             {
-                SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index,out var agentSkillComponent);
-                if (agentSkillComponent == null) { return; }
-                // 累积时间
-                _timeSinceLastTick += dt;
-
-                //每秒刷一次状态
-                if (_timeSinceLastTick >= 1f)
+                _visual?.Update(agent, dt);
+                _timer += dt;
+                int ticks = (int)_timer; _timer -= ticks;
+                AgentSkillComponent component = agent.GetComponent<AgentSkillComponent>();
+                if (component == null) return;
+                float maximum = agent.HealthLimit > 0f ? agent.HealthLimit : component.MaxHP;
+                for (int i = 0; i < ticks; i++)
                 {
-                    
-                    ZZZF_SandboxAgentStatCalculateModel zZZF_SandboxAgentStatCalculate = MissionGameModels.Current.AgentStatCalculateModel as ZZZF_SandboxAgentStatCalculateModel;
-                    if (zZZF_SandboxAgentStatCalculate != null)
-                    {
-                        if (_timeCount < 5)
-                        {
-                            agentSkillComponent._shieldStrength += agentSkillComponent.MaxHP * 0.1f;
-                            agent.Health = MathF.Clamp(agent.Health - agentSkillComponent.MaxHP * 0.1f, 1, agentSkillComponent.MaxHP);
-                            
-                        }
-                        if (agent.Health <= 1)
-                        { _timeCount += 1; }
-                        else
-                        { _timeCount = 0; }
-                        zZZF_SandboxAgentStatCalculate._dt = dt;
-                        agent.UpdateAgentProperties();
-                    }
-                    _timeSinceLastTick -= 1f; // 重置计时器
-                    
+                    bool extraWindow = ReachedMinimum && ExtraShieldSeconds < 5;
+                    if (ReachedMinimum && ExtraShieldSeconds < 5) ExtraShieldSeconds++;
+                    float payment = Math.Min(Math.Max(0f, agent.Health - 1f), maximum * 0.1f);
+                    if (payment > 0f)
+                    { agent.Health -= payment; component._shieldStrength += payment; }
+                    else if (extraWindow)
+                    { component._shieldStrength += maximum * 0.1f; }
+                    if (agent.Health <= 1f) ReachedMinimum = true;
                 }
             }
-
             public override void OnRemove(Agent agent)
-            {
-                agent.UpdateAgentProperties();
-            }
+            { _visual?.Remove(); _visual = null; if (agent != null && agent.IsActive()) agent.UpdateAgentProperties(); }
         }
     }
 }

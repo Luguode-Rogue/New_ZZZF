@@ -17,6 +17,8 @@ namespace New_ZZZF
         private const float BonusSegmentStaminaCost = 5f;
         private const float SpeedStep = 0.10f;
         public const float MaximumActionSpeed = 1.80f;
+        private const float StartProgressStep = 0.03f;
+        private const float MaximumStartProgress = 0.10f;
         private const float ContactTimeout = 2.50f;
         private const float FinishTimeout = 0.50f;
         private const float AttackStartTimeout = 0.40f;
@@ -34,11 +36,21 @@ namespace New_ZZZF
         private sealed class ChainRecord
         {
             public Agent Agent;
+            public bool BladeDance;
+            public int BladeAttackLimit;
+            public bool SawRelease;
+            public bool PendingBladeAdvance;
+            public ThrustSwingWeaponLease BladeWeapon;
+            public Vec3 BladeBaseLook;
+            public bool BladeTwisted;
+            public string PreviousReleaseAction;
+            public float PreviousReleaseProgress;
             public ItemObject WeaponItem;
             public string WeaponUsage;
             public ChainPhase Phase;
             public int Segment;
             public float ActionSpeed;
+            public float StartProgress;
             public float Deadline;
             public Agent.MovementControlFlag Direction;
             public Agent.MovementControlFlag PreviousDirection;
@@ -90,7 +102,18 @@ namespace New_ZZZF
             Current = this;
         }
 
-        public bool TryStart(Agent agent, out string reason)
+        public bool TryStartBladeDance(Agent agent, out string reason) => TryStartCore(agent, true, out reason);
+        public bool IsBladeDanceActive(Agent agent) => agent != null &&
+            _records.TryGetValue(agent.Index, out ChainRecord record) && record.BladeDance;
+        internal WeaponComponentData GetBladeThrustUsage(Agent agent) => agent != null &&
+            _records.TryGetValue(agent.Index, out ChainRecord record) ? record.BladeWeapon?.OriginalUsage : null;
+        public static bool HasBladeDanceWeapon(Agent agent) => TryGetWeapon(agent, out MissionWeapon weapon, out _) &&
+            (CanSwing(weapon.CurrentUsageItem) || CanThrust(weapon.CurrentUsageItem));
+        public bool TryStart(Agent agent, out string reason) => TryStartCore(agent, false, out reason);
+
+        public bool TryStartSingleBladeSweep(Agent agent, out string reason) => TryStartCore(agent, true, out reason, 1);
+
+        private bool TryStartCore(Agent agent, bool bladeDance, out string reason, int bladeAttackLimit = 24)
         {
             if (agent == null || !agent.IsActive() || agent.IsMount)
             {
@@ -99,32 +122,56 @@ namespace New_ZZZF
             }
             if (_records.ContainsKey(agent.Index))
             {
-                reason = "疾风连斩已经在执行。";
+                reason = "已有连续攻击技能正在执行。";
+                return false;
+            }
+            if (ThrustSwingWeaponLease.GetOriginalUsage(agent) != null) {
+                reason = "已有其他技能的自动挥砍正在执行。";
                 return false;
             }
             if (!TryGetWeapon(agent, out MissionWeapon weapon, out reason))
                 return false;
 
+            if (bladeDance && !CanSwing(weapon.CurrentUsageItem) && !CanThrust(weapon.CurrentUsageItem)) {
+                reason = "剑刃乱舞需要有伤害的近战武器。";
+                return false;
+            }
             var record = new ChainRecord
             {
                 Agent = agent,
+                BladeDance = bladeDance,
+                BladeAttackLimit = bladeAttackLimit,
                 WeaponItem = weapon.Item,
                 WeaponUsage = GetUsageId(weapon),
                 Phase = ChainPhase.RearmPending,
                 Segment = 1,
-                ActionSpeed = 1f,
+                ActionSpeed = bladeDance ? MaximumActionSpeed : 1f,
                 PreviousDirection = Agent.MovementControlFlag.None,
                 LastSpeedType = Agent.ActionCodeType.Other
             };
+            if (bladeDance) {
+                // 启动时清掉已有攻防，避免把施法前的左砍/突刺计作第一刀。
+                if (!agent.SetActionChannel(1, ActionIndexCache.act_none, true, (AnimFlags)0UL,
+                    0f, 1f, 0f, 0f, 0f, false, 0f, 0, false)) {
+                    _records.Remove(agent.Index);
+                    reason = "当前动作不能进入剑刃乱舞。";
+                    return false;
+                }
+            }
+
+            if (!CanSwing(weapon.CurrentUsageItem)) {
+                if (!ThrustSwingWeaponLease.TryApply(agent, weapon, out record.BladeWeapon, out reason)) return false;
+            }
             _records.Add(agent.Index, record);
 
             if (!QueueRandomAttack(record, out reason))
             {
                 _records.Remove(agent.Index);
+                record.BladeWeapon?.Restore();
                 return false;
             }
 
-            CancelCurrentAiCombatAction(agent);
+            if (!bladeDance) CancelCurrentAiCombatAction(agent);
 
             /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
             reason = null;
@@ -161,6 +208,7 @@ namespace New_ZZZF
 
         private void TickRecord(ChainRecord record)
         {
+            if (JingXia.IsFrightened(record.Agent)) { End(record, "惊吓中止连斩"); return; }
             if (!ValidateAgentAndWeapon(record, out string invalidReason))
             {
                 End(record, invalidReason);
@@ -177,7 +225,8 @@ namespace New_ZZZF
                     ObserveAttackStart(record);
                     break;
                 case ChainPhase.WaitingForContact:
-                    ApplyCappedActionSpeed(record);
+                    if (record.BladeDance) { ObserveBladeSweep(record); break; }
+                    ApplyCappedActionModifiers(record);
                     if (Mission.CurrentTime > record.Deadline)
                         End(record, "本段攻击未发生有效接触");
                     break;
@@ -197,6 +246,23 @@ namespace New_ZZZF
         private void ObserveAttackStart(ChainRecord record)
         {
             Agent.ActionCodeType type = record.Agent.GetCurrentActionType(1);
+            if (record.BladeDance) {
+                float progress = record.Agent.GetCurrentActionProgress(1);
+                string action = record.Agent.GetCurrentAction(1).GetName();
+                bool newRelease = type == Agent.ActionCodeType.ReleaseMelee &&
+                    (record.PreviousReleaseAction == null || action != record.PreviousReleaseAction ||
+                     progress + 0.05f < record.PreviousReleaseProgress);
+                if (type == Agent.ActionCodeType.ReadyMelee || newRelease) {
+                    if (record.PendingBladeAdvance) { record.Segment++; record.PendingBladeAdvance = false; }
+                    record.SawRelease = newRelease;
+                    record.Phase = ChainPhase.WaitingForContact;
+                    record.Deadline = Mission.CurrentTime + 6f;
+                    ApplyCappedActionModifiers(record);
+                } else if (Mission.CurrentTime > record.Deadline) {
+                    End(record, "右横扫输入未被当前姿态接受");
+                }
+                return;
+            }
             if (IsReadyOrRelease(type))
             {
                 /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
@@ -204,7 +270,7 @@ namespace New_ZZZF
                 record.RetryingLastSuccessfulDirection = false;
                 record.Phase = ChainPhase.WaitingForContact;
                 record.Deadline = Mission.CurrentTime + ContactTimeout;
-                ApplyCappedActionSpeed(record);
+                ApplyCappedActionModifiers(record);
                 return;
             }
 
@@ -226,7 +292,7 @@ namespace New_ZZZF
                 record.Direction = record.LastSuccessfulDirection;
                 record.RetryingLastSuccessfulDirection = true;
                 record.Phase = ChainPhase.WaitingForInjection;
-                record.Deadline = Mission.CurrentTime + AttackStartTimeout;
+                record.Deadline = Mission.CurrentTime + (record.BladeDance ? 1.5f : AttackStartTimeout);
                 record.LastSpeedAction = null;
                 record.LastSpeedType = Agent.ActionCodeType.Other;
                 if (record.Agent.IsAIControlled)
@@ -242,7 +308,73 @@ namespace New_ZZZF
             record.Phase = ChainPhase.RearmPending;
         }
 
-        private void ApplyCappedActionSpeed(ChainRecord record)
+        // 不以命中数或持续秒数续击：观察原生 ReleaseMelee 完成，挥空也完成一刀。
+        private void ObserveBladeSweep(ChainRecord record)
+        {
+            Agent.ActionCodeType type = record.Agent.GetCurrentActionType(1);
+            ApplyCappedActionModifiers(record);
+            if (type == Agent.ActionCodeType.ReleaseMelee) {
+                ApplyBladeTwist(record);
+                record.SawRelease = true;
+                record.PreviousReleaseAction = record.Agent.GetCurrentAction(1).GetName();
+                record.PreviousReleaseProgress = record.Agent.GetCurrentActionProgress(1);
+                if (record.PreviousReleaseProgress >= 0.95f && record.Segment < record.BladeAttackLimit) {
+                    // 在本刀末尾提交下一刀输入，保留原生 quick-ready 连招窗口。
+                    // 下一次 Ready/Release 被观察到时才计上一刀完成，不能同一帧多次计数。
+                    record.PendingBladeAdvance = true;
+                    if (!TryGetWeapon(record.Agent, out MissionWeapon weapon, out string reason) ||
+                        !PrepareBladeReady(record, weapon, out reason)) End(record, reason);
+                }
+                return;
+            }
+            if (record.SawRelease) {
+                if (record.Segment >= record.BladeAttackLimit) { End(record, "完成" + record.BladeAttackLimit + "次右横扫"); return; }
+                record.Segment++;
+                record.SawRelease = false;
+                RestoreBladeTwist(record);
+                // 未捕获末尾连招窗口时，重新提交原生右攻击输入。
+                record.Phase = ChainPhase.RearmPending;
+                return;
+            }
+            if (Mission.CurrentTime > record.Deadline)
+                End(record, "右横扫起手未进入释放动作");
+        }
+        private bool PrepareBladeReady(ChainRecord record, MissionWeapon weapon, out string reason)
+        {
+            RestoreBladeTwist(record);
+            if (record.Agent.IsAIControlled) FaceCurrentTarget(record.Agent);
+            record.BladeBaseLook = record.Agent.LookDirection;
+            // 一律原生右攻击输入：临时武器用法已为纯戳刺武器提供合法 attack_right。
+            // ready_from_right / quick_release 由 item_usage_set 在原生连招窗口选择。
+            record.Direction = Agent.MovementControlFlag.AttackRight;
+            record.Phase = ChainPhase.WaitingForInjection;
+            record.Deadline = Mission.CurrentTime + 1.5f;
+            record.LastSpeedAction = null;
+            if (!record.PendingBladeAdvance) record.SawRelease = false;
+            if (record.Agent.IsAIControlled) record.Agent.SetHasOnAiInputSetCallback(true);
+            reason = null;
+            return true;
+        }
+        private static void ApplyBladeTwist(ChainRecord record)
+        {
+            Vec3 facing = record.BladeBaseLook;
+            if (facing.LengthSquared < 0.001f) return;
+            float progress = MathF.Clamp(record.Agent.GetCurrentActionProgress(1), 0f, 1f);
+            float yaw = (progress * 2f - 1f) * (20f * MathF.PI / 180f);
+            Mat3 rotation = Mat3.Identity;
+            rotation.RotateAboutUp(yaw);
+            record.Agent.LookDirection = rotation.TransformToParent(facing).NormalizedCopy();
+            record.BladeTwisted = true;
+        }
+
+        private static void RestoreBladeTwist(ChainRecord record)
+        {
+            if (!record.BladeTwisted) return;
+            if (record.Agent != null && record.Agent.IsActive())
+                record.Agent.LookDirection = record.BladeBaseLook;
+            record.BladeTwisted = false;
+        }
+        private void ApplyCappedActionModifiers(ChainRecord record)
         {
             Agent.ActionCodeType type = record.Agent.GetCurrentActionType(1);
             if (!IsReadyOrRelease(type))
@@ -257,6 +389,9 @@ namespace New_ZZZF
             // 写入最终倍率并在入口硬限制为 1.80，防止连乘或重复应用越界。
             float speed = MathF.Min(MaximumActionSpeed, MathF.Max(0.01f, record.ActionSpeed));
             record.Agent.SetCurrentActionSpeed(1, speed);
+            float startProgress = MathF.Min(MaximumStartProgress, record.StartProgress);
+            if (record.Agent.GetCurrentActionProgress(1) < startProgress)
+                record.Agent.SetCurrentActionProgress(1, startProgress);
             record.LastSpeedAction = action;
             record.LastSpeedType = type;
         }
@@ -268,6 +403,8 @@ namespace New_ZZZF
             AttackCollisionData collisionData)
         {
             base.OnMeleeHit(attacker, victim, isCanceled, collisionData);
+            // 乱舞整刀扫完才续击，命中/格挡不能切断动作或消耗额外刀数。
+            if (IsBladeDanceActive(attacker)) return;
             if (attacker == null || !_records.TryGetValue(attacker.Index, out ChainRecord record) ||
                 record.Phase != ChainPhase.WaitingForContact)
                 return;
@@ -306,6 +443,9 @@ namespace New_ZZZF
             record.ActionSpeed = MathF.Min(
                 MaximumActionSpeed,
                 1f + (record.Segment - 1) * SpeedStep);
+            record.StartProgress = MathF.Min(
+                MaximumStartProgress,
+                record.StartProgress + StartProgressStep);
             record.TriedDirections.Clear();
             record.Phase = ChainPhase.FinishPending;
             record.Deadline = Mission.CurrentTime + FinishTimeout;
@@ -341,6 +481,8 @@ namespace New_ZZZF
             if (!TryGetWeapon(record.Agent, out MissionWeapon weapon, out reason))
                 return false;
 
+            if (record.BladeDance)
+                return PrepareBladeReady(record, weapon, out reason);
             BuildAvailableDirections(weapon.CurrentUsageItem, _directionScratch);
             for (int i = _directionScratch.Count - 1; i >= 0; i--)
             {
@@ -369,7 +511,7 @@ namespace New_ZZZF
             record.Direction = _directionScratch[MBRandom.RandomInt(_directionScratch.Count)];
             record.RetryingLastSuccessfulDirection = false;
             record.Phase = ChainPhase.WaitingForInjection;
-            record.Deadline = Mission.CurrentTime + AttackStartTimeout;
+            record.Deadline = Mission.CurrentTime + (record.BladeDance ? 1.5f : AttackStartTimeout);
             record.LastSpeedAction = null;
             record.LastSpeedType = Agent.ActionCodeType.Other;
             if (record.Agent.IsAIControlled)
@@ -382,6 +524,17 @@ namespace New_ZZZF
         public Agent.EventControlFlag OnCollectPlayerEventControlFlags()
         {
             Agent agent = Mission?.MainAgent;
+            if (agent != null && _records.TryGetValue(agent.Index, out ChainRecord dance) && dance.BladeDance) {
+                var flags = agent.MovementFlags;
+                flags &= ~(Agent.MovementControlFlag.AttackMask | Agent.MovementControlFlag.DefendMask |
+                           Agent.MovementControlFlag.DefendBlock);
+                if (dance.Phase == ChainPhase.WaitingForInjection || dance.Phase == ChainPhase.WaitingForAttack) {
+                    flags |= dance.Direction;
+                    if (dance.Phase == ChainPhase.WaitingForInjection) MarkInjected(dance);
+                }
+                agent.MovementFlags = flags;
+                return Agent.EventControlFlag.None;
+            }
             if (agent != null && _records.TryGetValue(agent.Index, out ChainRecord record) &&
                 record.Phase == ChainPhase.WaitingForInjection)
             {
@@ -443,7 +596,7 @@ namespace New_ZZZF
         private static void FaceCurrentTarget(Agent agent)
         {
             Agent target = agent?.GetTargetAgent();
-            if (target == null || !target.IsActive() || !agent.IsEnemyOf(target))
+            if (target == null || !SkillTargetProtection.CanSelect(target) || !agent.IsEnemyOf(target))
                 return;
 
             Vec2 direction = target.Position.AsVec2 - agent.Position.AsVec2;
@@ -456,7 +609,7 @@ namespace New_ZZZF
         private void MarkInjected(ChainRecord record)
         {
             record.Phase = ChainPhase.WaitingForAttack;
-            record.Deadline = Mission.CurrentTime + AttackStartTimeout;
+            record.Deadline = Mission.CurrentTime + (record.BladeDance ? 1.5f : AttackStartTimeout);
         }
 
         private bool ValidateAgentAndWeapon(ChainRecord record, out string reason)
@@ -546,6 +699,8 @@ namespace New_ZZZF
         {
             if (record == null || record.Agent == null || !_records.Remove(record.Agent.Index))
                 return;
+            RestoreBladeTwist(record);
+            record.BladeWeapon?.Restore();
             /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
         }
 
@@ -562,6 +717,10 @@ namespace New_ZZZF
 
         protected override void OnEndMission()
         {
+            foreach (ChainRecord record in _records.Values) {
+                RestoreBladeTwist(record);
+                record.BladeWeapon?.Restore();
+            }
             _records.Clear();
             if (ReferenceEquals(Current, this))
                 Current = null;
@@ -570,6 +729,10 @@ namespace New_ZZZF
 
         public override void OnRemoveBehavior()
         {
+            foreach (ChainRecord record in _records.Values) {
+                RestoreBladeTwist(record);
+                record.BladeWeapon?.Restore();
+            }
             _records.Clear();
             if (ReferenceEquals(Current, this))
                 Current = null;

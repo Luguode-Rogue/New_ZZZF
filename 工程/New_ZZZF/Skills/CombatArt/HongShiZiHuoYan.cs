@@ -54,7 +54,7 @@ namespace New_ZZZF.Skills
                 return FailActivation("喷火范围参数无效。");
 
             Vec3[] directions = BuildDirections(agent.LookDirection, area.HalfAngleDegrees);
-            DamageNearbyEnemies(agent, area, directions);
+            DamageNearbyEnemies(agent, area, directions, MagicDamageSystem.GetSpellPowerCoefficient(agent));
             ShowFlame(agent.Position, area, directions);
             // 空挥也是一次完整战技；正常消费资源与冷却，避免无目标时无限刷特效。
             return true;
@@ -68,7 +68,7 @@ namespace New_ZZZF.Skills
                 return false;
             Agent target = caster.GetTargetAgent();
             if (target == null || !target.IsActive() || !target.IsHuman ||
-                !caster.IsEnemyOf(target) || !TryGetDamageArea(caster, 0, out SkillDamageArea area))
+                (!caster.IsEnemyOf(target) || SkillTargetProtection.IsProtected(target)) || !TryGetDamageArea(caster, 0, out SkillDamageArea area))
                 return false;
             Vec3 toTarget = target.GetEyeGlobalPosition() - caster.Position;
             float maximumDistance = area.Length + area.Radius;
@@ -79,7 +79,33 @@ namespace New_ZZZF.Skills
                 RushMovementMissionLogic.HasLineOfSight(caster, target);
         }
 
-        private void DamageNearbyEnemies(Agent caster, SkillDamageArea area, Vec3[] directions)
+        /// <summary>附带效果入口，不消耗资源、不启动本战技冷却。</summary>
+        public bool ReleaseAtArrival(Agent caster, float spellPower)
+        {
+            if (caster == null || !caster.IsActive() || !TryGetDamageArea(caster, 0, out SkillDamageArea area)) return false;
+            Vec3[] directions = BuildDirections(caster.LookDirection, area.HalfAngleDegrees);
+            DamageNearbyEnemies(caster, area, directions, spellPower);
+            ShowFlame(caster.Position, area, directions);
+            return true;
+        }
+
+        /// <summary>持续龙息的伤害入口；表现由持久实体管理，不触发战技费用和冷却。</summary>
+        internal bool ReleaseContinuousDamage(Agent caster, float spellPower)
+        {
+            if (caster == null || !caster.IsActive() || !TryGetDamageArea(caster, 0, out SkillDamageArea area)) return false;
+            DamageNearbyEnemies(caster, area, BuildDirections(caster.LookDirection, area.HalfAngleDegrees), spellPower);
+            return true;
+        }
+
+        internal bool CanHitFromDirection(Agent caster, Agent enemy, Vec3 facing)
+        {
+            return caster != null && enemy != null && enemy.IsActive() && enemy.IsHuman && enemy.Health > 0f &&
+                caster.IsEnemyOf(enemy) && !SkillTargetProtection.IsProtected(enemy) &&
+                TryGetDamageArea(caster, 0, out SkillDamageArea area) &&
+                IsInsideSampledFlame(caster.Position, enemy.GetEyeGlobalPosition(), area,
+                    BuildDirections(facing, area.HalfAngleDegrees)) && RushMovementMissionLogic.HasLineOfSight(caster, enemy);
+        }
+        private void DamageNearbyEnemies(Agent caster, SkillDamageArea area, Vec3[] directions, float spellPower)
         {
             _nearbyAgents.Clear();
             float searchRadius = area.Length + area.Radius;
@@ -89,11 +115,11 @@ namespace New_ZZZF.Skills
             else
                 Mission.Current.GetNearbyAgents(caster.Position.AsVec2, searchRadius, _nearbyAgents);
 
-            float spellPower = MagicDamageSystem.GetSpellPowerCoefficient(caster);
+
             foreach (Agent target in _nearbyAgents)
             {
                 if (target == null || target == caster || !target.IsActive() || !target.IsHuman ||
-                    !caster.IsEnemyOf(target) || !IsInsideSampledFlame(
+                    (!caster.IsEnemyOf(target) || SkillTargetProtection.IsProtected(target)) || !IsInsideSampledFlame(
                         caster.Position, target.GetEyeGlobalPosition(), area, directions))
                     continue;
                 AgentSkillComponent component = Script.GetActiveComponents(target);

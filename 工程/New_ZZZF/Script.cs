@@ -36,6 +36,7 @@ namespace New_ZZZF
         private static readonly Dictionary<uint, Mesh> LuminousEggShellMeshes = new Dictionary<uint, Mesh>();
         private const int BellShieldLayers = 18;
         private static readonly Dictionary<uint, Mesh> BellShieldMeshes = new Dictionary<uint, Mesh>();
+        private static readonly Dictionary<uint, Mesh> LuminousBellShieldMeshes = new Dictionary<uint, Mesh>();
 
         /// <summary>
         /// 创建包围单位的半透明蛋壳。默认白色、34% 不透明度；Color.Alpha 可调整透明度。
@@ -105,19 +106,23 @@ namespace New_ZZZF
         /// 保留蛋壳版本；颜色参数与蛋壳版本相同，默认半透明白色。
         /// 调用者持有返回实体，在效果结束时 Remove(0)。
         /// </summary>
-        public static GameEntity CreateBellShieldVisual(Agent agent, Color? color = null)
+        public static GameEntity CreateBellShieldVisual(Agent agent, Color? color = null,
+            bool selfLuminous = false, float visualScale = 1f)
         {
             if (agent == null || !agent.IsActive() || agent.Mission?.Scene == null)
                 return null;
 
             Color tint = color ?? new Color(1f, 1f, 1f, 0.34f);
             uint colorKey = tint.ToUnsignedInteger();
-            if (!BellShieldMeshes.TryGetValue(colorKey, out Mesh mesh) || mesh == null || !mesh.IsValid)
+            Dictionary<uint, Mesh> meshes = selfLuminous ? LuminousBellShieldMeshes : BellShieldMeshes;
+            if (!meshes.TryGetValue(colorKey, out Mesh mesh) || mesh == null || !mesh.IsValid)
             {
-                Material material = Material.GetFromResource("vertex_color_lighting")?.CreateCopy();
+                Material material = Material.GetFromResource(
+                    selfLuminous ? "prt_shd_sparks" : "vertex_color_lighting")?.CreateCopy();
                 if (material == null || !material.IsValid)
                     return null;
-                material.SetAlphaBlendMode(Material.MBAlphaBlendMode.Modulate);
+                if (!selfLuminous)
+                    material.SetAlphaBlendMode(Material.MBAlphaBlendMode.Modulate);
 
                 MeshBuilder builder = new MeshBuilder();
                 for (int layer = 0; layer < BellShieldLayers; layer++)
@@ -129,7 +134,8 @@ namespace New_ZZZF
                         float left = (float)(Math.PI * 2.0 * side / EggShellSides);
                         float right = (float)(Math.PI * 2.0 * (side + 1) / EggShellSides);
                         AddEggShellQuad(builder, BellShieldPoint(top, left), BellShieldPoint(top, right),
-                            BellShieldPoint(bottom, right), BellShieldPoint(bottom, left), colorKey);
+                            BellShieldPoint(bottom, right), BellShieldPoint(bottom, left), colorKey,
+                            selfLuminous);
                     }
                 }
 
@@ -137,20 +143,22 @@ namespace New_ZZZF
                 if (mesh == null || !mesh.IsValid)
                     return null;
                 mesh.SetMaterial(material);
-                mesh.Color = new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger();
+                mesh.Color = selfLuminous ? new Color(1f, 1f, 1f, 1f).ToUnsignedInteger() :
+                    new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger();
                 mesh.CullingMode = MBMeshCullingMode.None;
                 mesh.UpdateBoundingBox();
-                BellShieldMeshes[colorKey] = mesh;
+                meshes[colorKey] = mesh;
             }
 
             GameEntity bell = GameEntity.CreateEmptyDynamic(agent.Mission.Scene, false);
             if (bell == null)
                 return null;
             bell.AddMesh(mesh);
-            bell.SetFactorColor(new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger());
+            bell.SetFactorColor(selfLuminous ? new Color(1f, 1f, 1f, 1f).ToUnsignedInteger() :
+                new Color(tint.Red, tint.Green, tint.Blue).ToUnsignedInteger());
             bell.SetVisibilityExcludeParents(true);
             bell.SetReadyToRender(true);
-            UpdateEggShellVisual(bell, agent);
+            UpdateEggShellVisual(bell, agent, visualScale);
             AgentAttachedVisualVisibility.Register(agent, bell);
             return bell;
         }
@@ -860,7 +868,7 @@ namespace New_ZZZF
 
             foreach (Agent agent in Mission.Current.Agents)
             {
-                if (agent.IsActive())
+                if (SkillTargetProtection.CanSelect(agent))
                 {
                     float distanceToTarget = targetLocation.Distance(agent.GetEyeGlobalPosition());
                     if (distanceToTarget <= spellRange)
@@ -913,7 +921,7 @@ namespace New_ZZZF
             for (int i = 0; i < InputList.Count; i++)
             {
                 AgentSkillComponent agentSkill = Script.GetActiveComponents(InputList[i]);
-                if (agentSkill != null && agentSkill.StateContainer.HasState("BKBBuff"))
+                if (SkillTargetProtection.IsProtected(InputList[i]))
                 {
                     continue;
                 }
@@ -954,6 +962,7 @@ namespace New_ZZZF
             Agent agent = null;
             foreach (Agent agent2 in Mission.Current.Agents)
             {
+                if (!SkillTargetProtection.CanSelect(agent2)) continue;
                 if ((agent2.IsMount && agent2.RiderAgent != null && !agent2.RiderAgent.IsFriendOf(player) && agent2.RiderAgent.IsEnemyOf(player)) || (!agent2.IsMount && !agent2.IsFriendOf(player) && agent2.IsEnemyOf(player)))
                 {
                     Vec3 vec2 = agent2.GetChestGlobalPosition() - v;
@@ -1302,6 +1311,7 @@ namespace New_ZZZF
         /// <returns></returns>
         public static int AgentShotAgent(Agent agent, Agent vagent)
         {
+            if (!SkillTargetProtection.CanSelect(vagent)) return 0;
             if (agent.Equipment != null)
             {
 
@@ -1391,6 +1401,7 @@ namespace New_ZZZF
         /// </summary>
         public static bool TryShootAtAgentLowCost(Agent shooter, Agent target, bool useHighArc)
         {
+            if (!SkillTargetProtection.CanSelect(target)) return false;
             if (!TryPrepareLowCostShot(shooter, target, useHighArc,
                     out MissionWeapon shotWeapon, out MissionWeapon ammoWeapon,
                     out Vec3 start, out Vec3 shotDirection, out float missileSpeed))
@@ -1407,6 +1418,7 @@ namespace New_ZZZF
         /// </summary>
         public static bool CanShootAtAgentLowCost(Agent shooter, Agent target, bool useHighArc)
         {
+            if (!SkillTargetProtection.CanSelect(target)) return false;
             return TryPrepareLowCostShot(shooter, target, useHighArc,
                 out _, out _, out _, out _, out _);
         }

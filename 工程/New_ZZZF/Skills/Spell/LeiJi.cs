@@ -93,7 +93,7 @@ namespace New_ZZZF.Skills
                 return false;
             Agent target = caster.GetTargetAgent();
             if (target == null || !target.IsActive() || target.Health <= 0f ||
-                !caster.IsEnemyOf(target))
+                (!caster.IsEnemyOf(target) || SkillTargetProtection.IsProtected(target)))
                 return false;
             float distanceSquared = (target.Position - caster.Position).LengthSquared;
             return distanceSquared >= MinimumAiRange * MinimumAiRange &&
@@ -122,7 +122,7 @@ namespace New_ZZZF.Skills
             return hitCount;
         }
 
-        /// <summary>供“呼唤风暴”共用同一电击伤害与落雷表现，每名敌人只调用一次。</summary>
+        /// <summary>供“呼唤风暴”共用同一电击伤害与落雷表现，可按目标独立调用多次。</summary>
         public static bool StrikeSingleTarget(
             Agent caster, Agent target, float spellPowerCoefficient, bool showVisual)
         {
@@ -138,7 +138,7 @@ namespace New_ZZZF.Skills
         {
             return caster != null && target != null && target != caster &&
                 target.IsActive() && target.IsHuman && target.Health > 0f &&
-                caster.IsEnemyOf(target);
+                (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target));
         }
 
         private static void ApplyDamage(Agent caster, Agent target, float spellPowerCoefficient)
@@ -168,6 +168,9 @@ namespace New_ZZZF.Skills
                 ShowLightningColumn(effects, position);
             }
         }
+
+        /// <summary>只播放原有落雷表现，不选取目标、不造成伤害。</summary>
+        public static void ShowSingleLightning(Vec3 impactPosition) => ShowLightning(impactPosition);
 
         private static void ShowLightning(Vec3 impactPosition)
         {

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using TaleWorlds.CampaignSystem.Inventory;
 using TaleWorlds.CampaignSystem;
@@ -30,12 +30,15 @@ using New_ZZZF.GUI;
 using BannerlordHtmlUI;
 using New_ZZZF.Systems.BattleEquipment;
 using New_ZZZF.Systems.BattlefieldPickup;
+using New_ZZZF.FormationRelocation;
+using New_ZZZF.BattlefieldControl;
 
 namespace New_ZZZF
 {
     public class SubModule : MBSubModuleBase
     {
         private Harmony _harmony;
+        private Bannerlord.UIExtenderEx.UIExtender _weaponMasteryUi;
         private bool _harmonyPatched;
         private bool _tacticalMapToggleKeyWasDown;
         private long _tacticalMapToggleIgnoreUntilMs;
@@ -43,7 +46,16 @@ namespace New_ZZZF
         protected override void OnSubModuleLoad()
         {
             base.OnSubModuleLoad();
+            _weaponMasteryUi = new Bannerlord.UIExtenderEx.UIExtender("New_ZZZF");
+            _weaponMasteryUi.Register(new[] { typeof(WeaponMasteryDescriptionPrefab) });
+            _weaponMasteryUi.Enable();
             NewZZZFDiag.Load();
+            try { FormationRelocationBootstrap.Install(); }
+            catch (Exception ex)
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "[New_ZZZF] 保持阵型移动初始化失败: " + ex.Message, Colors.Red));
+            }
             TacticalMapLog.Initialize();
             TacticalMapLog.Section("SUBMODULE LOAD");
             TacticalMapLog.Info("Assembly=" + typeof(SubModule).Assembly.Location);
@@ -171,6 +183,9 @@ namespace New_ZZZF
         public override void OnMissionBehaviorInitialize(Mission mission)
         {
             base.OnMissionBehaviorInitialize(mission);
+            if (!GameNetwork.IsMultiplayer)
+                mission.AddMissionBehavior(new WeaponCombatMissionLogic());
+            if (_harmonyPatched) FriendlyMeleePatchOwnership.EnsureOwnership(_harmony);
             TacticalMapLog.Section("MISSION BEHAVIOR INITIALIZE");
             TacticalMapLog.Info("Mission=" + (mission == null ? "null" : mission.GetType().FullName));
             if (NewZZZFDiag.SkillSystemBehavior)
@@ -178,16 +193,19 @@ namespace New_ZZZF
                 mission.AddMissionBehavior(new RushMovementMissionLogic());
                 mission.AddMissionBehavior(new JiFengLianZhanMissionLogic());
                 mission.AddMissionBehavior(new SpellProjectileMissionLogic());
+                mission.AddMissionBehavior(new ArcWaveMissionLogic());
+                mission.AddMissionBehavior(new TianFaZhiJianMissionLogic());
+                mission.AddMissionBehavior(new StormLightningMissionLogic());
+                mission.AddMissionBehavior(new FlameRushMissionLogic());
                 mission.AddMissionBehavior(new SpellAreaMissionLogic());
                 mission.AddMissionBehavior(new AgentAuraMissionLogic());
                 mission.AddMissionBehavior(new SpiritSteedMissionLogic());
                 mission.AddMissionBehavior(new SkillSystemBehavior());
+                mission.AddMissionBehavior(new SpellWheelBootstrap());
                 mission.AddMissionBehavior(new SummonManagerMissionLogic());
             }
             if (NewZZZFDiag.MountedSlashCamera)
                 mission.AddMissionBehavior(new MountedSlashCameraMissionLogic());
-            if (NewZZZFDiag.HeroChange)
-                mission.AddMissionBehavior(new HeroChangeMissionBehavior());
             if (NewZZZFDiag.TacticalMap)
             {
                 TacticalMapBootstrap.OnMissionStart(mission);
@@ -201,6 +219,11 @@ namespace New_ZZZF
                 mission.AddMissionBehavior(new BattleEquipmentMissionLogic());
             if (NewZZZFDiag.UnarmedWeaponPickup)
                 mission.AddMissionBehavior(new UnarmedWeaponPickupMissionLogic());
+            if (FormationRelocationBootstrap.IsInstalled)
+                mission.AddMissionBehavior(new FormationRelocationMissionLogic());
+            // Patches are installed by the behavior once Mission.Current is ready.
+            if (!GameNetwork.IsSessionActive)
+                mission.AddMissionBehavior(new BattlefieldControlMissionLogic());
 
         }
 
@@ -231,6 +254,9 @@ namespace New_ZZZF
                 catch (Exception ex) { TacticalMapLog.Error("BattleEquipment HtmlUI Dispose failed.", ex); }
             }
             if (NewZZZFDiag.FileLogging) HtmlUiInputTraceLogger.Event("NEW_ZZZF_SUBMODULE_UNLOAD_END");
+            FormationRelocationBootstrap.Uninstall();
+            BattlefieldControlBootstrap.Uninstall();
+            _weaponMasteryUi?.Deregister();
             base.OnSubModuleUnloaded();
         }
 
@@ -243,10 +269,10 @@ namespace New_ZZZF
 
         private static void ApplyZZZFSkillDisplayNames()
         {
-            RenameSkill(DefaultSkills.OneHanded, "{=ZZZF_SwordMastery}Sword Mastery", "{=ZZZF_SwordMastery_Desc}Sword Mastery");
-            RenameSkill(DefaultSkills.TwoHanded, "{=ZZZF_AxeMastery}Axe Mastery", "{=ZZZF_AxeMastery_Desc}Axe Mastery");
-            RenameSkill(DefaultSkills.Polearm, "{=ZZZF_HammerMastery}Hammer Mastery", "{=ZZZF_HammerMastery_Desc}Hammer Mastery");
-            RenameSkill(DefaultSkills.Throwing, "{=ZZZF_SpearMastery}Spear Mastery", "{=ZZZF_SpearMastery_Desc}Spear Mastery");
+            RenameSkill(DefaultSkills.OneHanded, "{=ZZZF_SwordMastery}剑精通", "{=ZZZF_SwordMastery_Desc}" + WeaponMasteryTexts.Description("Sword"));
+            RenameSkill(DefaultSkills.TwoHanded, "{=ZZZF_AxeMastery}斧精通", "{=ZZZF_AxeMastery_Desc}" + WeaponMasteryTexts.Description("Axe"));
+            RenameSkill(DefaultSkills.Polearm, "{=ZZZF_HammerMastery}锤精通", "{=ZZZF_HammerMastery_Desc}" + WeaponMasteryTexts.Description("Hammer"));
+            RenameSkill(DefaultSkills.Throwing, "{=ZZZF_SpearMastery}矛精通", "{=ZZZF_SpearMastery_Desc}" + WeaponMasteryTexts.Description("Spear"));
         }
 
         private static void RenameSkill(SkillObject skill, string localizedName, string localizedDescription)
@@ -272,11 +298,8 @@ namespace New_ZZZF
             if (game.GameType is Campaign)
             {
                 CampaignGameStarter campaignGameStarter = gameStarterObject as CampaignGameStarter;
-                if (NewZZZFDiag.HeroChange)
-                {
+                if (NewZZZFDiag.SkillRegistry)
                     campaignGameStarter.AddBehavior(new HeroSkillSaveCustomBehavior());
-                    campaignGameStarter.AddBehavior(new HeroChangeCampaignBehavior());
-                }
                 if (NewZZZFDiag.Affix)
                     campaignGameStarter.AddBehavior(new AffixCampaignBehavior());
             }

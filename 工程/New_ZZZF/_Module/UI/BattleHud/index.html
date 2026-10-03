@@ -60,6 +60,14 @@ body{pointer-events:none;user-select:none}
 .skill.gcd .cdFill{background:rgba(60,45,20,.72)}
 .skill.empty{opacity:.38}
 .skill.empty .name{color:#8d8478}
+#buffPanel{width:100%;margin-top:8px;padding:6px 9px;border:1px solid var(--line);
+  border-radius:10px;background:var(--panel);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+#buffPanel.hidden{display:none}
+.buffRow{display:grid;grid-template-columns:96px minmax(0,1fr) 34px;align-items:center;gap:7px;height:20px}
+.buffName{font-size:10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.buffTrack{height:7px;border-radius:4px;background:rgba(0,0,0,.55);overflow:hidden}
+.buffFill{height:100%;background:linear-gradient(90deg,#a66028,#edba64);transform-origin:left center}
+.buffTime{text-align:right;font-size:10px;color:#f6cf89;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -75,6 +83,7 @@ body{pointer-events:none;user-select:none}
       </div>
     </div>
     <div id="skillbar"></div>
+    <div id="buffPanel" class="hidden"></div>
   </div>
 </div>
 <script>
@@ -85,6 +94,9 @@ body{pointer-events:none;user-select:none}
   const app = window.game.scope('New_ZZZF.BattleHud');
   const hud = document.getElementById('hud');
   const skillbar = document.getElementById('skillbar');
+  const buffPanel = document.getElementById('buffPanel');
+  const buffRows = new Map();
+  const localBuffs = new Map();
   const SLOT_KEYS = {
     spell0:'法术1', spell1:'法术2', spell2:'法术3', spell3:'法术4',
     main:'E', sub:'Alt', passive:'被动', combat:'战技'
@@ -161,6 +173,9 @@ body{pointer-events:none;user-select:none}
   }
 
   function hasActiveCountdown(now) {
+    for (const timer of localBuffs.values()) {
+      if (remainingOf(timer, now) > 0.001) return true;
+    }
     if (remainingOf(localGcd, now) > 0.001) return true;
     for (const timer of localCooldowns.values()) {
       if (remainingOf(timer, now) > 0.001) return true;
@@ -184,6 +199,7 @@ body{pointer-events:none;user-select:none}
         const now = nowMs();
         updateSkillCells(latestState, now);
         updateGcdBadge(now);
+        updateBuffRows(now);
 
         if (!hasActiveCountdown(now)) {
           window.clearInterval(countdownInterval);
@@ -206,6 +222,7 @@ body{pointer-events:none;user-select:none}
       const now = nowMs();
       updateSkillCells(latestState, now);
       updateGcdBadge(now);
+      updateBuffRows(now);
     }
     updateCountdownLoop();
   }
@@ -222,6 +239,52 @@ body{pointer-events:none;user-select:none}
 
   function toggleClass(el, name, enabled) {
     if (el.classList.contains(name) !== enabled) el.classList.toggle(name, enabled);
+  }
+
+  function applyBuffsState(values) {
+    if (!Array.isArray(values)) return;
+    const now = nowMs();
+    const seen = new Set();
+    for (const buff of values) {
+      if (!buff || !buff.id || Number(buff.remaining) <= 0) continue;
+      seen.add(buff.id);
+      localBuffs.set(buff.id, { remaining: Number(buff.remaining),
+        max: Math.max(Number(buff.remaining), Number(buff.maximum) || 0), stamp: now });
+      let refs = buffRows.get(buff.id);
+      if (!refs) {
+        const row = document.createElement('div');
+        row.className = 'buffRow';
+        row.innerHTML = '<span class="buffName"></span><div class="buffTrack"><div class="buffFill"></div></div><span class="buffTime"></span>';
+        refs = { row, name: row.querySelector('.buffName'), fill: row.querySelector('.buffFill'),
+          time: row.querySelector('.buffTime'), ratio: null, text: null };
+        buffRows.set(buff.id, refs);
+        buffPanel.appendChild(row);
+      }
+      const name = buff.name || buff.id;
+      if (refs.name.textContent !== name) refs.name.textContent = name;
+    }
+    for (const [id, refs] of buffRows) {
+      if (!seen.has(id)) { refs.row.remove(); buffRows.delete(id); localBuffs.delete(id); }
+    }
+    updateBuffRows(now);
+    updateCountdownLoop();
+  }
+
+  function updateBuffRows(now) {
+    let visible = 0;
+    for (const [id, refs] of buffRows) {
+      const timer = localBuffs.get(id);
+      const remaining = remainingOf(timer, now);
+      const active = remaining > 0.01;
+      refs.row.style.display = active ? '' : 'none';
+      if (!active) continue;
+      visible++;
+      const ratio = Math.round(Math.min(1, remaining / Math.max(0.01, timer.max)) * 1000) / 1000;
+      const text = remaining >= 10 ? String(Math.ceil(remaining)) : remaining.toFixed(1);
+      if (refs.ratio !== ratio) { refs.fill.style.transform = 'scaleX(' + ratio + ')'; refs.ratio = ratio; }
+      if (refs.text !== text) { refs.time.textContent = text; refs.text = text; }
+    }
+    toggleClass(buffPanel, 'hidden', visible === 0);
   }
 
   function structureSignature(skills) {
@@ -386,6 +449,7 @@ body{pointer-events:none;user-select:none}
     if (!state || !state.available) {
       localCooldowns.clear();
       localDurations.clear();
+      applyBuffsState([]);
       localGcd = { remaining: 0, max: 0, stamp: nowMs() };
       updateCountdownLoop();
       hud.classList.add('hidden');
@@ -393,6 +457,7 @@ body{pointer-events:none;user-select:none}
     }
 
     hud.classList.remove('hidden');
+    applyBuffsState(state.buffs || []);
     syncLocalCountdowns(state);
     renderBar('stamFill', 'stamText', state.stamina, 100);
     renderBar('manaFill', 'manaText', state.mana, 100);
@@ -419,6 +484,7 @@ body{pointer-events:none;user-select:none}
       applyVitalsState(app.state.get('battleHud.vitals'));
       applyTimersState(app.state.get('battleHud.timers'));
       applySelectionState(app.state.get('battleHud.selection'));
+      applyBuffsState(app.state.get('battleHud.buffs'));
     } catch (_) {}
   };
 
@@ -456,6 +522,7 @@ body{pointer-events:none;user-select:none}
     app.state.watch('battleHud.vitals', applyVitalsState);
     app.state.watch('battleHud.timers', applyTimersState);
     app.state.watch('battleHud.selection', applySelectionState);
+    app.state.watch('battleHud.buffs', applyBuffsState);
     window.game.ready().then(() => { reportReady(); requestCurrentState(); })
       .catch(() => { requestCurrentState(); });
   } else {
@@ -464,6 +531,7 @@ body{pointer-events:none;user-select:none}
     app.state.subscribe('battleHud.vitals', applyVitalsState);
     app.state.subscribe('battleHud.timers', applyTimersState);
     app.state.subscribe('battleHud.selection', applySelectionState);
+    app.state.subscribe('battleHud.buffs', applyBuffsState);
     requestCurrentState();
     if (window.game && typeof window.game.ready === 'function') {
       window.game.ready().then(() => { hydrate(); requestCurrentState(); }).catch(() => { hydrate(); requestCurrentState(); });

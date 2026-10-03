@@ -1,4 +1,4 @@
-﻿using Helpers;
+using Helpers;
 using SandBox.GameComponents;
 using System;
 using System.Collections.Generic;
@@ -36,13 +36,16 @@ namespace New_ZZZF
 
         public static float ApplyRefactoredArmor(
             in AttackInformation attackInformation,
+            in AttackCollisionData collisionData,
             float damageBeforeArmor)
         {
             if (damageBeforeArmor <= 0f)
                 return 0f;
 
-            float armor = MathF.Max(0f, attackInformation.ArmorAmountFloat);
+            float weaponArmor = WeaponCombatRules.Armor(in attackInformation, in collisionData, attackInformation.ArmorAmountFloat);
+            float armor = PhysicalHitBuffRules.GetEffectiveArmor(weaponArmor, PhysicalHitBuffRules.GetArmorIgnoreRatio(attackInformation.AttackerAgent));
             float armorResult = damageBeforeArmor - armor;
+            WeaponCombatHitContext.PreArmorDamage = damageBeforeArmor;
             float minimumResult = damageBeforeArmor * GetMinimumDamageRatio(attackInformation.AttackerAgent);
 
             return MathF.Clamp(
@@ -51,11 +54,38 @@ namespace New_ZZZF
                 1000f);
         }
 
+        /// <summary>风暴之力只作用于投射物命中；额外100伤害在护甲前加入。</summary>
+        public static float ApplyStormRangedBaseDamage(
+            in AttackInformation attackInformation,
+            in AttackCollisionData collisionData,
+            float baseDamage)
+        {
+            if (baseDamage <= 0f || !collisionData.IsMissile ||
+                collisionData.CollisionResult != CombatCollisionResult.StrikeAgent ||
+                attackInformation.IsFriendlyFire ||
+                attackInformation.VictimAgent == null)
+                return baseDamage;
+            Agent attacker = attackInformation.AttackerAgent;
+            if (KongNueCiFu.IsBlessed(attacker)) baseDamage *= 0.5f;
+            if (attacker == null ||
+                !SkillSystemBehavior.ActiveComponents.TryGetValue(attacker.Index,
+                    out AgentSkillComponent component) ||
+                component.StateContainer.GetState("FengBaoZhiLiBuff") is not
+                    FengBaoZhiLi.FengBaoZhiLiBuff buff || buff.Duration <= 0f)
+                return baseDamage;
+
+            float result = baseDamage * 2.5f;
+            if (MBRandom.RandomFloat < 0.20f)
+                result += 100f;
+            return result;
+        }
+
         public static float ApplyCampaignFinalRules(
             in AttackInformation attackInformation,
             float damage)
         {
-            if (attackInformation.IsFriendlyFire)
+            if (attackInformation.IsFriendlyFire &&
+                !KongNueFriendlyFireRules.AllowsDamage(attackInformation.AttackerAgent, attackInformation.VictimAgent))
                 return 0f;
 
             Agent attacker = attackInformation.AttackerAgent;
@@ -86,13 +116,25 @@ namespace New_ZZZF
             if (victim != null &&
                 SkillSystemBehavior.ActiveComponents.TryGetValue(victim.Index, out var victimComponent))
             {
-                if (victimComponent.StateContainer.HasState("JianRenBuQuuBuff"))
-                    damage = 1f;
-                else if (victimComponent.StateContainer.HasState("TianQiBuff"))
+                if (victimComponent.StateContainer.HasState("TianQiBuff"))
                     damage = 0f;
             }
 
             return damage;
+        }
+
+        /// <summary>护甲和原版修正结算后，统一应用各来源线性相加的物理减伤。</summary>
+        public static float ApplyPhysicalDamageReduction(
+            in AttackInformation attackInformation, float finalDamage)
+        {
+            if (finalDamage <= 0f)
+                return finalDamage;
+            Agent victim = attackInformation.VictimAgent;
+            if (victim == null ||
+                !SkillSystemBehavior.ActiveComponents.TryGetValue(victim.Index,
+                    out AgentSkillComponent component))
+                return finalDamage;
+            return finalDamage * (1f - component.PhysicalDamageReduction);
         }
 
         public static float ApplyTianQiHitProtection(in AttackInformation attackInformation,
@@ -101,7 +143,7 @@ namespace New_ZZZF
             if (finalDamage > 0f && TianQi.IsProtected(attackInformation.AttackerAgent))
                 finalDamage *= 2f;
             Agent victim = attackInformation.VictimAgent;
-            if (TianQi.IsProtected(victim) ||
+            if (TianFaZhiJianMissionLogic.IsLeaping(victim) || TianQi.IsProtected(victim) ||
                 TianQi.TryTriggerEmergency(victim, MathF.Round(finalDamage)))
                 return 0f;
             return finalDamage;
@@ -229,6 +271,14 @@ namespace New_ZZZF
                 return;
             }
 
+            if (WeaponCombatRules.Enabled)
+            {
+                EquipmentIndex slot = defenderAgent.GetOffhandWieldedItemIndex();
+                if (slot == EquipmentIndex.None) slot = defenderAgent.GetPrimaryWieldedItemIndex();
+                WeaponCombatMissionLogic.Current.Block(attackerAgent, defenderAgent, slot);
+                return;
+            }
+
             float disarmChance =
                 0.2f +
                 proficiencyDifference / 500f *
@@ -258,7 +308,7 @@ namespace New_ZZZF
     {
         public static Random random = new Random();
 
-        public static float WOW_Script_AgentStatCalculateModel(Agent agent, float native)
+        public static float WOW_Script_AgentStatCalculateModel(Agent agent, float native, WeaponComponentData weapon)
         {
             SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var result);
             if (result != null)
@@ -269,39 +319,43 @@ namespace New_ZZZF
                     native *= 1 + result._currentStamina / 100 / 2;
                 if (result.StateContainer.HasState("ZhanHaoBuff"))
                     native *= 1.2f;
-                if (result.StateContainer.HasState("WeiYaBuff"))
-                    native *= 0.75f;
+                native *= 1f - 0.2f * WeiYa.GetAppliedStrength(agent);
                 if (result.StateContainer.HasState("YingXiongZhuFuBuff"))
-                    native *= 2f;
-                if (result.StateContainer.HasState("KongNueCiFuBuff"))
-                    native *= 3f;
-                if (result.StateContainer.HasState("NaGouCiFuBuff"))
-                    native *= 1.5f;
+                    native *= 1.4f;
+                if (result.StateContainer.HasState("KongNueCiFuBuff") && weapon != null && weapon.IsMeleeWeapon && !weapon.IsRangedWeapon)
+                    native *= KongNueCiFu.StrengthMultiplier;
+
                 if (result.StateContainer.HasState("XuRuoZuZhouBuffToEnemy"))
                     native *= 0.5f;
                 if (result.StateContainer.HasState("BKBBuff"))
                     native *= 2f;
-                if (result.StateContainer.HasState("FengBaoZhiLiBuff"))
-                {
-                    Script.AgentGetCurrentWeapon(agent, out var missionWeapon);
-                    if (Script.IsRangeWeapon(missionWeapon.Item))
-                        native *= 3f;
-                }
+                // 风暴之力在投射物命中的护甲前伤害处结算，避免换武器导致误判。
             }
 
-            return native;
+            return WeaponCombatRules.DamageMultiplier(agent, weapon, native);
         }
     }
 
     public class WOW_SandboxStrikeMagnitudeModel : SandboxStrikeMagnitudeModel
     {
+        public override float CalculateAdjustedArmorForBlow(in AttackInformation attackInformation,
+            in AttackCollisionData collisionData, float baseArmor, BasicCharacterObject attackerCharacter,
+            BasicCharacterObject attackerCaptainCharacter, BasicCharacterObject victimCharacter,
+            BasicCharacterObject victimCaptainCharacter, WeaponComponentData weaponComponent)
+        {
+            float adjusted = base.CalculateAdjustedArmorForBlow(in attackInformation, in collisionData,
+                baseArmor, attackerCharacter, attackerCaptainCharacter, victimCharacter, victimCaptainCharacter, weaponComponent);
+            return PhysicalHitBuffRules.GetEffectiveArmor(WeaponCombatRules.Armor(in attackInformation, in collisionData, adjusted),
+                PhysicalHitBuffRules.GetArmorIgnoreRatio(attackInformation.AttackerAgent));
+        }
+
         public override float CalculateStrikeMagnitudeForMissile(
             in AttackInformation attackInformation,
             in AttackCollisionData collisionData,
             in MissionWeapon weapon,
             float missileSpeed)
         {
-            if (SkillSystemBehavior.WoW_WeaponMissile.ContainsKey(collisionData.AffectorWeaponSlotOrMissileIndex) &&
+            if (!SoulBarrageNativeHit.IsCurrentHit(attackInformation.AttackerAgent, attackInformation.VictimAgent) && SkillSystemBehavior.WoW_WeaponMissile.ContainsKey(collisionData.AffectorWeaponSlotOrMissileIndex) &&
                 (weapon.Item.PrimaryWeapon.WeaponClass == WeaponClass.Arrow ||
                  weapon.Item.PrimaryWeapon.WeaponClass == WeaponClass.Bolt))
             {
@@ -322,7 +376,7 @@ namespace New_ZZZF
                 return baseDam / mtd * (weaponDamage + collisionData.MissileTotalDamage);
             }
 
-            if (SkillSystemBehavior.WoW_WeaponMissile.ContainsKey(collisionData.AffectorWeaponSlotOrMissileIndex) &&
+            if (!SoulBarrageNativeHit.IsCurrentHit(attackInformation.AttackerAgent, attackInformation.VictimAgent) && SkillSystemBehavior.WoW_WeaponMissile.ContainsKey(collisionData.AffectorWeaponSlotOrMissileIndex) &&
                 weapon.CurrentUsageItem.IsConsumable &&
                 weapon.CurrentUsageItem.IsRangedWeapon)
             {
@@ -593,13 +647,24 @@ namespace New_ZZZF
 
     public class WOW_DefaultStrikeMagnitudeModel : DefaultStrikeMagnitudeModel
     {
+        public override float CalculateAdjustedArmorForBlow(in AttackInformation attackInformation,
+            in AttackCollisionData collisionData, float baseArmor, BasicCharacterObject attackerCharacter,
+            BasicCharacterObject attackerCaptainCharacter, BasicCharacterObject victimCharacter,
+            BasicCharacterObject victimCaptainCharacter, WeaponComponentData weaponComponent)
+        {
+            float adjusted = base.CalculateAdjustedArmorForBlow(in attackInformation, in collisionData,
+                baseArmor, attackerCharacter, attackerCaptainCharacter, victimCharacter, victimCaptainCharacter, weaponComponent);
+            return PhysicalHitBuffRules.GetEffectiveArmor(WeaponCombatRules.Armor(in attackInformation, in collisionData, adjusted),
+                PhysicalHitBuffRules.GetArmorIgnoreRatio(attackInformation.AttackerAgent));
+        }
+
         public override float CalculateStrikeMagnitudeForMissile(
             in AttackInformation attackInformation,
             in AttackCollisionData collisionData,
             in MissionWeapon weapon,
             float missileSpeed)
         {
-            if (SkillSystemBehavior.WoW_WeaponMissile.ContainsKey(collisionData.AffectorWeaponSlotOrMissileIndex) &&
+            if (!SoulBarrageNativeHit.IsCurrentHit(attackInformation.AttackerAgent, attackInformation.VictimAgent) && SkillSystemBehavior.WoW_WeaponMissile.ContainsKey(collisionData.AffectorWeaponSlotOrMissileIndex) &&
                 (weapon.Item.PrimaryWeapon.WeaponClass == WeaponClass.Arrow ||
                  weapon.Item.PrimaryWeapon.WeaponClass == WeaponClass.Bolt))
             {
@@ -619,7 +684,7 @@ namespace New_ZZZF
                 return baseDam / mtd * (weaponDamage + collisionData.MissileTotalDamage);
             }
 
-            if (SkillSystemBehavior.WoW_WeaponMissile.ContainsKey(collisionData.AffectorWeaponSlotOrMissileIndex) &&
+            if (!SoulBarrageNativeHit.IsCurrentHit(attackInformation.AttackerAgent, attackInformation.VictimAgent) && SkillSystemBehavior.WoW_WeaponMissile.ContainsKey(collisionData.AffectorWeaponSlotOrMissileIndex) &&
                 weapon.CurrentUsageItem.IsConsumable &&
                 weapon.CurrentUsageItem.IsRangedWeapon)
             {
@@ -745,6 +810,9 @@ namespace New_ZZZF
             AgentDrivenProperties agentDrivenProperties)
         {
             base.UpdateAgentStats(agent, agentDrivenProperties);
+            FengBaoZhiLi.ApplyRangedDrivenProperties(agent, agentDrivenProperties);
+            WeaponCombatRules.Stats(agent, agentDrivenProperties);
+            ZhanHao.ApplyDrivenProperties(agent, agentDrivenProperties);
             AggressiveAi.AiDefenseThreatAdjustment.Apply(agent, agentDrivenProperties);
             if (agent != null && agent.IsHuman &&
                 RushMovementMissionLogic.IsMountedChongCiZhanCharge(agent))
@@ -759,13 +827,22 @@ namespace New_ZZZF
             WeaponComponentData weapon)
         {
             float native = base.GetWeaponDamageMultiplier(agent, weapon);
-            native = StrikeMagnitudeScript.WOW_Script_AgentStatCalculateModel(agent, native);
+            native = StrikeMagnitudeScript.WOW_Script_AgentStatCalculateModel(agent, native, weapon);
             return native;
         }
     }
 
     public class WOW_SandboxAgentApplyDamageModel : SandboxAgentApplyDamageModel
     {
+        public override float CalculateShieldDamage(in AttackInformation attackInformation, float baseDamage)
+        {
+            return WeaponCombatRules.ShieldDamage(in attackInformation, base.CalculateShieldDamage(in attackInformation, baseDamage));
+        }
+        public override bool CanWeaponDealSneakAttack(in AttackInformation attackInformation, WeaponComponentData weapon)
+        {
+            return SneakAttackRules.CanSneak(in attackInformation, weapon) ||
+                base.CanWeaponDealSneakAttack(in attackInformation, weapon);
+        }
         public override bool DecideAgentKnockedDownByBlow(
             Agent attackerAgent,
             Agent victimAgent,
@@ -780,6 +857,12 @@ namespace New_ZZZF
                 attackerAgent, victimAgent, in collisionData, attackerWeapon, in blow);
         }
 
+        public override float CalculateStaggerThresholdDamage(Agent defenderAgent, in Blow blow)
+        {
+            if (BkbCombatRules.IsActive(defenderAgent)) return 1000f;
+            return base.CalculateStaggerThresholdDamage(defenderAgent, in blow);
+        }
+
         public override bool DecideCrushedThrough(
             Agent attackerAgent,
             Agent defenderAgent,
@@ -789,18 +872,39 @@ namespace New_ZZZF
             WeaponComponentData defendItem,
             bool isPassiveUsage)
         {
-            if (JiFengLianZhanMissionLogic.Current?.IsActive(attackerAgent) == true)
+            if (BkbCombatRules.IsOverhead(attackerAgent, attackDirection, strikeType) || (KongNueCiFu.IsBlessed(attackerAgent) && KongNueCiFu.HasMeleeWeapon(attackerAgent)) || JiFengLianZhanMissionLogic.Current?.IsActive(attackerAgent) == true)
                 return true;
-            return ZZZFBlockBreakRules.Decide(
+            return WeaponCombatRules.Crush(attackerAgent, ZZZFBlockBreakRules.Decide(
                 attackerAgent,
                 defenderAgent,
                 totalAttackEnergy,
                 attackDirection,
                 strikeType,
                 defendItem,
-                isPassiveUsage);
+                isPassiveUsage));
         }
 
+        public override void DecideWeaponCollisionReaction(
+            in Blow registeredBlow, in AttackCollisionData collisionData, Agent attacker, Agent defender,
+            in MissionWeapon attackerWeapon, bool isFatalHit, bool isShruggedOff,
+            float momentumRemaining, out MeleeCollisionReaction colReaction)
+        {
+            if ((JiFengLianZhanMissionLogic.Current?.IsBladeDanceActive(attacker) == true ||
+                 BkbCombatRules.IsOverhead(attacker, collisionData.AttackDirection, (StrikeType)collisionData.StrikeType)) &&
+                !collisionData.IsMissile && !collisionData.IsHorseCharge &&
+                !attackerWeapon.IsEmpty && attackerWeapon.CurrentUsageItem?.IsMeleeWeapon == true &&
+                collisionData.CollisionResult != CombatCollisionResult.HitWorld)
+            {
+                colReaction = MeleeCollisionReaction.SlicedThrough;
+                return;
+            }
+            base.DecideWeaponCollisionReaction(in registeredBlow, in collisionData, attacker, defender,
+                in attackerWeapon, isFatalHit, isShruggedOff, momentumRemaining, out colReaction);
+            if (WeaponCombatRules.Enabled && !collisionData.IsMissile && !collisionData.IsAlternativeAttack &&
+                registeredBlow.StrikeType == StrikeType.Thrust &&
+                (colReaction == MeleeCollisionReaction.Bounced || colReaction == MeleeCollisionReaction.Staggered || colReaction == MeleeCollisionReaction.Stuck))
+                colReaction = MeleeCollisionReaction.ContinueChecking;
+        }
         public override float CalculateRemainingMomentum(
             float originalMomentum,
             in Blow blow,
@@ -810,12 +914,21 @@ namespace New_ZZZF
             in MissionWeapon attackerWeapon,
             bool isCrushThrough)
         {
-            if (isCrushThrough &&
-                JiFengLianZhanMissionLogic.Current?.IsActive(attacker) == true)
+            if ((JiFengLianZhanMissionLogic.Current?.IsBladeDanceActive(attacker) == true ||
+                 BkbCombatRules.IsOverhead(attacker, collisionData.AttackDirection, (StrikeType)collisionData.StrikeType)) &&
+                !collisionData.IsMissile && !collisionData.IsHorseCharge && !attackerWeapon.IsEmpty &&
+                attackerWeapon.CurrentUsageItem?.IsMeleeWeapon == true)
                 return originalMomentum;
-            return base.CalculateRemainingMomentum(
+            // 恐虐的原生近战贯穿、普通破格挡均保留输入动量；迎击格挡仍由原生前置判断决定。
+            if ((KongNueCiFu.IsBlessed(attacker) && !collisionData.IsMissile && !collisionData.IsHorseCharge &&
+                 !attackerWeapon.IsEmpty && attackerWeapon.CurrentUsageItem != null &&
+                 attackerWeapon.CurrentUsageItem.IsMeleeWeapon &&
+                 collisionData.CollisionResult != CombatCollisionResult.ChamberBlocked) ||
+                (isCrushThrough && JiFengLianZhanMissionLogic.Current?.IsActive(attacker) == true))
+                return originalMomentum;
+            return WeaponCombatRules.Momentum(attacker, attackerWeapon, isCrushThrough, originalMomentum, base.CalculateRemainingMomentum(
                 originalMomentum, in blow, in collisionData,
-                attacker, victim, in attackerWeapon, isCrushThrough);
+                attacker, victim, in attackerWeapon, isCrushThrough));
         }
 
         public override float ApplyDamageReductions(
@@ -823,7 +936,8 @@ namespace New_ZZZF
             in AttackCollisionData collisionData,
             float baseDamage)
         {
-            if (attackInformation.IsFriendlyFire)
+            if (attackInformation.IsFriendlyFire &&
+                !KongNueFriendlyFireRules.AllowsDamage(attackInformation.AttackerAgent, attackInformation.VictimAgent))
                 return 0f;
 
             float armor = attackInformation.ArmorAmountFloat;
@@ -835,7 +949,8 @@ namespace New_ZZZF
                 base.ApplyDamageReductions(
                     in noArmor,
                     in collisionData,
-                    baseDamage);
+                    DamageCalculationRules.ApplyStormRangedBaseDamage(
+                        in attackInformation, in collisionData, baseDamage));
 
             float adjustedDamage =
                 DamageCalculationRules.ApplyCampaignFinalRules(
@@ -847,6 +962,7 @@ namespace New_ZZZF
 
             return DamageCalculationRules.ApplyRefactoredArmor(
                 in armorContext,
+                in collisionData,
                 adjustedDamage);
         }
 
@@ -857,13 +973,28 @@ namespace New_ZZZF
         {
             float finalDamage = base.ApplyGeneralDamageModifiers(
                 in attackInformation, in collisionData, baseDamage);
-            return DamageCalculationRules.ApplyTianQiHitProtection(
+            finalDamage = WeaponCombatRules.FinalDamage(in attackInformation, in collisionData, finalDamage);
+            finalDamage = DamageCalculationRules.ApplyPhysicalDamageReduction(
                 in attackInformation, finalDamage);
+            finalDamage = DamageCalculationRules.ApplyTianQiHitProtection(
+                in attackInformation, finalDamage);
+            finalDamage = KongNueFriendlyFireRules.ApplyDamage(attackInformation.AttackerAgent, attackInformation.VictimAgent, finalDamage);
+            finalDamage = PhysicalHitBuffRules.ResolveNaGouImmunity(in attackInformation, in collisionData, finalDamage);
+            return collisionData.IsFallDamage ? finalDamage : FortitudeDamageRules.LimitFinalDamage(attackInformation.VictimAgent, finalDamage);
         }
     }
 
     public class WOW_CustomAgentApplyDamageModel : CustomAgentApplyDamageModel
     {
+        public override float CalculateShieldDamage(in AttackInformation attackInformation, float baseDamage)
+        {
+            return WeaponCombatRules.ShieldDamage(in attackInformation, base.CalculateShieldDamage(in attackInformation, baseDamage));
+        }
+        public override bool CanWeaponDealSneakAttack(in AttackInformation attackInformation, WeaponComponentData weapon)
+        {
+            return SneakAttackRules.CanSneak(in attackInformation, weapon) ||
+                base.CanWeaponDealSneakAttack(in attackInformation, weapon);
+        }
         public override bool DecideAgentKnockedDownByBlow(
             Agent attackerAgent,
             Agent victimAgent,
@@ -878,6 +1009,12 @@ namespace New_ZZZF
                 attackerAgent, victimAgent, in collisionData, attackerWeapon, in blow);
         }
 
+        public override float CalculateStaggerThresholdDamage(Agent defenderAgent, in Blow blow)
+        {
+            if (BkbCombatRules.IsActive(defenderAgent)) return 1000f;
+            return base.CalculateStaggerThresholdDamage(defenderAgent, in blow);
+        }
+
         public override bool DecideCrushedThrough(
             Agent attackerAgent,
             Agent defenderAgent,
@@ -887,18 +1024,39 @@ namespace New_ZZZF
             WeaponComponentData defendItem,
             bool isPassiveUsage)
         {
-            if (JiFengLianZhanMissionLogic.Current?.IsActive(attackerAgent) == true)
+            if (BkbCombatRules.IsOverhead(attackerAgent, attackDirection, strikeType) || (KongNueCiFu.IsBlessed(attackerAgent) && KongNueCiFu.HasMeleeWeapon(attackerAgent)) || JiFengLianZhanMissionLogic.Current?.IsActive(attackerAgent) == true)
                 return true;
-            return ZZZFBlockBreakRules.Decide(
+            return WeaponCombatRules.Crush(attackerAgent, ZZZFBlockBreakRules.Decide(
                 attackerAgent,
                 defenderAgent,
                 totalAttackEnergy,
                 attackDirection,
                 strikeType,
                 defendItem,
-                isPassiveUsage);
+                isPassiveUsage));
         }
 
+        public override void DecideWeaponCollisionReaction(
+            in Blow registeredBlow, in AttackCollisionData collisionData, Agent attacker, Agent defender,
+            in MissionWeapon attackerWeapon, bool isFatalHit, bool isShruggedOff,
+            float momentumRemaining, out MeleeCollisionReaction colReaction)
+        {
+            if ((JiFengLianZhanMissionLogic.Current?.IsBladeDanceActive(attacker) == true ||
+                 BkbCombatRules.IsOverhead(attacker, collisionData.AttackDirection, (StrikeType)collisionData.StrikeType)) &&
+                !collisionData.IsMissile && !collisionData.IsHorseCharge &&
+                !attackerWeapon.IsEmpty && attackerWeapon.CurrentUsageItem?.IsMeleeWeapon == true &&
+                collisionData.CollisionResult != CombatCollisionResult.HitWorld)
+            {
+                colReaction = MeleeCollisionReaction.SlicedThrough;
+                return;
+            }
+            base.DecideWeaponCollisionReaction(in registeredBlow, in collisionData, attacker, defender,
+                in attackerWeapon, isFatalHit, isShruggedOff, momentumRemaining, out colReaction);
+            if (WeaponCombatRules.Enabled && !collisionData.IsMissile && !collisionData.IsAlternativeAttack &&
+                registeredBlow.StrikeType == StrikeType.Thrust &&
+                (colReaction == MeleeCollisionReaction.Bounced || colReaction == MeleeCollisionReaction.Staggered || colReaction == MeleeCollisionReaction.Stuck))
+                colReaction = MeleeCollisionReaction.ContinueChecking;
+        }
         public override float CalculateRemainingMomentum(
             float originalMomentum,
             in Blow blow,
@@ -908,12 +1066,21 @@ namespace New_ZZZF
             in MissionWeapon attackerWeapon,
             bool isCrushThrough)
         {
-            if (isCrushThrough &&
-                JiFengLianZhanMissionLogic.Current?.IsActive(attacker) == true)
+            if ((JiFengLianZhanMissionLogic.Current?.IsBladeDanceActive(attacker) == true ||
+                 BkbCombatRules.IsOverhead(attacker, collisionData.AttackDirection, (StrikeType)collisionData.StrikeType)) &&
+                !collisionData.IsMissile && !collisionData.IsHorseCharge && !attackerWeapon.IsEmpty &&
+                attackerWeapon.CurrentUsageItem?.IsMeleeWeapon == true)
                 return originalMomentum;
-            return base.CalculateRemainingMomentum(
+            // 恐虐的原生近战贯穿、普通破格挡均保留输入动量；迎击格挡仍由原生前置判断决定。
+            if ((KongNueCiFu.IsBlessed(attacker) && !collisionData.IsMissile && !collisionData.IsHorseCharge &&
+                 !attackerWeapon.IsEmpty && attackerWeapon.CurrentUsageItem != null &&
+                 attackerWeapon.CurrentUsageItem.IsMeleeWeapon &&
+                 collisionData.CollisionResult != CombatCollisionResult.ChamberBlocked) ||
+                (isCrushThrough && JiFengLianZhanMissionLogic.Current?.IsActive(attacker) == true))
+                return originalMomentum;
+            return WeaponCombatRules.Momentum(attacker, attackerWeapon, isCrushThrough, originalMomentum, base.CalculateRemainingMomentum(
                 originalMomentum, in blow, in collisionData,
-                attacker, victim, in attackerWeapon, isCrushThrough);
+                attacker, victim, in attackerWeapon, isCrushThrough));
         }
 
         public override float ApplyDamageReductions(
@@ -921,13 +1088,19 @@ namespace New_ZZZF
             in AttackCollisionData collisionData,
             float baseDamage)
         {
-            if (attackInformation.IsFriendlyFire)
+            if (attackInformation.IsFriendlyFire &&
+                !KongNueFriendlyFireRules.AllowsDamage(attackInformation.AttackerAgent, attackInformation.VictimAgent))
                 return 0f;
 
+            AttackInformation armorContext = attackInformation;
+            armorContext.ArmorAmountFloat = PhysicalHitBuffRules.GetEffectiveArmor(WeaponCombatRules.Armor(in attackInformation, in collisionData, attackInformation.ArmorAmountFloat),
+                PhysicalHitBuffRules.GetArmorIgnoreRatio(attackInformation.AttackerAgent));
+            WeaponCombatHitContext.PreArmorDamage = baseDamage;
             return base.ApplyDamageReductions(
-                in attackInformation,
+                in armorContext,
                 in collisionData,
-                baseDamage);
+                DamageCalculationRules.ApplyStormRangedBaseDamage(
+                    in attackInformation, in collisionData, baseDamage));
         }
 
         public override float ApplyGeneralDamageModifiers(
@@ -937,8 +1110,14 @@ namespace New_ZZZF
         {
             float finalDamage = base.ApplyGeneralDamageModifiers(
                 in attackInformation, in collisionData, baseDamage);
-            return DamageCalculationRules.ApplyTianQiHitProtection(
+            finalDamage = WeaponCombatRules.FinalDamage(in attackInformation, in collisionData, finalDamage);
+            finalDamage = DamageCalculationRules.ApplyPhysicalDamageReduction(
                 in attackInformation, finalDamage);
+            finalDamage = DamageCalculationRules.ApplyTianQiHitProtection(
+                in attackInformation, finalDamage);
+            finalDamage = KongNueFriendlyFireRules.ApplyDamage(attackInformation.AttackerAgent, attackInformation.VictimAgent, finalDamage);
+            finalDamage = PhysicalHitBuffRules.ResolveNaGouImmunity(in attackInformation, in collisionData, finalDamage);
+            return collisionData.IsFallDamage ? finalDamage : FortitudeDamageRules.LimitFinalDamage(attackInformation.VictimAgent, finalDamage);
         }
     }
 }

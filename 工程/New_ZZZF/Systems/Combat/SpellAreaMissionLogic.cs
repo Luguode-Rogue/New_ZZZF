@@ -279,6 +279,7 @@ namespace New_ZZZF
                 return false;
             if (record.Request.HitHumanAgentsOnly && !target.IsHuman)
                 return false;
+            if (SkillTargetProtection.IsProtected(target)) return false;
             if (record.Request.HitEnemiesOnly && !record.Request.Caster.IsEnemyOf(target))
                 return false;
             return record.Request.AdditionalAgentFilter == null ||

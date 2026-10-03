@@ -18,6 +18,16 @@ namespace New_ZZZF.Harmonys
             RushMovementMissionLogic manager = RushMovementMissionLogic.Current;
             if (mission?.MainAgent != null && manager != null)
                 manager.ApplyPlayerRushMovementAfterControlTick(mission.MainAgent);
+            Agent player = mission?.MainAgent;
+            if (player?.GetComponent<AgentSkillComponent>()?.StateContainer.GetLongestStateDuration("DaDiJianTaBuffToEnemy") > 0f)
+            {
+                player.MovementInputVector = TaleWorlds.Library.Vec2.Zero;
+                player.MovementFlags = 0;
+                if (player.MountAgent != null) {
+                    player.MountAgent.MovementInputVector = TaleWorlds.Library.Vec2.Zero;
+                    player.MountAgent.MovementFlags = 0;
+                }
+            }
         }
     }
 }

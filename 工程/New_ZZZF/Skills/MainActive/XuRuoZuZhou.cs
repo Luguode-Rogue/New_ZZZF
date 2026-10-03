@@ -1,137 +1,78 @@
-﻿using New_ZZZF.Systems;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TaleWorlds.CampaignSystem.Extensions;
-using TaleWorlds.Core;
-using TaleWorlds.Engine;
-using TaleWorlds.InputSystem;
-using TaleWorlds.Library;
+using New_ZZZF.Systems;
 using TaleWorlds.MountAndBlade;
-using static New_ZZZF.JingXia;
+using TaleWorlds.Engine;
+using TaleWorlds.Core;
 
 namespace New_ZZZF
 {
     internal class XuRuoZuZhou : SkillBase
     {
-        public XuRuoZuZhou()
-        {
-            SkillID = "XuRuoZuZhou";      // 必须唯一
-            Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 2;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0056}XuRuoZuZhou");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0057}群体负面状态，持续影响附近敌方单位。受影响单位降低造成的伤害，并且耐力回复-10。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
+        internal const float DebuffDuration = 60f;
+        internal const string MarkerId = "XuRuoZuZhouAllyMarker";
+        internal const string DescriptionText = "全图虚弱诅咒60秒，武器伤害降低50%，每秒耐力恢复减少5。友军已有施放时NPC不会重复开启。耐力60，冷却90秒。";
+        public XuRuoZuZhou() {
+            SkillID = "XuRuoZuZhou"; Type = SPSkillType.MainActive;
+            Cooldown = 90f; ResourceCost = 60f;
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0056}虚弱诅咒");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0057}" + DescriptionText);
         }
-        public override bool Activate(Agent agent)
-        {
-            // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new XuRuoZuZhouBuffToSelf(60f, agent), }; // 新实例
-            foreach (var state in newStates)
-            {
-                state.TargetAgent = agent;
-                agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
+        public override bool IsHudDurationState(string stateId) => false;
+        internal static bool IsCursed(Agent agent) =>
+            (agent?.IsMount == true ? agent.RiderAgent : agent)?.GetComponent<AgentSkillComponent>()?
+                .StateContainer.GetLongestStateDuration("XuRuoZuZhouBuffToEnemy") > 0f;
+        private static bool CanAffect(Agent caster, Agent enemy) => enemy != null && enemy.IsActive() &&
+            enemy.IsHuman && enemy.Health > 0f && caster.IsEnemyOf(enemy) &&
+            !SkillTargetProtection.IsProtected(enemy) && enemy.GetComponent<AgentSkillComponent>() != null;
+        public override bool CheckCondition(Agent caster) {
+            if (!base.CheckCondition(caster) || caster?.Mission == null) return false;
+            if (caster.GetComponent<AgentSkillComponent>()?.StateContainer.HasState(MarkerId) == true) return false;
+            foreach (Agent enemy in caster.Mission.Agents)
+                if (CanAffect(caster, enemy)) return true;
+            return false;
+        }
+        public override bool Activate(Agent caster) {
+            if (caster == null || !caster.IsActive() || caster.Mission == null) return FailActivation("施法者不可用。");
+            bool affected = false;
+            foreach (Agent enemy in caster.Mission.Agents) {
+                if (!CanAffect(caster, enemy)) continue;
+                AgentBuffContainer states = enemy.GetComponent<AgentSkillComponent>().StateContainer;
+                var old = states.GetState("XuRuoZuZhouBuffToEnemy") as XuRuoZuZhouBuffToEnemy;
+                if (old != null) { old.Duration = Math.Max(old.Duration, DebuffDuration); }
+                else states.AddState(new XuRuoZuZhouBuffToEnemy(DebuffDuration, caster), enemy);
+                affected = true;
             }
+            if (!affected) return FailActivation("没有可诅咒的敌军。");
+            foreach (Agent ally in caster.Mission.Agents) {
+                if (ally == null || !ally.IsActive() || !ally.IsHuman || (ally != caster && !caster.IsFriendOf(ally))) continue;
+                var states = ally.GetComponent<AgentSkillComponent>()?.StateContainer;
+                if (states == null) continue;
+                var old = states.GetState(MarkerId);
+                if (old != null) old.Duration = Math.Max(old.Duration, DebuffDuration);
+                else states.AddState(new AllyMarker(caster), ally);
+            }
+
             return true;
         }
-
-
-    }
-    public class XuRuoZuZhouBuffToSelf : AgentBuff
-    {
-        private float _timeSinceLastTick;
-        public XuRuoZuZhouBuffToSelf(float duration, Agent source)
-        {
-            StateId = "XuRuoZuZhouBuffToSelf";
-            Duration = duration;
-            SourceAgent = source;
-            _timeSinceLastTick = 0; // 新增初始化
-        }
-
-        public override void OnApply(Agent agent)
-        {
-
-        }
-
-        public override void OnUpdate(Agent agent, float dt)
-        {
-
-            SkillSystemBehavior.ActiveComponents.TryGetValue(this.SourceAgent.Index, out var agentSkillComponent);
-            if (agentSkillComponent == null) { return; }
-            // 累积时间
-            _timeSinceLastTick += dt;
-
-            //每秒刷一次状态
-            if (_timeSinceLastTick >= 1f)
-            {
-                List<Agent> values = Mission.Current.Agents;
-                Script.AgentListIFF(agent, values, out var friendAgent, out var foeAgent);
-                if (foeAgent != null && foeAgent.Count > 0)
-                {
-                    foreach (var item in foeAgent)
-                    {
-
-                        // 每次创建新的状态实例
-                        List<AgentBuff> newStates = new List<AgentBuff> { new XuRuoZuZhouBuffToEnemy(2F, agent), }; // 新实例
-                        foreach (var state in newStates)
-                        {
-                            state.TargetAgent = item;
-                            item.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                        }
-
-                    }
-
-                    return;
-                }
-                _timeSinceLastTick -= 1f; // 重置计时器
-            }
-        }
-
-        public override void OnRemove(Agent agent)
-        {
-
+        private sealed class AllyMarker : AgentBuff {
+            public override bool IsMarker => true;
+            public override bool BypassesSkillProtection => true;
+            public AllyMarker(Agent source) { StateId = MarkerId; SourceAgent = source; Duration = DebuffDuration; }
+            public override void OnApply(Agent agent) { }
+            public override void OnUpdate(Agent agent, float dt) { }
+            public override void OnRemove(Agent agent) { }
         }
     }
     public class XuRuoZuZhouBuffToEnemy : AgentBuff
     {
-        private float _timeSinceLastTick;
-        private List<EquipmentIndex> itemsIndex = new List<EquipmentIndex>();
-        private List<MissionWeapon> weapon = new List<MissionWeapon>();
-        public XuRuoZuZhouBuffToEnemy(float duration, Agent source)
-        {
-            StateId = "XuRuoZuZhouBuffToEnemy";
-            Duration = duration;
-            SourceAgent = source;
-            _timeSinceLastTick = 0; // 新增初始化
+        public override string BattleHudName => "虚弱诅咒";
+        public XuRuoZuZhouBuffToEnemy(float duration, Agent source) {
+            StateId = "XuRuoZuZhouBuffToEnemy"; Duration = duration; SourceAgent = source;
         }
-
-        public override void OnApply(Agent agent)
-        {
-
+        public override void OnApply(Agent agent) { }
+        public override void OnUpdate(Agent agent, float dt) {
+            if (SkillTargetProtection.IsProtected(agent)) Duration = 0f;
         }
-
-        public override void OnUpdate(Agent agent, float dt)
-        {
-
-            // 累积时间
-            _timeSinceLastTick += dt;
-
-            //每秒刷一次状态
-            if (_timeSinceLastTick >= 1f)
-            {
-                Script.GetActiveComponents(agent).ChangeStamina(-5);
-                agent.UpdateAgentProperties();
-
-                _timeSinceLastTick -= 1f; // 重置计时器
-            }
-        }
-
-        public override void OnRemove(Agent agent)
-        {
-            agent.UpdateAgentProperties();
-        }
+        public override void OnRemove(Agent agent) { }
     }
 }

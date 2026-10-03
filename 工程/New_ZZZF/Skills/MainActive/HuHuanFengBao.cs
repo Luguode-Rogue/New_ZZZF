@@ -1,56 +1,28 @@
-﻿using NetworkMessages.FromServer;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TaleWorlds.CampaignSystem;
-using TaleWorlds.CampaignSystem.Extensions;
-using TaleWorlds.Core;
-using TaleWorlds.MountAndBlade;
 using New_ZZZF.Systems;
+using TaleWorlds.MountAndBlade;
 
-namespace New_ZZZF.Skills//（法术）
+namespace New_ZZZF.Skills
 {
     public class HuHuanFengBao : SkillBase
     {
         public HuHuanFengBao()
         {
-            SkillID = "HuHuanFengBao";
-            Type = SPSkillType.MainActive;
-            Cooldown = 90;
-            ResourceCost = 75;
+            SkillID = "HuHuanFengBao"; Type = SPSkillType.MainActive; Cooldown = 90f; ResourceCost = 75f;
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0047}HuHuanFengBao");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0048}召唤一场闪电风暴，对每一个敌人降下落雷。消耗耐力：75。冷却时间：90秒。");
-
-
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0048}对全场敌人位置降下3米范围落雷，密集敌人会受到不同落点的交叠伤害；每次落雷后有50%概率继续追击存活目标，首次判定失败即停止。每次基础雷伤30，受法强与魔抗影响。施法者位置另有一次落雷表现。耐力75，冷却90秒。");
         }
+        public override bool CheckCondition(Agent caster) => base.CheckCondition(caster) && caster.Mission != null &&
+            caster.Mission.GetMissionBehavior<StormLightningMissionLogic>()?.HasEligibleEnemy(caster) == true;
 
-
-        public override bool Activate(Agent agent)
+        public override bool Activate(Agent caster)
         {
-            if (agent == null || !agent.IsActive() || Mission.Current == null)
-                return FailActivation("施法者或当前任务不可用。");
-
-            // 每名敌人只受一次落雷；限制同时存在的表现实体，伤害仍覆盖全部敌人。
-            List<Agent> enemies = new List<Agent>();
-            foreach (Agent candidate in Mission.Current.Agents)
-            {
-                if (candidate != null && candidate.IsActive() && candidate.IsHuman &&
-                    candidate != agent && agent.IsEnemyOf(candidate))
-                    enemies.Add(candidate);
-            }
-            int visualCount = 0;
-            float spellPowerCoefficient = MagicDamageSystem.GetSpellPowerCoefficient(agent);
-            foreach (Agent foe in enemies)
-            {
-                if (LeiJi.StrikeSingleTarget(
-                        agent, foe, spellPowerCoefficient, visualCount < 24) && visualCount < 24)
-                    visualCount++;
-            }
+            if (caster == null || !caster.IsActive() || caster.Mission == null) return FailActivation("施法者或任务不可用。");
+            StormLightningMissionLogic logic = caster.Mission.GetMissionBehavior<StormLightningMissionLogic>();
+            if (logic == null) return FailActivation("风暴管理器不可用。");
+            if (!logic.Begin(caster)) return FailActivation("没有可被落雷命中的敌人。");
+            LeiJi.ShowSingleLightning(caster.Position + TaleWorlds.Library.Vec3.Up);
+            SpellProjectileMissionLogic.GetForCurrentMission()?.QueueOneShotSound("event:/mission/siege/ballista/fire", caster.Position);
             return true;
         }
-       
     }
 }

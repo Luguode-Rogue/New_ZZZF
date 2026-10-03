@@ -401,12 +401,12 @@ namespace New_ZZZF
         {
             return new List<(string, SkillObject)>
             {
-                ("单手",   DefaultSkills.OneHanded),
-                ("双手",   DefaultSkills.TwoHanded),
-                ("长杆",   DefaultSkills.Polearm),
+                (DefaultSkills.OneHanded.Name.ToString(), DefaultSkills.OneHanded),
+                (DefaultSkills.TwoHanded.Name.ToString(), DefaultSkills.TwoHanded),
+                (DefaultSkills.Polearm.Name.ToString(), DefaultSkills.Polearm),
                 ("弓",     DefaultSkills.Bow),
                 ("弩",     DefaultSkills.Crossbow),
-                ("投掷",   DefaultSkills.Throwing),
+                (DefaultSkills.Throwing.Name.ToString(), DefaultSkills.Throwing),
                 ("骑术",   DefaultSkills.Riding),
                 ("跑动",   DefaultSkills.Athletics),
                 ("锻造",   DefaultSkills.Crafting),

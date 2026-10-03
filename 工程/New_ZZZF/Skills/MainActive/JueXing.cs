@@ -1,4 +1,4 @@
-﻿using New_ZZZF.Systems;
+using New_ZZZF.Systems;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,7 +44,7 @@ namespace New_ZZZF
 
             Agent target = caster.GetTargetAgent();
             float distanceSquared = float.MaxValue;
-            if (target != null && target.IsActive() && target.Health > 0f && caster.IsEnemyOf(target))
+            if (target != null && target.IsActive() && target.Health > 0f && (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target)))
                 distanceSquared = (target.Position.AsVec2 - caster.Position.AsVec2).LengthSquared;
             Formation enemyFormation = caster.Formation?.CachedClosestEnemyFormation?.Formation;
             if (enemyFormation != null)

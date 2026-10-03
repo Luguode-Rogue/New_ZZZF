@@ -47,6 +47,10 @@ namespace New_ZZZF
         public Action<Vec3, Vec3> OnTravelSegment { get; set; }
 
         public string MeshResourceName { get; set; }
+        /// <summary>原版武器复合网格快照，每枚弹体使用独立副本。</summary>
+        public MetaMesh VisualMesh { get; set; }
+        /// <summary>模型本地侧轴旋转弧度；仅修正外观坐标轴，不改变弹道或碰撞。</summary>
+        public float VisualPitchOffset { get; set; }
         /// <summary>可选的完整预制体；用于保留旧法术原有的模型外观。</summary>
         public string PrefabResourceName { get; set; }
         public string ParticleSystemName { get; set; }
@@ -136,6 +140,13 @@ namespace New_ZZZF
             return Current;
         }
 
+        private static Mat3 GetVisualRotation(Vec3 direction, SpellProjectileRequest request)
+        {
+            Mat3 rotation = Mat3.CreateMat3WithForward(direction);
+            if (request.VisualPitchOffset != 0f)
+                rotation.RotateAboutSide(request.VisualPitchOffset);
+            return rotation;
+        }
         public bool TrySpawn(SpellProjectileRequest request, out string failureReason)
         {
             failureReason = null;
@@ -166,6 +177,8 @@ namespace New_ZZZF
                 failureReason = "投射物预制体不存在。";
                 return false;
             }
+            if (request.VisualMesh != null)
+                entity.AddMultiMesh(request.VisualMesh.CreateCopy(), true);
             if (!string.IsNullOrEmpty(request.MeshResourceName))
             {
                 Mesh mesh = Mesh.GetFromResource(request.MeshResourceName);
@@ -174,7 +187,7 @@ namespace New_ZZZF
             }
             if (!string.IsNullOrEmpty(request.ParticleSystemName))
                 entity.AddParticleSystemComponent(request.ParticleSystemName);
-            entity.SetGlobalFrame(new MatrixFrame(Mat3.CreateMat3WithForward(direction), request.StartPosition));
+            entity.SetGlobalFrame(new MatrixFrame(GetVisualRotation(direction, request), request.StartPosition));
 
             int staggerIndex = _projectiles.Count & 3;
             _projectiles.Add(new ProjectileRecord
@@ -275,7 +288,7 @@ namespace New_ZZZF
                 Vec3 visualEnd = visualStart + record.Direction * travelStep;
                 record.TravelledDistance += travelStep;
                 record.Entity.SetGlobalFrame(
-                    new MatrixFrame(Mat3.CreateMat3WithForward(record.Direction), visualEnd));
+                    new MatrixFrame(GetVisualRotation(record.Direction, record.Request), visualEnd));
 
                 record.CollisionTimer -= dt;
                 bool reachedMaximumDistance = request.MaxTravelDistance > 0f &&
@@ -306,7 +319,7 @@ namespace New_ZZZF
                     {
                         Vec3 traversedEnd = hitWorld ? worldHitPosition : collisionEnd;
                         record.Entity.SetGlobalFrame(new MatrixFrame(
-                            Mat3.CreateMat3WithForward(record.Direction), traversedEnd));
+                            GetVisualRotation(record.Direction, record.Request), traversedEnd));
                         try { request.OnTravelSegment(collisionStart, traversedEnd); }
                         catch (Exception ex) { Debug.Print("[New_ZZZF][法术投射物] 穿透回调异常: " + ex); }
                     }
@@ -541,7 +554,7 @@ namespace New_ZZZF
 
         private static bool CanHitAgent(SpellProjectileRequest request, Agent candidate)
         {
-            if (candidate == null || candidate == request.Caster || !candidate.IsActive() || candidate.Health <= 0f)
+            if (candidate == null || candidate == request.Caster || !SkillTargetProtection.CanSelect(candidate) || candidate.Health <= 0f)
                 return false;
             if (request.HitHumanAgentsOnly && !candidate.IsHuman)
                 return false;

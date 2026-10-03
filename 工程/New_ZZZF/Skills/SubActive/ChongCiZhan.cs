@@ -154,7 +154,7 @@ namespace New_ZZZF
         private static bool IsValidEnemy(Agent caster, Agent target)
         {
             return target != null && target != caster && target.IsHuman && !target.IsMount &&
-                   target.IsActive() && target.Health > 0f && caster.IsEnemyOf(target);
+                   target.IsActive() && target.Health > 0f && (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target));
         }
 
         private static bool HasUsableMeleeWeapon(Agent agent)

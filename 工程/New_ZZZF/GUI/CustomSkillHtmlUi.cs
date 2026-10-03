@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 using BannerlordHtmlUI;
 using Newtonsoft.Json.Linq;
@@ -17,7 +16,6 @@ namespace New_ZZZF.GUI
         private const string ContentRootName = "customskill";
         private const string StateKey = "customSkill";
         private static readonly Lazy<CustomSkillHtmlUi> _instance = new Lazy<CustomSkillHtmlUi>(() => new CustomSkillHtmlUi());
-        private static readonly MethodInfo SelectTargetMethod = typeof(CustomSkillScreenVM).GetMethod("SelectTarget", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private HtmlUiConsumerScope _scope;
         private string _pageId;
@@ -62,7 +60,8 @@ namespace New_ZZZF.GUI
                 ContentRootId = ContentRootName,
                 HotReload = true,
                 DefaultInputMode = HtmlUiInputMode.Captured,
-                CloseOnEscape = true,
+                // The page handles Escape after checking IME composition and nested views.
+                CloseOnEscape = false,
                 Opened = OnPageOpened,
                 Closed = OnPageClosed
             });
@@ -93,16 +92,14 @@ namespace New_ZZZF.GUI
             }));
             _scope.RegisterCommand("selectHero", payload => Execute(() =>
             {
-                if (_vm?.Roster == null || SelectTargetMethod == null) return;
-                int index = payload?["index"]?.ToObject<int>() ?? -1;
-                if (index < 0 || index >= _vm.Roster.Count) return;
-                SelectTargetMethod.Invoke(_vm, new object[] { _vm.Roster[index] });
+                if (_vm == null) return;
+                _vm.SelectTargetById(payload?["id"]?.ToObject<string>(), payload?["targetType"]?.ToObject<int>() ?? -1);
                 _view = "main";
                 InvalidateStateCaches();
             }));
             _scope.RegisterCommand("selectSlot", payload => Execute(() =>
             {
-                if (_vm?.Skills == null) return;
+                if (_vm?.Skills == null || _vm.CurrentHero == null) return;
                 int index = payload?["index"]?.ToObject<int>() ?? -1;
                 if (index < 0 || index >= _vm.Skills.Count) return;
                 _vm.SelectSlotByIndex(index);
@@ -219,7 +216,7 @@ namespace New_ZZZF.GUI
 
         private void OpenForge()
         {
-            if (_vm == null) return;
+            if (_vm?.CurrentHero == null) return;
             if (_forgeVm == null) _forgeVm = new New_ZZZF.SpellForge.SpellForgeVM(_vm, CloseForge);
             _view = "forge";
             InvalidateForgeCache();
@@ -406,7 +403,11 @@ namespace New_ZZZF.GUI
             for (int i = 0; i < _vm.Roster.Count; i++)
             {
                 var hero = _vm.Roster[i];
-                result.Add(new { index = i, id = hero.HeroId ?? string.Empty, name = hero.HeroName ?? string.Empty, subtitle = hero.Subtitle ?? string.Empty, selected = hero.IsSelected });
+                var culture = hero.Character?.Culture ?? hero.Hero?.CharacterObject?.Culture;
+                result.Add(new { index = i, id = hero.HeroId ?? string.Empty, name = hero.HeroName ?? string.Empty,
+                    subtitle = hero.Subtitle ?? string.Empty, selected = hero.IsSelected,
+                    culture = culture?.StringId ?? string.Empty, cultureName = culture?.Name?.ToString() ?? "无文化",
+                    tier = hero.Character?.GetBattleTier() ?? -1 });
             }
             return result;
         }

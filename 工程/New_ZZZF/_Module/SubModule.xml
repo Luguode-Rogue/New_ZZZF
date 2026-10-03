@@ -9,6 +9,7 @@
 	<ModuleType value="Community" />
 	<Url value="$moduleurl$" />
 	<DependedModules>
+        <DependedModule Id="Bannerlord.UIExtenderEx" />
 		<DependedModule Id="Bannerlord.Harmony" DependentVersion="v2.2.2" />
 		<DependedModule Id="BannerlordHtmlUI" />
 		<DependedModule Id="Native" />
@@ -20,6 +21,7 @@
 	<!-- Community Dependency Metadata -->
 	<!-- https://github.com/BUTR/Bannerlord.BLSE#community-dependency-metadata -->
 	<DependedModuleMetadatas>
+        <DependedModuleMetadata id="Bannerlord.UIExtenderEx" order="LoadBeforeThis" />
 		<DependedModuleMetadata id="Bannerlord.Harmony" order="LoadBeforeThis" version="v2.2.2" />
 		<DependedModuleMetadata id="BannerlordHtmlUI" order="LoadBeforeThis" />
 		<DependedModuleMetadata id="Native" order="LoadBeforeThis" />

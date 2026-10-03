@@ -21,9 +21,9 @@ namespace New_ZZZF
             Text = new TextObject("{=ZZZF_JI_FENG_LIAN_ZHAN_NAME}疾风连斩");
             Description = new TextObject(
                 "{=ZZZF_JI_FENG_LIAN_ZHAN_DESC}立即发动原生近战攻击；具有挥砍伤害的武器只会随机左右挥砍，"
-                + "纯突刺武器则使用突刺。命中、盾挡、武器格挡或招架后自动衔接下一击。"
+                + "纯突刺武器临时适配左右挥砍，仍使用突刺伤害。命中、盾挡、武器格挡或招架后自动衔接下一击。"
                 + "基础为10段；第10段及之后每完成5段并继续命中时，额外消耗5点耐力追加5段，没有总段数上限。"
-                + "每段攻击速度提高10%，最高180%。技能持续期间攻击必定突破格挡，"
+                + "每次衔接攻击速度提高10%，最高180%；动作起始进度提高3%，最高10%。技能持续期间攻击必定突破格挡，"
                 + "且突破格挡不会损失攻击动量。消耗耐力：25。冷却时间：8秒。");
         }
 
@@ -50,7 +50,7 @@ namespace New_ZZZF
                 return false;
 
             Agent target = caster.GetTargetAgent();
-            if (target == null || !target.IsActive() || !caster.IsEnemyOf(target))
+            if (target == null || !target.IsActive() || (!caster.IsEnemyOf(target) || SkillTargetProtection.IsProtected(target)))
                 return false;
 
             MissionWeapon weapon = caster.WieldedWeapon;

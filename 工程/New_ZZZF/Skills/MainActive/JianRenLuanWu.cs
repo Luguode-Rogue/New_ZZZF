@@ -1,80 +1,48 @@
-﻿using New_ZZZF.Skills;
-using New_ZZZF.Systems;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using TaleWorlds.Core;
-using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 
 namespace New_ZZZF
 {
-    internal class JianRenLuanWu : SkillBase
+    internal sealed class JianRenLuanWu : SkillBase
     {
-        public JianRenLuanWu()
-        {
-            SkillID = "JianRenLuanWu";      // 必须唯一
-            Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 2;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0068}JianRenLuanWu");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0069}不断地挥动手中的武器，持续对面前的敌人造成武器伤害。消耗耐力值：60。持续时间：12秒。冷却时间：40秒。");
+        public const string DescriptionText = "使用近战武器连续发动24次右横扫，挥空也计入次数。攻击命中不会中断，必定突破格挡并无限贯穿单位，使用原版武器物理伤害。纯戳刺武器使用戳刺伤害，动作速度180%，挥击时小幅扭身扩大扫击角度。切换武器或失去行动能力会结束。消耗耐力：60。冷却时间：40秒。";
+        private readonly MBList<Agent> _nearby = new MBList<Agent>();
+        public JianRenLuanWu() {
+            SkillID = "JianRenLuanWu";
+            Type = SPSkillType.MainActive;
+            Cooldown = 40f;
+            ResourceCost = 60f;
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0068}剑刃乱舞");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0069}" + DescriptionText);
         }
-        public override bool Activate(Agent agent)
-        {
-
-            // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new JianRenLuanWuBuff(12f, agent), }; // 新实例
-            foreach (var state in newStates)
-            {
-                state.TargetAgent = agent;
-                agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-            }
-            return true;
-
+        public override bool CanActivateWhilePerformingAction => true;
+        public override bool Activate(Agent caster) {
+            var logic = JiFengLianZhanMissionLogic.GetForCurrentMission();
+            if (logic == null) return FailActivation("连续攻击管理器不可用。");
+            return logic.TryStartBladeDance(caster, out string reason) || FailActivation(reason);
         }
-
-        public class JianRenLuanWuBuff : AgentBuff
-        {
-            public BaseZhanJi baseZhanJi = new BaseZhanJi();
-            private float _timeSinceLastTick;
-            public JianRenLuanWuBuff(float duration, Agent source)
-            {
-                StateId = "JianRenLuanWuBuff";
-                Duration = duration;
-                SourceAgent = source;
-                _timeSinceLastTick = 0; // 新增初始化
+        public override bool CheckCondition(Agent caster) {
+            if (!base.CheckCondition(caster) || caster.IsPlayerControlled ||
+                !JiFengLianZhanMissionLogic.HasBladeDanceWeapon(caster)) return false;
+            var logic = JiFengLianZhanMissionLogic.GetForCurrentMission();
+            if (logic == null || logic.IsActive(caster) || JingXia.IsFrightened(caster)) return false;
+            var usage = caster.WieldedWeapon.CurrentUsageItem;
+            float reach = MathF.Max(1.5f, usage.WeaponLength * 0.01f + 0.8f);
+            _nearby.Clear();
+            caster.Mission.GetNearbyAgents(caster.Position.AsVec2, reach, _nearby);
+            int count = 0;
+            bool strong = false;
+            foreach (Agent enemy in _nearby) {
+                if (enemy == null || !enemy.IsActive() || !enemy.IsHuman || enemy.Health <= 0f ||
+                    !caster.IsEnemyOf(enemy) || SkillTargetProtection.IsProtected(enemy) || !RushMovementMissionLogic.HasLineOfSight(caster, enemy) ||
+                    (enemy.Position - caster.Position).LengthSquared > reach * reach) continue;
+                count++;
+                strong |= enemy.IsHero || WeiYa.GetTier(enemy) >= WeiYa.GetTier(caster);
             }
-
-            public override void OnApply(Agent agent)
-            {
-                SkillFactory._skillRegistry.TryGetValue("BaseZhanJi", out var skillBase);
-                baseZhanJi = skillBase as BaseZhanJi;
-            }
-
-            public override void OnUpdate(Agent agent, float dt)
-            {
-
-                // 累积时间
-                _timeSinceLastTick += dt;
-
-                //每秒刷一次状态
-                if (_timeSinceLastTick >= 0.3f)
-                {
-                    agent.SetActionChannel(0, ActionIndexCache.Create("act_release_slash_horseback_right"), false, (AnimFlags)272UL, 0, 1, -0.2f, 0.4f, 0.25f);
-                    baseZhanJi.Activate(SourceAgent);
-                    _timeSinceLastTick -= 0.3f; // 重置计时器
-                }
-            }
-
-            public override void OnRemove(Agent agent)
-            {
-                agent.UpdateAgentProperties();
-            }
+            return count >= 2 || (count == 1 && (strong ||
+                caster.GetComponent<AgentSkillComponent>()?._currentStamina >= 80f));
         }
     }
 }

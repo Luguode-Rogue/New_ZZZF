@@ -27,6 +27,7 @@ namespace New_ZZZF.BattleHud
         private const string VitalsStateKey = "battleHud.vitals";
         private const string TimersStateKey = "battleHud.timers";
         private const string SelectionStateKey = "battleHud.selection";
+        private const string BuffsStateKey = "battleHud.buffs";
 
         private static readonly Lazy<BattleHudHtmlUi> _instance =
             new Lazy<BattleHudHtmlUi>(() => new BattleHudHtmlUi());
@@ -41,6 +42,7 @@ namespace New_ZZZF.BattleHud
         private bool _vitalsDirty = true;
         private bool _timersDirty = true;
         private bool _selectionDirty = true;
+        private bool _buffsDirty = true;
         private AgentSkillComponent _boundComponent;
         private long _nextShowAttemptTimestamp;
         private long _nextPublishAttemptTimestamp;
@@ -199,9 +201,10 @@ namespace New_ZZZF.BattleHud
             {
                 _nextDurationRefreshTimestamp = now + Stopwatch.Frequency;
                 if (HasActiveHudDuration(_boundComponent)) _timersDirty = true;
+                if (BattleBuffHudSnapshot.HasVisibleState(_boundComponent)) _buffsDirty = true;
             }
             if (now >= _nextPublishAttemptTimestamp &&
-                (_fullDirty || _vitalsDirty || _timersDirty || _selectionDirty))
+                (_fullDirty || _vitalsDirty || _timersDirty || _selectionDirty || _buffsDirty))
                 PublishPendingState();
         }
 
@@ -255,7 +258,10 @@ namespace New_ZZZF.BattleHud
         private void OnHudTimersChanged(AgentSkillComponent component)
         {
             if (ReferenceEquals(component, _boundComponent))
+            {
                 _timersDirty = true;
+                _buffsDirty = true;
+            }
         }
 
         private void OnHudSelectionChanged(AgentSkillComponent component)
@@ -270,6 +276,7 @@ namespace New_ZZZF.BattleHud
             _vitalsDirty = true;
             _timersDirty = true;
             _selectionDirty = true;
+            _buffsDirty = true;
         }
 
         private void PublishPendingState()
@@ -297,6 +304,11 @@ namespace New_ZZZF.BattleHud
                 {
                     _scope.SetState(SelectionStateKey, _boundComponent == null ? 0 : _boundComponent.SelectedSpellSlot);
                     _selectionDirty = false;
+                }
+                if (_buffsDirty)
+                {
+                    _scope.SetState(BuffsStateKey, BattleBuffHudSnapshot.Build(_boundComponent));
+                    _buffsDirty = false;
                 }
             }
             catch (Exception ex)
@@ -393,7 +405,8 @@ namespace New_ZZZF.BattleHud
                     shield = 0,
                     lives = 0,
                     selectedSpellSlot = 0,
-                    skills = Array.Empty<object>()
+                    skills = Array.Empty<object>(),
+                    buffs = BattleBuffHudSnapshot.Build(null)
                 };
             }
 
@@ -414,7 +427,8 @@ namespace New_ZZZF.BattleHud
                 shield = QuantizeWhole(comp._shieldStrength),
                 lives = comp._lifeResurgenceCount,
                 selectedSpellSlot = comp.SelectedSpellSlot,
-                skills
+                skills,
+                buffs = BattleBuffHudSnapshot.Build(comp)
             };
         }
 

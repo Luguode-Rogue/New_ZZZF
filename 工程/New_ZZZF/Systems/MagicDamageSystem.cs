@@ -12,7 +12,13 @@ namespace New_ZZZF.Systems
         None = 0,
         Area = 1,
         Periodic = 2,
-        Burning = 4
+        Burning = 4,
+        /// <summary>本次伤害无视受击者的魔法反射能力。</summary>
+        PiercesReflection = 8,
+        /// <summary>由反射产生的伤害；不会再次触发反射。</summary>
+        Reflected = 16,
+        ForceDismount = 32,
+        Explosion = 64
     }
 
     /// <summary>
@@ -39,6 +45,10 @@ namespace New_ZZZF.Systems
         public float FinalDamage;
         public bool WasImmune;
         public bool WasFatal;
+        /// <summary>受击者是否发动反射；攻击方免疫反伤时仍为 true。</summary>
+        public bool ReflectionTriggered;
+        /// <summary>反射对原施法者实际结算的伤害。</summary>
+        public float ReflectedDamage;
     }
 
     /// <summary>
@@ -49,6 +59,49 @@ namespace New_ZZZF.Systems
     {
         // 允许负抗性产生易伤，但限制最低值，避免错误配置造成无限倍率。
         private const float MinimumResistance = -100f;
+        public const string ReflectionStateId = "MagicReflectionBuff";
+        public const string ReflectionPenetrationStateId = "MagicReflectionPenetrationBuff";
+
+        /// <summary>反射能力由受击者状态提供；未来技能直接挂载 MagicReflectionBuff。</summary>
+        public static bool HasReflection(Agent agent)
+        {
+            return GetActiveReflection(agent) != null;
+        }
+
+        private static MagicReflectionBuff GetActiveReflection(Agent agent)
+        {
+            MagicReflectionBuff reflection = agent?.GetComponent<AgentSkillComponent>()?
+                .StateContainer.GetState(ReflectionStateId) as MagicReflectionBuff;
+            return reflection != null && reflection.Duration > 0f &&
+                reflection.DamageRatio > 0f ? reflection : null;
+        }
+
+        private static MagicReflectionBuff GetReflectionForHit(
+            Agent caster, Agent victim, MagicDamageFlags flags)
+        {
+            if (caster == null || victim == null || caster == victim || !caster.IsActive() ||
+                (flags & (MagicDamageFlags.Reflected | MagicDamageFlags.Periodic)) != 0 ||
+                HasReflectionPenetration(caster, flags))
+                return null;
+            return GetActiveReflection(victim);
+        }
+
+        /// <summary>穿透反射可来自施法者状态，也可由单次伤害的标记指定。</summary>
+        public static bool HasReflectionPenetration(Agent caster, MagicDamageFlags flags)
+        {
+            if ((flags & MagicDamageFlags.PiercesReflection) != 0)
+                return true;
+            AgentBuff penetration = caster?.GetComponent<AgentSkillComponent>()?
+                .StateContainer.GetState(ReflectionPenetrationStateId);
+            return penetration != null && penetration.Duration > 0f;
+        }
+
+        /// <summary>顿悟只免除自己的反伤，不妨碍原目标承受法术伤害。</summary>
+        public static bool IsImmuneToReflectedDamage(Agent agent)
+        {
+            return agent?.GetComponent<AgentSkillComponent>()?.StateContainer
+                .HasState("DunWuBuff") == true;
+        }
 
         /// <summary>
         /// 读取施法者当前的法强系数。没有技能组件的原生单位使用1倍，确保旧技能
@@ -62,7 +115,10 @@ namespace New_ZZZF.Systems
 
         public static float GetOutgoingDamageMultiplier(Agent caster)
         {
-            return TianQi.IsProtected(caster) ? 2f : 1f;
+            float multiplier = TianQi.IsProtected(caster) ? 2f : 1f;
+            if (caster?.GetComponent<AgentSkillComponent>()?.StateContainer.HasState("BKBBuff") == true)
+                multiplier *= 0.1f;
+            return multiplier;
         }
 
         /// <summary>
@@ -87,13 +143,43 @@ namespace New_ZZZF.Systems
             MagicDamageFlags flags = MagicDamageFlags.None,
             Vec3? impactPosition = null)
         {
+            // 腾空期间免疫本次法术；在反射、应急技能等副作用之前结束。
+            if (TianFaZhiJianMissionLogic.IsLeaping(victim))
+                return new MagicDamageResult { BaseDamage = baseDamage,
+                    SpellPowerCoefficient = spellPowerCoefficient, WasImmune = true };
+
+            if ((flags & MagicDamageFlags.Reflected) != 0 &&
+                IsImmuneToReflectedDamage(victim))
+            {
+                return new MagicDamageResult
+                {
+                    BaseDamage = baseDamage,
+                    SpellPowerCoefficient = spellPowerCoefficient,
+                    WasImmune = true
+                };
+            }
+
             MagicDamageResult result = Calculate(
                 victim, baseDamage, spellPowerCoefficient, damageType);
 
             if (result.FinalDamage <= 0f)
                 return result;
 
-            result.FinalDamage *= GetOutgoingDamageMultiplier(caster);
+            // 反伤继承原命中的实际伤害，不再次获得反射者的出手增伤。
+            if ((flags & MagicDamageFlags.Reflected) == 0)
+                result.FinalDamage *= GetOutgoingDamageMultiplier(caster);
+
+            // 明确标记爆炸；普通范围法术与持续伤害不受坚韧不屈限制。
+            if ((flags & MagicDamageFlags.Periodic) == 0 &&
+                ((flags & MagicDamageFlags.Explosion) != 0 || damageType == DamageType.FIRE_ENHANCEMENT_BLASTING))
+                result.FinalDamage = FortitudeDamageRules.LimitFinalDamage(victim, result.FinalDamage);
+
+            // 最终法术伤害已包含法强、魔抗和出手倍率；扣血前响应可免疫本次伤害。
+            if (BKB.TryActivateForMagicHit(victim, result.FinalDamage)) {
+                result.FinalDamage = 0f;
+                result.WasImmune = true;
+                return result;
+            }
 
             // RegisterBlow 只接受整数伤害。正数伤害至少登记1点，确保极低伤害也能
             // 进入原生受击、飘字和监听链；Result同步为真正交给引擎的伤害值。
@@ -105,10 +191,23 @@ namespace New_ZZZF.Systems
                 result.WasImmune = true;
                 return result;
             }
+            // 原伤害先结算，再按受击者当时的反射能力反伤。穿透只取消反射判定，
+            // 不改变原伤害；顿悟只在反伤命中原施法者时免除该次伤害。
+            MagicReflectionBuff reflection = GetReflectionForHit(caster, victim, flags);
+
             float healthBefore = victim.Health;
             RegisterNativeMagicBlow(
                 caster, victim, inflictedDamage, flags, impactPosition);
             result.WasFatal = healthBefore > 0f && victim.Health < 1f;
+
+            if (reflection != null && caster.IsActive() && victim.IsActive())
+            {
+                result.ReflectionTriggered = true;
+                MagicDamageResult reflected = Apply(
+                    victim, caster, inflictedDamage * reflection.DamageRatio,
+                    1f, damageType, MagicDamageFlags.Reflected, caster.Position + Vec3.Up);
+                result.ReflectedDamage = reflected.FinalDamage;
+            }
 
             return result;
         }
@@ -121,8 +220,9 @@ namespace New_ZZZF.Systems
         {
             if (victim == null || !victim.IsActive() || damage <= 0f ||
                 float.IsNaN(damage) || float.IsInfinity(damage) ||
-                TianQi.IsProtected(victim) || TianQi.TryTriggerEmergency(victim, damage))
+                TianFaZhiJianMissionLogic.IsLeaping(victim) || SkillTargetProtection.IsProtected(victim) || TianQi.TryTriggerEmergency(victim, damage))
                 return;
+            if (BKB.TryActivateForMagicHit(victim, damage)) return;
             victim.Health = MathF.Max(0f, victim.Health - damage);
         }
 
@@ -148,8 +248,7 @@ namespace New_ZZZF.Systems
                 return result;
 
             AgentSkillComponent victimComponent = victim.GetComponent<AgentSkillComponent>();
-            if (!ignoreTemporaryImmunity && victimComponent != null &&
-                victimComponent.StateContainer.HasState("TianQiBuff"))
+            if (!ignoreTemporaryImmunity && SkillTargetProtection.IsProtected(victim))
             {
                 result.WasImmune = true;
                 return result;
@@ -226,6 +325,8 @@ namespace New_ZZZF.Systems
                     ? BlowFlags.NoSound
                     : BlowFlags.None
             };
+            if (flags.HasFlag(MagicDamageFlags.ForceDismount) && victim.HasMount && !victim.IsHero)
+                blow.BlowFlag |= BlowFlags.CanDismount;
             blow.WeaponRecord.FillAsMeleeBlow(null, null, -1, attackBoneIndex);
             blow.WeaponRecord.WeaponFlags |= WeaponFlags.NoBlood;
             if (flags.HasFlag(MagicDamageFlags.Area))
@@ -311,5 +412,38 @@ namespace New_ZZZF.Systems
             combatLog.SetVictimAgent(victim);
             mission.AddCombatLogSafe(caster, victim, combatLog);
         }
+    }
+
+    /// <summary>未来反射技能挂载此状态；反伤按原命中的最终伤害乘以比例计算。</summary>
+    public sealed class MagicReflectionBuff : AgentBuff
+    {
+        public float DamageRatio { get; }
+
+        public MagicReflectionBuff(float duration, Agent source, float damageRatio = 1f)
+        {
+            StateId = MagicDamageSystem.ReflectionStateId;
+            Duration = MathF.Max(0f, duration);
+            SourceAgent = source;
+            DamageRatio = MathF.Max(0f, damageRatio);
+        }
+
+        public override void OnApply(Agent agent) { }
+        public override void OnUpdate(Agent agent, float dt) { }
+        public override void OnRemove(Agent agent) { }
+    }
+
+    /// <summary>未来穿透技能挂载此状态，或对单次命中使用 PiercesReflection 标记。</summary>
+    public sealed class MagicReflectionPenetrationBuff : AgentBuff
+    {
+        public MagicReflectionPenetrationBuff(float duration, Agent source)
+        {
+            StateId = MagicDamageSystem.ReflectionPenetrationStateId;
+            Duration = MathF.Max(0f, duration);
+            SourceAgent = source;
+        }
+
+        public override void OnApply(Agent agent) { }
+        public override void OnUpdate(Agent agent, float dt) { }
+        public override void OnRemove(Agent agent) { }
     }
 }

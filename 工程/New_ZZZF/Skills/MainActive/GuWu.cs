@@ -12,7 +12,6 @@ namespace New_ZZZF
     {
         private const float BuffDuration = 30f;
         private const int Range = 50;
-        private const float AiRefreshThreshold = 10f;
         private static readonly string[] MaleYells =
         {
             "event:/voice/combat/male/01/yell", "event:/voice/combat/male/02/yell",
@@ -43,19 +42,17 @@ namespace New_ZZZF
                 return false;
 
             List<Agent> allies = GetAlliesInRange(caster);
-            int needingBuff = 0;
+            int eligibleAllies = 0;
             foreach (Agent ally in allies)
             {
-                AgentSkillComponent component = ally.GetComponent<AgentSkillComponent>();
-                if (component == null)
+                if (ally.GetComponent<AgentSkillComponent>() == null)
                     continue;
-                GuWuBuff current = component.StateContainer.GetState("GuWuBuff") as GuWuBuff;
-                if (current == null || current.Duration <= AiRefreshThreshold)
-                    needingBuff++;
-                if (needingBuff >= 2)
+                // 鼓舞的立即回血和未来重复施放收益不应被现有Buff拦截。
+                if (++eligibleAllies >= 2)
                     return true;
             }
-            return false;
+            return eligibleAllies > 0 && caster.HealthLimit > 0f &&
+                caster.Health < caster.HealthLimit * 0.7f;
         }
 
         public override bool Activate(Agent agent)

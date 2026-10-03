@@ -599,12 +599,16 @@ namespace New_ZZZF
         public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow)
         {
             base.OnAgentRemoved(affectedAgent, affectorAgent, agentState, blow);
+            JingXia.OnEnemyDefeated(affectedAgent, affectorAgent, agentState);
+            if (affectedAgent != null) JingXia.NextEvaluation.Remove(affectedAgent);
             if (affectedAgent != null && !affectedAgent.IsMount)
             {
                 // 清理失效的组件引用
                 var comp = affectedAgent.GetComponent<AgentSkillComponent>();
                 if (comp != null)
                 {
+                    comp.StateContainer.RemoveState("JingXiaBuffToSelf", affectedAgent);
+                    comp.StateContainer.RemoveState("JingXiaBuffToEnemy", affectedAgent);
                     // 鼓舞的落尘是独立场景实体；Agent 离场时立即释放。
                     comp.StateContainer.RemoveState("GuWuBuff", affectedAgent);
                     comp.ReleaseShieldStrengthVisual();
@@ -621,6 +625,8 @@ namespace New_ZZZF
         public override void OnAfterMissionCreated()
         {
             base.OnAfterMissionCreated();
+            JingXia.ActiveAuras.Clear();
+            JingXia.NextEvaluation.Clear();
             Mission.OnMissileRemovedEvent -= HandleMissileRemoved;
             Mission.OnMissileRemovedEvent += HandleMissileRemoved;
             //WoW_Agents.Clear();
@@ -640,6 +646,8 @@ namespace New_ZZZF
         }
         protected override void OnEndMission()
         {
+            JingXia.ActiveAuras.Clear();
+            JingXia.NextEvaluation.Clear();
             Mission.OnMissileRemovedEvent -= HandleMissileRemoved;
             foreach (AgentSkillComponent component in _activeComponents)
                 component.ReleaseShieldStrengthVisual();
@@ -681,24 +689,22 @@ namespace New_ZZZF
                         else
                         {
                             Script.SysOut("损失" + victimSkillComponent._shieldStrength.ToString() + "点护盾，并抵消同等伤害", victim);
-                            victim.Health = MathF.Clamp(victimSkillComponent._shieldStrength, 0, victimSkillComponent.MaxHP);
+                            victim.Health = MathF.Clamp(victim.Health + victimSkillComponent._shieldStrength, 0, victimSkillComponent.MaxHP);
                             victimSkillComponent._shieldStrength = 0;
 
                         }
                         return;
                     }
-                    if (victimSkillComponent.StateContainer.HasState("NaGouCiFuBuff"))
-                    {
-                        if (random.NextFloat() <= 0.5f)
-                        {
-                            victim.Health += Math.Max(blow.InflictedDamage, victimSkillComponent.MaxHP);
-                        }
-                    }
+
                 }
+                // 护盾/免死结算后再使用通用复活；复活成功不能产生击杀奖励。
+                if (victim != null && victim.Health <= 0f &&
+                    ResurrectionSystem.TryConsume(victim, out float restoredHealth))
+                    victim.Health = restoredHealth;
                 //击杀事件处理
                 if (attackerSkillComponent != null)
                 {
-                    if (victim == null || victim.Health <= 0)
+                    if (victim == null || (victim.Health <= 0 && attacker.IsEnemyOf(victim)))
                     {
                         attackerSkillComponent.ChangeStamina(5);
                         if (attackerSkillComponent.StateContainer.HasState("JueXingBuff"))
@@ -717,25 +723,19 @@ namespace New_ZZZF
                         if (attackerSkillComponent.StateContainer.HasState("KongNueCiFuBuff"))
                         {
                             KongNueCiFuBuff buff = attackerSkillComponent.StateContainer.GetState("KongNueCiFuBuff") as KongNueCiFuBuff;
-                            if (victim.Character!=null)
+                            if (victim.Character != null)
+                                attackerSkillComponent.KongNueCarnageLevel += Math.Max(0, victim.Character.Level);
+                            while (attackerSkillComponent.KongNueCarnageLevel >= 888)
                             {
-                                buff.carnageRankCounter += victim.Character.Level;
+                                attackerSkillComponent.KongNueCarnageLevel -= 888;
+                                int previous = attackerSkillComponent._lifeResurgenceCount;
+                                attackerSkillComponent._lifeResurgenceCount++;
+                                if (attackerSkillComponent._lifeResurgenceCount > previous)
+                                    Script.SysOut("受赐获得复活次数", attacker);
                             }
-                            if (buff.carnageRankCounter > 888)
-                            {
-                                buff.carnageRankCounter -= 888;
-                                Script.SysOut("受赐获得复活次数", attacker);
-                                attackerSkillComponent._lifeResurgenceCount += 1;
-                            }
-                            attackerSkillComponent.StateContainer.UpdateStates(attacker, 0f);
+                            buff?.ExtendAfterKill();
                             attackerSkillComponent.ChangeStamina(5);
                             attacker.Health += (attackerSkillComponent.MaxHP - attacker.Health) * 0.5f;
-                        }
-                        if (victimSkillComponent != null && victimSkillComponent._lifeResurgenceCount >= 1)
-                        {
-                            Script.SysOut("损失" + victimSkillComponent._lifeResurgenceCount.ToString() + "复活次数", victim);
-                            victimSkillComponent._lifeResurgenceCount -= 1;
-                            victim.Health += victimSkillComponent.MaxHP;
                         }
                     }
 
@@ -777,6 +777,9 @@ namespace New_ZZZF
         public override void OnAgentHit(Agent affectedAgent, Agent affectorAgent, in MissionWeapon affectorWeapon, in Blow blow, in AttackCollisionData attackCollisionData)
         {
             base.OnAgentHit(affectedAgent, affectorAgent, affectorWeapon, blow, attackCollisionData);
+            // 矛的延迟伤害是首次命中的余款，不是每一帧又进行了一次武器攻击。
+            // 原生扣血、击杀归属仍执行，但不重复触发本模组的命中/受击技能。
+            if (WeaponCombatMissionLogic.DeliveringBleed) return;
             bool isJianQiHit = JianQiHitContext.TryConsumePrimaryHit(affectorAgent, affectedAgent);
             ExecuteHitEvents(affectorAgent, affectedAgent, affectorWeapon, blow, attackCollisionData);
             // 剑气暴击属于受击事件，而非飞行/碰撞逻辑。第二次登记相同的物理打击，
@@ -848,10 +851,7 @@ namespace New_ZZZF
             if (proj == null || !WoW_ProjectileDB.TryGetValue(proj, out ProjectileData data))
                 return;
 
-            if (data.Name != null && data.Name == "LingHunDanMu")
-            {
-                LingHunDanMu.LingHunDanMuDamage(proj);
-            }
+
             proj.Remove(1);
             WoW_CustomGameEntity.Remove(proj);
             WoW_ProjectileDB.Remove(proj);

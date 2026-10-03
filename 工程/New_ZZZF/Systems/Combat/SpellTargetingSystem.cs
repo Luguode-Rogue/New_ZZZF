@@ -97,7 +97,7 @@ namespace New_ZZZF
             Agent caster,
             float maximumRange,
             float clusterRadius,
-            out Result result)
+            out Result result, bool requireLineOfSight = true)
         {
             result = default;
             if (!CanResolve(caster))
@@ -116,7 +116,7 @@ namespace New_ZZZF
             List<Agent> visibleEnemies = new List<Agent>();
             foreach (Agent candidate in Mission.Current.Agents)
             {
-                if (IsValidVisibleEnemy(caster, candidate, maximumRange) &&
+                if (IsValidVisibleEnemy(caster, candidate, maximumRange, requireLineOfSight) &&
                     IsInsideView(caster, candidate))
                     visibleEnemies.Add(candidate);
             }
@@ -150,19 +150,101 @@ namespace New_ZZZF
             return true;
         }
 
+        private sealed class DenseCell
+        {
+            internal Vec3 Sum;
+            internal int Count, X, Y;
+            internal Vec3 Center => Sum / Count;
+        }
+        private static long DenseCellKey(int x, int y) => ((long)x << 32) | (uint)y;
+        /// <summary>空间分桶估算敌群密度，仅在施法时执行；适合大规模 NPC 范围技能。</summary>
+        public static bool TryResolveDenseAreaTarget(Agent caster, float maximumRange, float radius, out Result result)
+        {
+            result = default;
+            if (!CanResolve(caster) || radius <= 0f || maximumRange <= 0f) return false;
+            if (IsManualIndicatorHeld(caster)) {
+                Vec3 point = Script.CameraLookPos();
+                if (!point.IsValid || (point - caster.Position).LengthSquared > maximumRange * maximumRange) return false;
+                var targets = new MBList<Agent>();
+                Mission.Current.GetNearbyAgents(point.AsVec2, radius, targets);
+                foreach (Agent target in targets)
+                    if (target != null && target.IsHuman && IsValidVisibleEnemy(caster, target, maximumRange, false) &&
+                        (target.Position - point).LengthSquared <= radius * radius) {
+                        result = new Result { Position = point, Target = target, UsesManualIndicator = true }; return true;
+                    }
+                return false;
+            }
+            float cellSize = radius * 0.5f;
+            var buckets = new Dictionary<long, DenseCell>();
+            var nearby = new MBList<Agent>();
+            bool player = caster.IsPlayerControlled;
+            Vec3 eye = caster.GetEyeGlobalPosition();
+            Vec3 view = player ? GetViewDirection(caster) : Vec3.Zero;
+            if (float.IsPositiveInfinity(maximumRange)) nearby.AddRange(Mission.Current.Agents);
+            else if (caster.Team != null) Mission.Current.GetNearbyEnemyAgents(caster.Position.AsVec2, maximumRange, caster.Team, nearby);
+            else Mission.Current.GetNearbyAgents(caster.Position.AsVec2, maximumRange, nearby);
+            foreach (Agent target in nearby) {
+                if (target == null || !target.IsHuman || !IsValidVisibleEnemy(caster, target, maximumRange, false)) continue;
+                Vec3 toward = target.GetEyeGlobalPosition() - eye;
+                if (player && toward.LengthSquared > 0.001f &&
+                    Vec3.DotProduct(view, toward.NormalizedCopy()) < MinimumViewDot) continue;
+                int x = (int)System.Math.Floor(target.Position.x / cellSize);
+                int y = (int)System.Math.Floor(target.Position.y / cellSize);
+                long key = DenseCellKey(x, y);
+                if (!buckets.TryGetValue(key, out DenseCell cell)) buckets[key] = cell = new DenseCell { X = x, Y = y };
+                cell.Sum += target.Position; cell.Count++;
+            }
+            int bestScore = 0;
+            float bestDistance = float.MaxValue;
+            foreach (var candidate in buckets) {
+                Vec3 center = candidate.Value.Center;
+                int score = 0;
+                for (int x = -3; x <= 3; x++)
+                    for (int y = -3; y <= 3; y++)
+                        if (buckets.TryGetValue(DenseCellKey(candidate.Value.X + x, candidate.Value.Y + y), out DenseCell neighbor) &&
+                            (neighbor.Center - center).LengthSquared <= radius * radius) score += neighbor.Count;
+                float distance = (center - caster.Position).LengthSquared;
+                if (score > bestScore || score == bestScore && distance < bestDistance) {
+                    bestScore = score; bestDistance = distance; result.Position = center;
+                }
+            }
+            return bestScore > 0;
+        }
+
+
+        /// <summary>只在已按统一指示键时查询指示点附近敌人；附加筛选由具体技能提供。</summary>
+        public static bool TryResolveEnemyNearIndicator(Agent caster, float radius, out Agent target,
+            System.Func<Agent, bool> extraFilter = null)
+        {
+            target = null;
+            if (!CanResolve(caster) || !IsManualIndicatorHeld(caster)) return false;
+            Vec3 point = Script.CameraLookPos();
+            if (!point.IsValid) return false;
+            var nearby = new MBList<Agent>();
+            Mission.Current.GetNearbyAgents(point.AsVec2, radius, nearby);
+            float best = radius * radius;
+            foreach (Agent candidate in nearby) {
+                if (!IsValidVisibleEnemy(caster, candidate, float.PositiveInfinity, false) ||
+                    extraFilter != null && !extraFilter(candidate)) continue;
+                float distance = (candidate.Position - point).LengthSquared;
+                if (distance <= best) { best = distance; target = candidate; }
+            }
+            return target != null;
+        }
+
         private static bool CanResolve(Agent caster)
         {
             return caster != null && caster.IsActive() && Mission.Current != null;
         }
 
-        private static bool IsValidVisibleEnemy(Agent caster, Agent target, float maximumRange)
+        private static bool IsValidVisibleEnemy(Agent caster, Agent target, float maximumRange, bool requireLineOfSight = true)
         {
             if (target == null || target == caster || !target.IsActive() ||
-                target.Health <= 0f || !caster.IsEnemyOf(target))
+                target.Health <= 0f || SkillTargetProtection.IsProtected(target) || !caster.IsEnemyOf(target))
                 return false;
             if ((target.Position - caster.Position).LengthSquared > maximumRange * maximumRange)
                 return false;
-            return RushMovementMissionLogic.HasLineOfSight(caster, target);
+            return !requireLineOfSight || RushMovementMissionLogic.HasLineOfSight(caster, target);
         }
 
         private static bool IsInsideView(Agent caster, Agent target)
@@ -193,7 +275,7 @@ namespace New_ZZZF
             foreach (Agent candidate in Mission.Current.Agents)
             {
                 if (candidate == null || candidate == caster || !candidate.IsActive() ||
-                    candidate.Health <= 0f || !caster.IsEnemyOf(candidate))
+                    candidate.Health <= 0f || SkillTargetProtection.IsProtected(candidate) || !caster.IsEnemyOf(candidate))
                     continue;
                 float distanceSquared = (candidate.Position - point).LengthSquared;
                 if (distanceSquared > bestDistanceSquared)

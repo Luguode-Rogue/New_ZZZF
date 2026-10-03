@@ -115,7 +115,7 @@ namespace New_ZZZF.Skills
 
             Agent target = caster.GetTargetAgent();
             if (target == null || target == caster || !target.IsActive() ||
-                !caster.IsEnemyOf(target))
+                (!caster.IsEnemyOf(target) || SkillTargetProtection.IsProtected(target)))
                 return false;
 
             float distance = (target.Position - caster.Position).Length;
@@ -123,6 +123,33 @@ namespace New_ZZZF.Skills
                    RushMovementMissionLogic.HasLineOfSight(caster, target);
         }
 
+        /// <summary>突进留下的短火墙；复用火墙时长、宽度、伤害和原生粒子。</summary>
+        public static bool CreateTrailSegment(Agent caster, Vec3 start, Vec3 end, float power,
+            System.Collections.Generic.Dictionary<int, float> sharedHitTimes)
+        {
+            SpellAreaMissionLogic manager = SpellAreaMissionLogic.GetForCurrentMission();
+            Vec3 direction = end - start; direction.z = 0f;
+            float length = direction.Length;
+            if (manager == null || length < 0.05f) return false;
+            direction.Normalize();
+            return manager.TryCreate(new SpellAreaRequest
+            {
+                Caster = caster, Center = start, Direction = direction, Shape = SpellAreaShape.Capsule,
+                Radius = WallRadius, Length = length, HeightTolerance = 2.75f,
+                Duration = Duration, TickInterval = TickInterval, TickImmediately = false,
+                HitHumanAgentsOnly = true, HitEnemiesOnly = true,
+                ParticleSystemName = "psys_blaze_vertical_1", SecondaryParticleSystemName = "psys_campfire_sparks",
+                ParticleSpacing = 1.25f,
+                OnAffectTarget = context =>
+                {
+                    float now = context.Caster.Mission.CurrentTime;
+                    if (sharedHitTimes.TryGetValue(context.Target.Index, out float last) && now - last < TickInterval - 0.001f) return;
+                    sharedHitTimes[context.Target.Index] = now;
+                    MagicDamageSystem.Apply(context.Caster, context.Target, BaseDamagePerTick, power,
+                        DamageType.FIRE_DAMAGE, MagicDamageFlags.Area | MagicDamageFlags.Burning, context.Target.Position + Vec3.Up);
+                }
+            }, out _, out _);
+        }
         private static void AffectTarget(SpellAreaTargetContext context)
         {
             if (context.Caster == null || context.Target == null ||

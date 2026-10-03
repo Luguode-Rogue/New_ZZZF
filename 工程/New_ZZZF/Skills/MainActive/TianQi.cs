@@ -45,7 +45,7 @@ namespace New_ZZZF
 
             Agent target = caster.GetTargetAgent();
             return target != null && target.IsActive() && target.Health > 0f &&
-                   caster.IsEnemyOf(target) &&
+                   (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target)) &&
                    (target.Position.AsVec2 - caster.Position.AsVec2).LengthSquared <= 225f;
         }
 

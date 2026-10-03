@@ -82,6 +82,13 @@ namespace New_ZZZF
             }
         }
 
+        public void RefreshDuration(int auraId, float duration)
+        {
+            if (duration <= 0f) return;
+            foreach (AuraRecord record in _auras)
+                if (record.Id == auraId) { record.Remaining = duration; return; }
+        }
+
         public override void OnMissionTick(float dt)
         {
             if (dt <= 0f || _auras.Count == 0)
@@ -152,7 +159,7 @@ namespace New_ZZZF
             float radiusSquared = request.Radius * request.Radius;
             foreach (Agent target in _nearby)
             {
-                if (target == null || target == caster || !target.IsActive() ||
+                if (target == null || target == caster || !SkillTargetProtection.CanSelect(target) ||
                     (target.Position.AsVec2 - caster.Position.AsVec2).LengthSquared > radiusSquared ||
                     request.EnemiesOnly && !caster.IsEnemyOf(target))
                     continue;

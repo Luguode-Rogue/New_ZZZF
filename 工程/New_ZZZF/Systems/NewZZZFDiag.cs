@@ -33,9 +33,6 @@ namespace New_ZZZF
         /// <summary>MountedSlashCameraMissionLogic（斩击镜头）</summary>
         public static bool MountedSlashCamera = true;
 
-        /// <summary>HeroChangeMissionBehavior + HeroChangeCampaignBehavior + HeroSkillSaveCustomBehavior</summary>
-        public static bool HeroChange = true;
-
         /// <summary>Affix 词缀系统：AffixMissionBehavior + AffixCampaignBehavior + Ctrl+F5~F9 调试热键</summary>
         public static bool Affix = true;
 
@@ -135,8 +132,6 @@ namespace New_ZZZF
                         new XElement("SkillSystemBehavior", SkillSystemBehavior.ToString().ToLowerInvariant()),
                         new XComment(" 斩击镜头 Behavior"),
                         new XElement("MountedSlashCamera", MountedSlashCamera.ToString().ToLowerInvariant()),
-                        new XComment(" 英雄切换系统（MissionBehavior + CampaignBehavior）"),
-                        new XElement("HeroChange", HeroChange.ToString().ToLowerInvariant()),
                         new XComment(" 词缀系统（MissionBehavior + CampaignBehavior + Ctrl+F5~F9）"),
                         new XElement("Affix", Affix.ToString().ToLowerInvariant()),
                         new XComment(" 战斗 HTML HUD（耐力/法力/技能冷却 Surface）"),
@@ -170,7 +165,6 @@ namespace New_ZZZF
             if (TryParseBool(root.Element("CustomSkillHtmlUi")?.Value, out v)) CustomSkillHtmlUi = v;
             if (TryParseBool(root.Element("SkillSystemBehavior")?.Value, out v)) SkillSystemBehavior = v;
             if (TryParseBool(root.Element("MountedSlashCamera")?.Value, out v)) MountedSlashCamera = v;
-            if (TryParseBool(root.Element("HeroChange")?.Value, out v)) HeroChange = v;
             if (TryParseBool(root.Element("Affix")?.Value, out v)) Affix = v;
             if (TryParseBool(root.Element("BattleHud")?.Value, out v)) BattleHud = v;
             if (TryParseBool(root.Element("BattleEquipment")?.Value, out v)) BattleEquipment = v;

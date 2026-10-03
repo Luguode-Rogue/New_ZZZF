@@ -1,9 +1,6 @@
-using System;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.CharacterDevelopment;
-using TaleWorlds.CampaignSystem.GameState;
 using TaleWorlds.CampaignSystem.Party;
-using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 
@@ -88,28 +85,6 @@ namespace New_ZZZF
         public static bool HasPerk(this MobileParty mobileParty, PerkObject perk, bool checkSecondaryRole)
         {
             return mobileParty != null && mobileParty.HasPerk(perk, out Hero _, checkSecondaryRole);
-        }
-    }
-
-    internal static class Bannerlord150TroopSelectionExtensions
-    {
-        public static void OpenTroopSelection(
-            this MenuContext menuContext,
-            TroopRoster fullRoster,
-            TroopRoster initialSelections,
-            object legacyEligibleShips,
-            Func<CharacterObject, bool> canChangeStatusOfTroop,
-            Action<TroopRoster> onDone,
-            int maxSelectableTroopCount,
-            int minSelectableTroopCount)
-        {
-            menuContext.OpenTroopSelection(
-                fullRoster,
-                initialSelections,
-                canChangeStatusOfTroop,
-                onDone,
-                maxSelectableTroopCount,
-                minSelectableTroopCount);
         }
     }
 }

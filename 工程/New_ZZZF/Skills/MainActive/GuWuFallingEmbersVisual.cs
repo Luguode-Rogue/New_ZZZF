@@ -6,7 +6,7 @@ using TaleWorlds.MountAndBlade;
 namespace New_ZZZF
 {
     /// <summary>
-    /// 鼓舞的金红色自建粒子。用已验证的 prt_shd_sparks 材质绘制小菱片，
+    /// 鼓舞的金红色下落粒子。每片叠加受光内层和自发光外层，
     /// 每组独立选择下落起点、横向漂移与弯曲路线。释放 40 片，持续 4 片。
     /// </summary>
     internal sealed class GuWuFallingEmbersVisual
@@ -17,8 +17,10 @@ namespace New_ZZZF
         private const int BurstFlakesPerGroup = 10;
         private const int LingeringGroups = 2;
         private const int LingeringFlakesPerGroup = 2;
-        private static Mesh _burstMesh;
-        private static Mesh _lingeringMesh;
+        private static Mesh _burstLitMesh;
+        private static Mesh _burstLuminousMesh;
+        private static Mesh _lingeringLitMesh;
+        private static Mesh _lingeringLuminousMesh;
 
         private readonly Cloud[] _clouds;
         private readonly bool _lingering;
@@ -57,8 +59,9 @@ namespace New_ZZZF
         {
             if (agent == null || !agent.IsActive() || agent.Mission?.Scene == null)
                 return null;
-            Mesh mesh = GetMesh(lingering);
-            if (mesh == null)
+            Mesh litMesh = GetMesh(lingering, false);
+            Mesh luminousMesh = GetMesh(lingering, true);
+            if (litMesh == null || luminousMesh == null)
                 return null;
 
             Cloud[] clouds = new Cloud[lingering ? LingeringGroups : BurstGroups];
@@ -66,15 +69,11 @@ namespace New_ZZZF
             {
                 for (int i = 0; i < clouds.Length; i++)
                 {
-                    GameEntity entity = GameEntity.CreateEmptyDynamic(agent.Mission.Scene, false);
-                    if (entity == null)
+                    Cloud cloud = new Cloud();
+                    clouds[i] = cloud;
+                    cloud.Entity = DualLayerParticleVisual.Create(agent, litMesh, luminousMesh);
+                    if (cloud.Entity == null)
                         throw new InvalidOperationException("鼓舞粒子实体创建失败。");
-                    clouds[i] = new Cloud { Entity = entity };
-                    entity.AddMesh(mesh);
-                    entity.SetFactorColor(new Color(1f, 1f, 1f, 1f).ToUnsignedInteger());
-                    entity.SetVisibilityExcludeParents(true);
-                    entity.SetReadyToRender(true);
-                    AgentAttachedVisualVisibility.Register(agent, entity);
                 }
 
                 GuWuFallingEmbersVisual visual = new GuWuFallingEmbersVisual(clouds, lingering);
@@ -85,15 +84,8 @@ namespace New_ZZZF
             {
                 foreach (Cloud cloud in clouds)
                 {
-                    try
-                    {
-                        if (cloud?.Entity != null)
-                        {
-                            AgentAttachedVisualVisibility.Unregister(cloud.Entity);
-                            cloud.Entity.Remove(0);
-                        }
-                    }
-                    catch (Exception) { /* 继续清理其余实体。 */ }
+                    if (cloud == null) continue;
+                    DualLayerParticleVisual.Remove(cloud.Entity);
                 }
                 return null;
             }
@@ -134,7 +126,7 @@ namespace New_ZZZF
                     cloud.StartX + cloud.DriftX * phase + cloud.CurveX * bend,
                     cloud.StartY + cloud.DriftY * phase + cloud.CurveY * bend,
                     0.35f - phase * 1.75f);
-                cloud.Entity.SetGlobalFrame(frame);
+                DualLayerParticleVisual.Update(cloud.Entity, frame);
             }
             return true;
         }
@@ -146,21 +138,16 @@ namespace New_ZZZF
             _removed = true;
             foreach (Cloud cloud in _clouds)
             {
-                try
-                {
-                    if (cloud?.Entity != null)
-                    {
-                        AgentAttachedVisualVisibility.Unregister(cloud.Entity);
-                        cloud.Entity.Remove(0);
-                    }
-                }
-                catch (Exception) { /* 单个实体失效不阻碍清理其余粒子。 */ }
+                if (cloud == null) continue;
+                DualLayerParticleVisual.Remove(cloud.Entity);
             }
         }
 
-        private static Mesh GetMesh(bool lingering)
+        private static Mesh GetMesh(bool lingering, bool selfLuminous)
         {
-            Mesh cached = lingering ? _lingeringMesh : _burstMesh;
+            Mesh cached = lingering
+                ? (selfLuminous ? _lingeringLuminousMesh : _lingeringLitMesh)
+                : (selfLuminous ? _burstLuminousMesh : _burstLitMesh);
             if (cached != null && cached.IsValid)
                 return cached;
 
@@ -171,21 +158,29 @@ namespace New_ZZZF
                 {
                     float angle = i * 2.399963f;
                     float radius = lingering ? 0.36f : 0.13f + (i * 7 % 9) * 0.048f;
+                    if (!selfLuminous) radius -= 0.006f;
                     Vec3 point = new Vec3(
                         radius * (float)Math.Cos(angle),
                         radius * (float)Math.Sin(angle),
                         lingering ? (i == 0 ? -0.20f : 0.20f) :
                             ((i * 11 % 10) - 4.5f) * 0.055f);
                     uint color = new Color(1f, i % 3 == 0 ? 0.45f : 0.68f,
-                        0.14f, 0.95f).ToUnsignedInteger();
+                        0.14f, selfLuminous ? 0.95f : 0.72f).ToUnsignedInteger();
+                    float size = 0.025f + (i % 3) * 0.006f;
                     GoldenSparkMesh.AddDiamond(builder, point,
-                        0.025f + (i % 3) * 0.006f, color);
+                        selfLuminous ? size : size * 0.88f, color);
                 }
-            });
+            }, selfLuminous);
             if (lingering)
-                _lingeringMesh = mesh;
+            {
+                if (selfLuminous) _lingeringLuminousMesh = mesh;
+                else _lingeringLitMesh = mesh;
+            }
             else
-                _burstMesh = mesh;
+            {
+                if (selfLuminous) _burstLuminousMesh = mesh;
+                else _burstLitMesh = mesh;
+            }
             return mesh;
         }
 

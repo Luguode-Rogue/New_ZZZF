@@ -40,7 +40,7 @@ namespace New_ZZZF
             ResourceCost = 20f;
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0023}ChaoFeng");
             Description = new TaleWorlds.Localization.TextObject(
-                "{=ZZZF0024}嘲讽附近敌方单位，并持续大幅回复自身血量。受到嘲讽的单位会持续靠近施法者。消耗耐力：20。持续时间：30秒。冷却时间：60秒。");
+                "{=ZZZF0024}嘲讽附近敌方单位，并持续大幅回复自身血量。近战敌人持续靠近施法者；弓弩步兵停在原地射击，弓弩骑兵保持骑射；近战敌人（包括投掷兵和近战骑兵）贴近施法者战斗。消耗耐力：20。持续时间：30秒。冷却时间：60秒。");
         }
 
         public override bool Activate(Agent agent)
@@ -88,7 +88,7 @@ namespace New_ZZZF
             int enemyCount = 0;
             foreach (Agent enemy in _nearbyEnemies)
             {
-                if (enemy == null || !enemy.IsActive() || !enemy.IsHuman || !caster.IsEnemyOf(enemy))
+                if (enemy == null || !enemy.IsActive() || !enemy.IsHuman || (!caster.IsEnemyOf(enemy) || SkillTargetProtection.IsProtected(enemy)))
                     continue;
                 enemyCount++;
                 if (enemyCount >= FrontlineEnemyCount)
@@ -101,7 +101,7 @@ namespace New_ZZZF
             CollectNearby(caster, AllyProtectionRadius, _nearbyAllies, false);
             foreach (Agent ally in _nearbyAllies)
                 if (ally != null && ally != caster && ally.IsActive() && ally.IsHuman &&
-                    ally.IsFriendOf(caster) && !ally.IsEnemyOf(caster) && HasBowOrCrossbow(ally))
+                    ally.IsFriendOf(caster) && !ally.IsEnemyOf(caster) && !SkillTargetProtection.IsProtected(ally) && HasBowOrCrossbow(ally))
                     return true;
             return false;
         }
@@ -131,10 +131,44 @@ namespace New_ZZZF
             return false;
         }
 
+        private static EquipmentIndex FindRangedWeaponSlot(Agent agent)
+        {
+            foreach (EquipmentIndex slot in WeaponSlots)
+            {
+                ItemObject.ItemTypeEnum? type = agent.Equipment[slot].Item?.Type;
+                if (type == ItemObject.ItemTypeEnum.Bow || type == ItemObject.ItemTypeEnum.Crossbow)
+                    return slot;
+            }
+            return EquipmentIndex.None;
+        }
+
+        // AI 输入回调每帧调用：骑兵保留移动但禁止下马；远程步兵留在原地射击。
+        public static void AdjustTauntedAiInput(Agent agent,
+            ref Agent.EventControlFlag eventFlags,
+            ref Agent.MovementControlFlag movementFlags, ref Vec2 inputVector)
+        {
+            if (JingXia.IsFrightened(agent)) return;
+            if (agent == null || !agent.IsActive() || agent.IsPlayerControlled ||
+                !(agent.GetComponent<AgentSkillComponent>()?.StateContainer
+                    .GetState("ChaoFengBuffApplyToEnemy") is ChaoFengBuffApplyToEnemy taunt) ||
+                taunt.SourceAgent == null || !taunt.SourceAgent.IsActive())
+                return;
+            if (agent.MountAgent != null)
+            {
+                // 保留原生 RangedHorseback / ChargeHorseback 的移动输入；只阻止下马。
+                eventFlags &= ~Agent.EventControlFlag.Dismount;
+                return;
+            }
+            if (FindRangedWeaponSlot(agent) == EquipmentIndex.None)
+                return;
+            movementFlags &= ~Agent.MovementControlFlag.MoveMask;
+            inputVector = Vec2.Zero;
+        }
+
         private static bool CanTaunt(Agent caster, Agent target)
         {
             return target.IsHuman && !target.IsHero &&
-                target.GetComponent<AgentSkillComponent>() != null && caster.IsEnemyOf(target);
+                target.GetComponent<AgentSkillComponent>() != null && (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target));
         }
 
         private static void ApplyTaunt(Agent caster, Agent target, float remaining)
@@ -185,6 +219,8 @@ namespace New_ZZZF
         public sealed class ChaoFengBuffApplyToEnemy : AgentBuff
         {
             private float _targetRefreshTimer;
+            private bool _ownsMountedMeleeControl;
+            private bool _ownsMountedMeleeNavigation;
 
             public ChaoFengBuffApplyToEnemy(float duration, Agent source)
             {
@@ -210,7 +246,7 @@ namespace New_ZZZF
                     return;
                 _targetRefreshTimer = 0.5f;
                 if (SourceAgent == null || !SourceAgent.IsActive() || agent == null ||
-                    !agent.IsActive() || !agent.IsEnemyOf(SourceAgent))
+                    !agent.IsActive() || !agent.IsEnemyOf(SourceAgent) || SkillTargetProtection.IsProtected(agent))
                 {
                     Duration = 0f;
                     return;
@@ -222,6 +258,28 @@ namespace New_ZZZF
             {
                 if (agent == null || !agent.IsActive())
                     return;
+                if (JingXia.IsFrightened(agent)) return;
+                if (_ownsMountedMeleeNavigation)
+                {
+                    agent.DisableScriptedMovement();
+                    _ownsMountedMeleeNavigation = false;
+                }
+                if (_ownsMountedMeleeControl)
+                {
+                    agent.SetAutomaticTargetSelection(true);
+                    if (agent.HumanAIComponent != null)
+                    {
+                        // 切换集合再恢复，避免同名集合缓存跳过被嘲讽修改的参数。
+                        agent.HumanAIComponent.SetBehaviorValueSet(HumanAIComponent.BehaviorValueSet.Follow);
+                        agent.HumanAIComponent.SetBehaviorValueSet(HumanAIComponent.BehaviorValueSet.Default);
+                        if (agent.Formation != null)
+                            agent.HumanAIComponent.RefreshBehaviorValues(
+                                agent.Formation.GetReadonlyMovementOrderReference().OrderEnum,
+                                agent.Formation.ArrangementOrder.OrderEnum);
+                        else
+                            agent.HumanAIComponent.SetBehaviorValueSet(HumanAIComponent.BehaviorValueSet.Default);
+                    }
+                }
                 if (agent.GetTargetAgent() == SourceAgent)
                 {
                     agent.ClearTargetFrame();
@@ -231,13 +289,86 @@ namespace New_ZZZF
                     AggressiveAi.AiDefenseThreatAdjustment.RefreshForCurrentTarget(agent);
             }
 
+            private void PrepareMountedMeleeControl(Agent agent)
+            {
+                if (!_ownsMountedMeleeControl)
+                {
+                    if (agent.IsDetachedFromFormation || agent.Detachment != null)
+                        return;
+                    _ownsMountedMeleeControl = true;
+                    // 不修改阵型排列：DetachUnit 必须配套原生 Detachment 生命周期，
+                    // 单独移除排列会让阵型更新继续访问已失效的 file/rank 索引。
+                    agent.SetAutomaticTargetSelection(false);
+                }
+                agent.SetFormationFrameDisabled();
+                agent.SetAIBehaviorParams(HumanAIComponent.AISimpleBehaviorKind.GoToPos, 3f, 7f, 5f, 20f, 6f);
+                agent.SetAIBehaviorParams(HumanAIComponent.AISimpleBehaviorKind.Melee, 8f, 7f, 4f, 20f, 1f);
+                agent.SetAIBehaviorParams(HumanAIComponent.AISimpleBehaviorKind.Ranged, 0f, 7f, 0f, 20f, 0f);
+                agent.SetAIBehaviorParams(HumanAIComponent.AISimpleBehaviorKind.ChargeHorseback, 0f, 7f, 0f, 30f, 0f);
+                agent.SetAIBehaviorParams(HumanAIComponent.AISimpleBehaviorKind.RangedHorseback, 0f, 15f, 0f, 30f, 0f);
+                if (agent.WieldedWeapon.CurrentUsageItem?.IsRangedWeapon == true)
+                {
+                    foreach (EquipmentIndex slot in WeaponSlots)
+                    {
+                        WeaponComponentData usage = agent.Equipment[slot].CurrentUsageItem;
+                        if (usage == null || !usage.IsMeleeWeapon || usage.IsRangedWeapon)
+                            continue;
+                        agent.TryToWieldWeaponInSlot(slot, Agent.WeaponWieldActionType.WithAnimation, false);
+                        break;
+                    }
+                }
+                if (!_ownsMountedMeleeNavigation &&
+                    (agent.GetScriptedFlags() & Agent.AIScriptedFrameFlags.GoToPosition) != 0)
+                    return;
+                if (RushMovementMissionLogic.Current?.IsRushing(agent) == true)
+                    return;
+
+                // 原版骑枪比武也通过骑手的 SetScriptedPosition 驱动骑乘导航。
+                // 不传 GoWithoutMount / NoAttack / NeverSlowDown，允许减速停在近战距离并继续攻击。
+                Vec2 offset = agent.Position.AsVec2 - SourceAgent.Position.AsVec2;
+                Vec2 approachDirection = offset.LengthSquared > 0.001f
+                    ? offset.Normalized() : new Vec2(1f, 0f);
+                WorldPosition destination = SourceAgent.GetWorldPosition();
+                destination.SetVec2(SourceAgent.Position.AsVec2 + approachDirection * 2f);
+                agent.SetScriptedPosition(ref destination, false, Agent.AIScriptedFrameFlags.None);
+                _ownsMountedMeleeNavigation = true;
+                agent.SetTargetAgent(SourceAgent);
+            }
+
             private void RefreshTarget(Agent agent)
             {
+                if (JingXia.IsFrightened(agent)) return;
                 if (agent == null || SourceAgent == null || !SourceAgent.IsActive())
                     return;
                 agent.SetTargetAgent(SourceAgent);
-                agent.SetTargetPosition(SourceAgent.Position.AsVec2);
+                EquipmentIndex rangedSlot = FindRangedWeaponSlot(agent);
+                if (_ownsMountedMeleeNavigation && (agent.MountAgent == null || rangedSlot != EquipmentIndex.None))
+                {
+                    agent.DisableScriptedMovement();
+                    _ownsMountedMeleeNavigation = false;
+                }
+                if (rangedSlot == EquipmentIndex.None)
+                {
+                    if (agent.MountAgent != null && !agent.IsPlayerControlled)
+                    {
+                        PrepareMountedMeleeControl(agent);
+                        return;
+                    }
+                    agent.SetTargetPosition(SourceAgent.Position.AsVec2);
+                    return;
+                }
+
+                // 骑射与骑乘冲锋使用原生位置/走位决策；仅指定敌人目标，不写骑手或坐骑的移动帧。
+                if (agent.MountAgent == null)
+                {
+                    // 远程步兵留在当前位置攻击施法者。
+                    agent.SetTargetPosition(agent.Position.AsVec2);
+                }
+                if (agent.WieldedWeapon.CurrentUsageItem?.IsRangedWeapon != true)
+                    agent.TryToWieldWeaponInSlot(rangedSlot,
+                        Agent.WeaponWieldActionType.WithAnimation, false);
             }
+
         }
 
         public sealed class ChaoFengBuffApplyToSelf : AgentBuff

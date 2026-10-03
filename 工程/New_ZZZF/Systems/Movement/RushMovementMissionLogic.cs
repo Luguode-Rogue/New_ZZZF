@@ -57,6 +57,9 @@ namespace New_ZZZF
         public float Distance = 3.5f;
         public float ApexHeight = 2.2f;
         public bool FaceTargetDuringLeap;
+        // 默认保留后跃射击的完整抛物线；瞬移技能可选择减速上升、顶点停留后结束。
+        public bool RiseAndHold;
+        public float ApexHoldDuration;
         public Action<Agent, Agent> OnApex;
         public Action<Agent, Agent, RushEndReason> OnEnded;
     }
@@ -68,6 +71,11 @@ namespace New_ZZZF
     /// </summary>
     public sealed class RushMovementMissionLogic : MissionLogic, IPlayerInputEffector
     {
+        // AnimFlags 低8位是一个优先级字段，不能 OR 多个 amf_priority_*。
+        // 旧 (AnimFlags)999 是优先级231 + 两个碰撞标志；231没有原版名称。
+        // 用户实测确认忽略全部碰撞是关键；腾空由逐帧真实位移实现，墙体由技能射线检查。
+        internal const AnimFlags LeapActionFlags = AnimFlags.amf_priority_jump_loop |
+            AnimFlags.anf_disable_agent_agent_collisions | AnimFlags.anf_ignore_all_collisions;
         private sealed class RushRecord
         {
             public Agent Mover;
@@ -94,11 +102,63 @@ namespace New_ZZZF
             public ParabolicLeapOptions LeapOptions;
             public Vec3 LeapLandingPosition;
             public bool ApexTriggered;
+            public bool LeapHorizontalBlocked;
+            public Vec3 LeapLastPosition;
         }
 
         private readonly Dictionary<int, RushRecord> _records = new Dictionary<int, RushRecord>();
         private readonly List<RushRecord> _tickSnapshot = new List<RushRecord>();
         private readonly Dictionary<int, Agent> _pendingRightAttacks = new Dictionary<int, Agent>();
+        private sealed class RightAttackWeaponRecord
+        {
+            public Agent Agent;
+            public ThrustSwingWeaponLease Lease;
+            public string PreviousReleaseAction;
+            public float PreviousReleaseProgress;
+            public bool SawRelease;
+            public float Deadline;
+        }
+        private readonly Dictionary<int, RightAttackWeaponRecord> _rightAttackWeapons = new Dictionary<int, RightAttackWeaponRecord>();
+        private readonly List<int> _rightAttackWeaponKeys = new List<int>();
+
+        private void TickRightAttackWeapons()
+        {
+            if (_rightAttackWeapons.Count == 0) return;
+            _rightAttackWeaponKeys.Clear();
+            _rightAttackWeaponKeys.AddRange(_rightAttackWeapons.Keys);
+            foreach (int key in _rightAttackWeaponKeys) {
+                if (!_rightAttackWeapons.TryGetValue(key, out RightAttackWeaponRecord record)) continue;
+                Agent agent = record.Agent;
+                bool active = agent != null && agent.IsActive();
+                bool releasing = active && agent.GetCurrentActionType(1) == Agent.ActionCodeType.ReleaseMelee;
+                if (!active || ThrustSwingWeaponLease.GetOriginalUsage(agent) == null ||
+                    Mission.CurrentTime > record.Deadline || (record.SawRelease && !releasing)) {
+                    ReleaseRightAttackWeapon(key);
+                } else if (releasing) {
+                    // 只识别本次注入的新挥砍，不把施法前尚未结束的挥砍计入。
+                    if (record.PreviousReleaseAction == null ||
+                        agent.GetCurrentAction(1).GetName() != record.PreviousReleaseAction ||
+                        agent.GetCurrentActionProgress(1) + 0.05f < record.PreviousReleaseProgress)
+                        record.SawRelease = true;
+                } else if (agent.GetCurrentActionType(1) == Agent.ActionCodeType.ReadyMelee) {
+                    record.PreviousReleaseAction = null;
+                }
+            }
+        }
+
+        private void ReleaseRightAttackWeapon(int key)
+        {
+            if (!_rightAttackWeapons.TryGetValue(key, out RightAttackWeaponRecord record)) return;
+            _rightAttackWeapons.Remove(key);
+            _pendingRightAttacks.Remove(key);
+            record.Lease.Restore();
+        }
+
+        private void ReleaseAllRightAttackWeapons()
+        {
+            foreach (RightAttackWeaponRecord record in _rightAttackWeapons.Values) record.Lease.Restore();
+            _rightAttackWeapons.Clear();
+        }
 
         public static RushMovementMissionLogic Current
         {
@@ -257,6 +317,8 @@ namespace New_ZZZF
                 record.LeapLandingPosition, BodyFlags.CommonCollisionExcludeFlags);
             record.FixedPosition = record.LeapLandingPosition;
             _records.Add(mover.Index, record);
+            // 复用旧版后跃：攀爬动作 + 每帧真实位置移动，不使用目标高度锁或出生定位。
+            record.LeapLastPosition = record.StartPosition;
             return true;
         }
 
@@ -304,6 +366,7 @@ namespace New_ZZZF
         public override void OnMissionTick(float dt)
         {
             base.OnMissionTick(dt);
+            TickRightAttackWeapons();
             if (_records.Count == 0)
                 return;
 
@@ -486,42 +549,57 @@ namespace New_ZZZF
             float progress = MathF.Clamp(
                 (options.Duration - record.Remaining) / options.Duration, 0f, 1f);
 
-            Vec3 candidate = record.StartPosition +
-                             record.Direction.ToVec3() * (options.Distance * progress);
-            float groundLine = record.StartPosition.z +
-                               (record.LeapLandingPosition.z - record.StartPosition.z) * progress;
-            candidate.z = groundLine + 4f * options.ApexHeight * progress * (1f - progress);
+            float apexProgress = 0.5f;
+            Vec3 candidate;
+            if (options.RiseAndHold) {
+                float hold = MathF.Clamp(options.ApexHoldDuration, 0f, options.Duration - 0.01f);
+                float riseDuration = options.Duration - hold;
+                apexProgress = riseDuration / options.Duration;
+                float u = MathF.Clamp((options.Duration - record.Remaining) / riseDuration, 0f, 1f);
+                float remaining = 1f - u;
+                // easeOutCubic：速度从最大值单调减至0；到顶后位置保持，结束回调负责瞬移。
+                float rise = 1f - remaining * remaining * remaining;
+                candidate = record.StartPosition + record.Direction.ToVec3() * (options.Distance * rise);
+                candidate.z = record.StartPosition.z + options.ApexHeight * rise;
+            } else {
+                candidate = record.StartPosition + record.Direction.ToVec3() * (options.Distance * progress);
+                float groundLine = record.StartPosition.z +
+                    (record.LeapLandingPosition.z - record.StartPosition.z) * progress;
+                candidate.z = groundLine + 4f * options.ApexHeight * progress * (1f - progress);
+            }
 
             // 身体中心做一条短射线。没有预检落点，因此狭窄空间允许发动，
             // 但不会借助逐帧坐标驱动穿过墙体。
-            if (IsLeapStepBlocked(mover.Position, candidate))
+            if (record.LeapHorizontalBlocked) { candidate.x = mover.Position.x; candidate.y = mover.Position.y; }
+            if (IsLeapStepBlocked(mover, record.LeapLastPosition, candidate))
             {
-                EndRecord(record, RushEndReason.Stuck);
-                return;
+                // 后方拥挤/障碍不能把腾空整个取消；改成当前位置的竖直抛物线，仍检查头顶障碍。
+                candidate.x = mover.Position.x; candidate.y = mover.Position.y;
+                if (IsLeapStepBlocked(mover, record.LeapLastPosition, candidate)) {
+                    EndRecord(record, RushEndReason.Stuck); return;
+                }
+                record.LeapHorizontalBlocked = true;
             }
 
             // 下落过程中若地面提前抬高，直接在接触点落地，避免钻入斜坡。
-            float groundHeight = Mission.Scene.GetGroundHeightAtPosition(
-                candidate, BodyFlags.CommonCollisionExcludeFlags);
-            bool touchedGround = progress > 0.5f && candidate.z <= groundHeight + 0.05f;
-            if (touchedGround)
-                candidate.z = groundHeight;
-
-            // TeleportToPosition 每次都会通知所有 AgentComponent 执行
-            // OnAgentTeleported。连续调用会造成闪烁，也会放大大量 AI 同时后跃的开销。
-            // SetInitialFrame 直接写入原生帧，并同时维持正确朝向。
-            Vec2 facing = mover.LookDirection.AsVec2;
-            if (options.FaceTargetDuringLeap && IsValidEnemy(mover, record.Target))
-            {
-                Vec2 towardTarget = record.Target.Position.AsVec2 - candidate.AsVec2;
-                if (towardTarget.LengthSquared > 0.001f)
-                    facing = towardTarget.Normalized();
+            bool touchedGround = false;
+            if (!options.RiseAndHold && progress > 0.5f) {
+                float groundHeight = Mission.Scene.GetGroundHeightAtPosition(candidate, BodyFlags.CommonCollisionExcludeFlags);
+                touchedGround = candidate.z <= groundHeight + 0.05f;
+                if (touchedGround) candidate.z = groundHeight;
             }
-            if (facing.LengthSquared < 0.001f)
-                facing = -record.Direction;
-            mover.SetInitialFrame(candidate, facing.Normalized());
 
-            if (!record.ApexTriggered && previousProgress < 0.5f && progress >= 0.5f)
+            // 原版后跃射击在每帧调用 TeleportToPosition，使空中移动抵消原生重力。
+            // 不能限为30Hz；中间未写入的帧仍会被地面移动流程覆盖。
+            if (options.FaceTargetDuringLeap && IsValidEnemy(mover, record.Target)) {
+                Vec3 toward = record.Target.Position - candidate;
+                if (toward.AsVec2.LengthSquared > 0.001f)
+                    mover.LookDirection = toward.AsVec2.Normalized().ToVec3();
+            }
+            mover.TeleportToPosition(candidate);
+            record.LeapLastPosition = candidate;
+
+            if (!record.ApexTriggered && previousProgress < apexProgress && progress >= apexProgress)
             {
                 record.ApexTriggered = true;
                 try { options.OnApex?.Invoke(mover, record.Target); }
@@ -532,7 +610,7 @@ namespace New_ZZZF
                 EndRecord(record, RushEndReason.Arrived);
         }
 
-        private bool IsLeapStepBlocked(Vec3 fromPosition, Vec3 toPosition)
+        private bool IsLeapStepBlocked(Agent mover, Vec3 fromPosition, Vec3 toPosition)
         {
             Vec3 delta = toPosition - fromPosition;
             float length = delta.Length;
@@ -542,9 +620,14 @@ namespace New_ZZZF
             float collisionDistance;
             Vec3 bodyStart = fromPosition + Vec3.Up * 1.05f;
             Vec3 bodyEnd = toPosition + Vec3.Up * 1.05f;
-            bool bodyHit = Mission.Scene.RayCastForClosestEntityOrTerrain(
-                bodyStart, bodyEnd, out collisionDistance, 0.01f,
-                BodyFlags.CommonCollisionExcludeFlags);
+            // 碰撞射线从自己体内出发时必须排除自身实体，避免刚起跳就被判为 Stuck。
+            var visuals = mover.AgentVisuals;
+            bool bodyHit = visuals != null
+                ? Mission.Scene.RayCastForClosestEntityOrTerrainIgnoreEntity(
+                    bodyStart, bodyEnd, visuals.GetWeakEntity(), out collisionDistance, out _, 0.01f,
+                    BodyFlags.CommonCollisionExcludeFlags)
+                : Mission.Scene.RayCastForClosestEntityOrTerrain(
+                    bodyStart, bodyEnd, out collisionDistance, 0.01f, BodyFlags.CommonCollisionExcludeFlags);
             return bodyHit && collisionDistance + 0.05f < length;
         }
 
@@ -757,7 +840,7 @@ namespace New_ZZZF
         private static bool IsValidEnemy(Agent mover, Agent target)
         {
             return mover != null && target != null && target.IsActive() && target.Health > 0f &&
-                   target != mover && mover.IsEnemyOf(target);
+                   target != mover && !SkillTargetProtection.IsProtected(target) && mover.IsEnemyOf(target);
         }
 
 #if false
@@ -841,6 +924,7 @@ namespace New_ZZZF
                 return;
 
             Agent mover = record.Mover;
+
             if (mover.IsActive())
             {
                 // 后跃没有开启 scripted movement，不能误关 AI 原有的战术移动。
@@ -880,6 +964,27 @@ namespace New_ZZZF
         {
             if (attacker == null || !attacker.IsActive())
                 return;
+            // 不覆盖其他连续攻击技能拥有的临时武器与攻击输入。
+            if (JiFengLianZhanMissionLogic.Current?.IsActive(attacker) == true) return;
+            MissionWeapon weapon = attacker.WieldedWeapon;
+            WeaponComponentData usage = weapon.CurrentUsageItem;
+            if (usage == null || !usage.IsMeleeWeapon) return;
+            if ((usage.SwingDamage <= 0 || usage.SwingDamageType == DamageTypes.Invalid) &&
+                usage.ThrustDamage > 0 && usage.ThrustDamageType != DamageTypes.Invalid) {
+                if (!ThrustSwingWeaponLease.TryApply(attacker, weapon, out ThrustSwingWeaponLease lease, out _)) return;
+                _rightAttackWeapons[attacker.Index] = new RightAttackWeaponRecord {
+                    Agent = attacker, Lease = lease, Deadline = Mission.CurrentTime + 6f,
+                    PreviousReleaseAction = attacker.GetCurrentActionType(1) == Agent.ActionCodeType.ReleaseMelee
+                        ? attacker.GetCurrentAction(1).GetName() : null,
+                    PreviousReleaseProgress = attacker.GetCurrentActionProgress(1)
+                };
+            } else if (_rightAttackWeapons.TryGetValue(attacker.Index, out RightAttackWeaponRecord existing)) {
+                existing.SawRelease = false;
+                existing.PreviousReleaseAction = attacker.GetCurrentActionType(1) == Agent.ActionCodeType.ReleaseMelee
+                    ? attacker.GetCurrentAction(1).GetName() : null;
+                existing.PreviousReleaseProgress = attacker.GetCurrentActionProgress(1);
+                existing.Deadline = Mission.CurrentTime + 6f;
+            }
             _pendingRightAttacks[attacker.Index] = target;
             if (attacker.IsAIControlled)
                 attacker.SetHasOnAiInputSetCallback(true);
@@ -1007,6 +1112,7 @@ namespace New_ZZZF
             in AttackCollisionData attackCollisionData)
         {
             base.OnAgentHit(affectedAgent, affectorAgent, affectorWeapon, blow, attackCollisionData);
+            if (WeaponCombatMissionLogic.DeliveringBleed) return;
             if (affectedAgent == null || affectorAgent == null || affectorWeapon.IsEmpty)
                 return;
 
@@ -1036,10 +1142,21 @@ namespace New_ZZZF
             List<RushRecord> snapshot = new List<RushRecord>(_records.Values);
             for (int i = 0; i < snapshot.Count; i++)
             {
-                if (snapshot[i].Target == affectedAgent)
+                if (snapshot[i].Mode != RushMovementMode.ParabolicLeap && snapshot[i].Target == affectedAgent)
                     EndRecord(snapshot[i], RushEndReason.InvalidTarget);
             }
             _pendingRightAttacks.Remove(affectedAgent.Index);
+            ReleaseRightAttackWeapon(affectedAgent.Index);
+        }
+
+        public override void OnRemoveBehavior()
+        {
+            var ending = new List<RushRecord>(_records.Values);
+            foreach (RushRecord record in ending) EndRecord(record, RushEndReason.Cancelled);
+            _records.Clear();
+            ReleaseAllRightAttackWeapons();
+            _pendingRightAttacks.Clear();
+            base.OnRemoveBehavior();
         }
 
         protected override void OnEndMission()
@@ -1049,6 +1166,7 @@ namespace New_ZZZF
                 EndRecord(snapshot[i], RushEndReason.Cancelled);
             _records.Clear();
             _pendingRightAttacks.Clear();
+            ReleaseAllRightAttackWeapons();
             base.OnEndMission();
         }
     }

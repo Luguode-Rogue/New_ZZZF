@@ -242,7 +242,7 @@ namespace New_ZZZF.Skills
         private static bool IsUsableEnemy(Agent caster, Agent target)
         {
             return target != null && target != caster && target.IsActive() &&
-                target.Health > 0f && caster.IsEnemyOf(target);
+                target.Health > 0f && (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target));
         }
     }
 }

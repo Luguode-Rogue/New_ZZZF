@@ -7,55 +7,83 @@ namespace New_ZZZF.Skills
 {
     internal sealed class MagicShoot : SkillBase
     {
-        // 约 10 度瞄准锥；必须已经由原生 AI 锁定并面向目标，不能把技能当自瞄使用。
-        private const float MinimumAimDot = 0.985f;
+
 
         public MagicShoot()
         {
             SkillID = "MagicShoot";
             Type = SPSkillType.SubActive;
             Cooldown = 5f;
-            ResourceCost = 0f;
+            ResourceCost = 15f;
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0007}MagicShoot");
             Difficulty = null;
+            Description = new TaleWorlds.Localization.TextObject("{=MagicShoot_DESC}立即沿视线追加一次远程射击，不扣弹药数量。NPC在远程攻击准备时向敌人当前头部射击，不预判移动。消耗耐力15，冷却5秒。");
         }
 
         public override bool CanActivateWhilePerformingAction => true;
 
-        public override bool Activate(Agent casterAgent)
+        public override bool Activate(Agent caster)
         {
-            if (!Script.AgentShootTowardsLookDirection(casterAgent, 0f))
-                return FailActivation("没有可用于魔法射击的武器、弹药或有效弹道。");
-
-            PlayReleasePresentation(casterAgent);
-            return true;
+            if (caster == null || !caster.IsActive() || caster.Equipment == null)
+                return FailActivation("施法者不可用。");
+            EquipmentIndex slot = caster.GetPrimaryWieldedItemIndex();
+            if (slot == EquipmentIndex.None) return FailActivation("需要手持武器。");
+            MissionWeapon weapon = caster.Equipment[slot];
+            if (weapon.IsEmpty || weapon.CurrentUsageItem == null) return FailActivation("武器不可用。");
+            if (!weapon.CurrentUsageItem.IsRangedWeapon) {
+                // 保留近战默认投矛分支，只用恒假条件屏蔽。
+                if (1 == 0) {
+                    PlayReleasePresentation(caster);
+                    return Script.AgentShootTowardsLookDirection(caster, 0f);
+                }
+                return FailActivation("近战武器射击分支暂时关闭。");
+            }
+            if (!Script.TryGetActualAmmoWeapon(caster, weapon, out MissionWeapon ammo))
+                return FailActivation("没有可用弹药。");
+            float speed = weapon.GetModifiedMissileSpeedForCurrentUsage();
+            if (SkillSystemBehavior.WoW_AgentMissileSpeedData.TryGetValue(caster.Index, out var recorded) && recorded != null)
+                foreach (var entry in recorded)
+                    if (!entry.Weapon.IsEmpty && entry.Weapon.Item.Id == weapon.Item.Id && entry.MissileSpeed > 0f)
+                        speed = entry.MissileSpeed;
+            if (speed <= 0f || float.IsNaN(speed) || float.IsInfinity(speed)) return FailActivation("弹速无效。");
+            Vec3 start = caster.GetEyeGlobalPosition();
+            Vec3 destination;
+            bool targetPosition = !caster.IsPlayerControlled;
+            if (targetPosition) {
+                Agent target = caster.GetTargetAgent();
+                if (!IsTarget(caster, target) || !RushMovementMissionLogic.HasLineOfSight(caster, target))
+                    return FailActivation("没有有效射击目标。");
+                // 当前头部位置，不读取目标速度，不预判飞行时间。
+                destination = target.GetEyeGlobalPosition();
+                Vec3 solution = Script.CalculateProjectileFiringSolution(start, destination, speed, 9.81f);
+                if (!solution.IsValid || solution.LengthSquared < 0.001f) return FailActivation("弹道无法到达目标。");
+            } else {
+                destination = caster.LookDirection;
+                if (!destination.IsValid || destination.LengthSquared < 0.001f) return FailActivation("视线方向无效。");
+                destination.Normalize();
+            }
+            // 触发时直接调用相应 release 动作；创建真实投射物，不扣装备弹药数量。
+            PlayReleasePresentation(caster);
+            int missile = Script.FireProjectileFromAgentWithWeaponAtPosition(caster, weapon, ammo,
+                start, destination, speed, forceTargetPosition: targetPosition);
+            return missile > 0 || FailActivation("投射物创建失败。");
         }
+
+        private static bool IsTarget(Agent caster, Agent target) => target != null && target != caster &&
+            target.IsHuman && target.IsActive() && target.Health > 0f && caster.IsEnemyOf(target) &&
+            !SkillTargetProtection.IsProtected(target);
 
         public override bool CheckCondition(Agent caster)
         {
-            if (!base.CheckCondition(caster))
-                return false;
-
+            if (!base.CheckCondition(caster) || caster.Equipment == null ||
+                caster.GetCurrentActionType(1) != Agent.ActionCodeType.ReadyRanged) return false;
             Agent target = caster.GetTargetAgent();
-            if (target == null || target == caster || !target.IsHuman || target.IsMount ||
-                !target.IsActive() || target.Health <= 0f || !caster.IsEnemyOf(target))
-                return false;
-
-            EquipmentIndex weaponIndex = caster.GetPrimaryWieldedItemIndex();
-            if (weaponIndex == EquipmentIndex.None)
-                return false;
-            MissionWeapon weapon = caster.Equipment[weaponIndex];
-            if (weapon.IsEmpty || weapon.CurrentUsageItem == null || !weapon.CurrentUsageItem.IsRangedWeapon)
-                return false;
-            Vec3 toTarget = target.GetEyeGlobalPosition() - caster.GetEyeGlobalPosition();
-            Vec3 lookDirection = caster.LookDirection;
-            if (toTarget.LengthSquared < 0.01f || lookDirection.LengthSquared < 0.01f)
-                return false;
-            if (Vec3.DotProduct(toTarget.NormalizedCopy(), lookDirection.NormalizedCopy()) < MinimumAimDot)
-                return false;
-
-            // 角度合格后才发射射线；AI 冷却期间连本方法都不会进入。
-            return RushMovementMissionLogic.HasLineOfSight(caster, target);
+            if (!IsTarget(caster, target)) return false;
+            EquipmentIndex slot = caster.GetPrimaryWieldedItemIndex();
+            if (slot == EquipmentIndex.None) return false;
+            MissionWeapon weapon = caster.Equipment[slot];
+            return !weapon.IsEmpty && weapon.CurrentUsageItem != null && weapon.CurrentUsageItem.IsRangedWeapon &&
+                Script.TryGetActualAmmoWeapon(caster, weapon, out _) && RushMovementMissionLogic.HasLineOfSight(caster, target);
         }
 
         /// <summary>

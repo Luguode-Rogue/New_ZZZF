@@ -164,7 +164,7 @@ namespace New_ZZZF.Skills
             private bool IsValidEnemy(Agent target)
             {
                 return target != null && target != _caster && target.IsActive() && target.IsHuman &&
-                    target.Health > 0f && _caster.IsEnemyOf(target) &&
+                    target.Health > 0f && (_caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target)) &&
                     (target.Position - _caster.Position).LengthSquared <=
                     (SearchRange + 5f) * (SearchRange + 5f);
             }
@@ -279,7 +279,7 @@ namespace New_ZZZF.Skills
 
             Agent target = caster.GetTargetAgent();
             if (target == null || !target.IsActive() || target.Health <= 0f ||
-                !caster.IsEnemyOf(target))
+                (!caster.IsEnemyOf(target) || SkillTargetProtection.IsProtected(target)))
                 return false;
             float distanceSquared = (target.Position - caster.Position).LengthSquared;
             return distanceSquared >= 64f && distanceSquared <= SearchRange * SearchRange &&

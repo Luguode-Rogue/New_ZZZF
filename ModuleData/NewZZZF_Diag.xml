@@ -12,8 +12,6 @@
   <SkillSystemBehavior>true</SkillSystemBehavior>
   <!-- 斩击镜头 Behavior-->
   <MountedSlashCamera>true</MountedSlashCamera>
-  <!-- 英雄切换系统（MissionBehavior + CampaignBehavior）-->
-  <HeroChange>true</HeroChange>
   <!-- 词缀系统（MissionBehavior + CampaignBehavior + Ctrl+F5~F9）-->
   <Affix>true</Affix>
   <!-- 战斗 HTML HUD（耐力/法力/技能冷却 Surface）-->

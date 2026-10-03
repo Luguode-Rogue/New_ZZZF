@@ -1,137 +1,99 @@
-﻿using New_ZZZF.Systems;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TaleWorlds.CampaignSystem.Extensions;
-using TaleWorlds.Core;
-using TaleWorlds.Engine;
-using TaleWorlds.InputSystem;
-using TaleWorlds.Library;
+using New_ZZZF.Systems;
 using TaleWorlds.MountAndBlade;
-using static New_ZZZF.JingXia;
+using TaleWorlds.Engine;
+using TaleWorlds.Core;
 
 namespace New_ZZZF
 {
     internal class XieEZuZhou : SkillBase
     {
-        public XieEZuZhou()
-        {
-            SkillID = "XieEZuZhou";      // 必须唯一
-            Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 2;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0053}XieEZuZhou");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0054}群体负面状态，持续影响附近敌方单位。受影响单位每秒生命值减少1%，并且禁用远程武器，对英雄单位无影响。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
+        internal const float DebuffDuration = 60f;
+        internal const string MarkerId = "XieEZuZhouAllyMarker";
+        internal const string DescriptionText = "全图诅咒普通敌军60秒，每秒流失最大生命的1%，降低移速30%、精度20%、物理伤害20%，加速时间乘1.5，并允许其误伤友军。英雄免疫。友军已有施放时NPC不会重复开启。耐力60，冷却90秒。";
+        public XieEZuZhou() {
+            SkillID = "XieEZuZhou"; Type = SPSkillType.MainActive;
+            Cooldown = 90f; ResourceCost = 60f;
+            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0053}邪恶诅咒");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0054}" + DescriptionText);
         }
-        public override bool Activate(Agent agent)
-        {
-            // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new XieEZuZhouBuffToSelf(60f, agent), }; // 新实例
-            foreach (var state in newStates)
-            {
-                state.TargetAgent = agent;
-                agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
+        public override bool IsHudDurationState(string stateId) => false;
+        internal static bool IsCursed(Agent agent) =>
+            (agent?.IsMount == true ? agent.RiderAgent : agent)?.GetComponent<AgentSkillComponent>()?
+                .StateContainer.GetLongestStateDuration("XieEZuZhouBuffToEnemy") > 0f;
+        private static bool CanAffect(Agent caster, Agent enemy) => enemy != null && enemy.IsActive() &&
+            enemy.IsHuman && !enemy.IsHero && enemy.Health > 0f && caster.IsEnemyOf(enemy) &&
+            !SkillTargetProtection.IsProtected(enemy) && enemy.GetComponent<AgentSkillComponent>() != null;
+        public override bool CheckCondition(Agent caster) {
+            if (!base.CheckCondition(caster) || caster?.Mission == null) return false;
+            if (caster.GetComponent<AgentSkillComponent>()?.StateContainer.HasState(MarkerId) == true) return false;
+            foreach (Agent enemy in caster.Mission.Agents)
+                if (CanAffect(caster, enemy)) return true;
+            return false;
+        }
+        public override bool Activate(Agent caster) {
+            if (caster == null || !caster.IsActive() || caster.Mission == null) return FailActivation("施法者不可用。");
+            bool affected = false;
+            foreach (Agent enemy in caster.Mission.Agents) {
+                if (!CanAffect(caster, enemy)) continue;
+                AgentBuffContainer states = enemy.GetComponent<AgentSkillComponent>().StateContainer;
+                var old = states.GetState("XieEZuZhouBuffToEnemy") as XieEZuZhouBuffToEnemy;
+                if (old != null) { old.Duration = Math.Max(old.Duration, DebuffDuration); }
+                else states.AddState(new XieEZuZhouBuffToEnemy(DebuffDuration, caster), enemy);
+                affected = true;
             }
+            if (!affected) return FailActivation("没有可诅咒的敌军。");
+            foreach (Agent ally in caster.Mission.Agents) {
+                if (ally == null || !ally.IsActive() || !ally.IsHuman || (ally != caster && !caster.IsFriendOf(ally))) continue;
+                var states = ally.GetComponent<AgentSkillComponent>()?.StateContainer;
+                if (states == null) continue;
+                var old = states.GetState(MarkerId);
+                if (old != null) old.Duration = Math.Max(old.Duration, DebuffDuration);
+                else states.AddState(new AllyMarker(caster), ally);
+            }
+            try {
+                string voice = "event:/voice/combat/" + (caster.IsFemale ? "female" : "male") + "/0" + MBRandom.RandomInt(1, 5) + "/yell";
+                SoundManager.StartOneShotEvent(voice, caster.Position);
+            } catch (Exception) { /* 声音资源缺失不影响减益。 */ }
             return true;
         }
-
-
-    }
-    public class XieEZuZhouBuffToSelf : AgentBuff
-    {
-        private float _timeSinceLastTick;
-        public XieEZuZhouBuffToSelf(float duration, Agent source)
-        {
-            StateId = "XieEZuZhouBuffToSelf";
-            Duration = duration;
-            SourceAgent = source;
-            _timeSinceLastTick = 0; // 新增初始化
-        }
-
-        public override void OnApply(Agent agent)
-        {
-
-        }
-
-        public override void OnUpdate(Agent agent, float dt)
-        {
-
-            SkillSystemBehavior.ActiveComponents.TryGetValue(this.SourceAgent.Index, out var agentSkillComponent);
-            if (agentSkillComponent == null) { return; }
-            // 累积时间
-            _timeSinceLastTick += dt;
-
-            //每秒刷一次状态
-            if (_timeSinceLastTick >= 1f)
-            {
-                List<Agent> values = Mission.Current.Agents;
-                Script.AgentListIFF(agent, values, out var friendAgent, out var foeAgent);
-                if (foeAgent != null && foeAgent.Count > 0)
-                {
-                    foreach (var item in foeAgent)
-                    {
-
-                        // 每次创建新的状态实例
-                        List<AgentBuff> newStates = new List<AgentBuff> { new XieEZuZhouBuffToEnemy(2F, agent), }; // 新实例
-                        foreach (var state in newStates)
-                        {
-                            state.TargetAgent = item;
-                            item.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                        }
-
-                    }
-
-                    return;
-                }
-                _timeSinceLastTick -= 1f; // 重置计时器
-            }
-        }
-
-        public override void OnRemove(Agent agent)
-        {
-
+        private sealed class AllyMarker : AgentBuff {
+            public override bool IsMarker => true;
+            public override bool BypassesSkillProtection => true;
+            public AllyMarker(Agent source) { StateId = MarkerId; SourceAgent = source; Duration = DebuffDuration; }
+            public override void OnApply(Agent agent) { }
+            public override void OnUpdate(Agent agent, float dt) { }
+            public override void OnRemove(Agent agent) { }
         }
     }
     public class XieEZuZhouBuffToEnemy : AgentBuff
     {
-        private float _timeSinceLastTick;
-        private List<EquipmentIndex> itemsIndex = new List<EquipmentIndex>();
-        private List<MissionWeapon> weapon = new List<MissionWeapon>();
-        public XieEZuZhouBuffToEnemy(float duration, Agent source)
-        {
-            StateId = "XieEZuZhouBuffToEnemy";
-            Duration = duration;
-            SourceAgent = source;
-            _timeSinceLastTick = 0; // 新增初始化
+        private float _elapsed;
+        private Agent _mount;
+        public override string BattleHudName => "邪恶诅咒";
+        public XieEZuZhouBuffToEnemy(float duration, Agent source) {
+            StateId = "XieEZuZhouBuffToEnemy"; Duration = duration; SourceAgent = source;
         }
-
-        public override void OnApply(Agent agent)
-        {
-
+        private void Refresh(Agent agent) {
+            agent.UpdateAgentProperties();
+            if (_mount != null && _mount != agent.MountAgent && _mount.IsActive()) _mount.UpdateAgentProperties();
+            _mount = agent.MountAgent;
+            if (_mount != null && _mount.IsActive()) _mount.UpdateAgentProperties();
         }
-
-        public override void OnUpdate(Agent agent, float dt)
-        {
-
-            // 累积时间
-            _timeSinceLastTick += dt;
-
-            //每秒刷一次状态
-            if (_timeSinceLastTick >= 1f)
-            {
-
-                agent.UpdateAgentProperties();
-
-                _timeSinceLastTick -= 1f; // 重置计时器
+        public override void OnApply(Agent agent) { Refresh(agent); }
+        public override void OnUpdate(Agent agent, float dt) {
+            if (SkillTargetProtection.IsProtected(agent)) { Duration = 0f; return; }
+            if (_mount != agent.MountAgent) Refresh(agent);
+            _elapsed += dt;
+            while (_elapsed >= 1f && agent.Health > 0f) {
+                _elapsed -= 1f;
+                MagicDamageSystem.ApplyResolvedPeriodicDamage(agent, agent.HealthLimit * 0.01f);
             }
         }
-
-        public override void OnRemove(Agent agent)
-        {
-            agent.UpdateAgentProperties();
+        public override void OnRemove(Agent agent) {
+            if (agent != null && agent.IsActive()) Refresh(agent);
+            if (_mount != null && _mount.IsActive()) _mount.UpdateAgentProperties();
+            _mount = null;
         }
     }
 }

@@ -45,6 +45,12 @@ namespace New_ZZZF.Skills
                 return FailActivation("当前任务未加载强制移动管理器。");
 
             Agent target = agent.GetTargetAgent();
+            if (agent.IsPlayerControlled) {
+                // 发动时锁定可见敌人；最高点按目标实时位置解弹道，而非朝视野盲射。
+                target = null;
+                if (SpellTargetingSystem.TryResolveSingleTarget(agent, float.PositiveInfinity, out var aimed) &&
+                    IsValidEnemy(agent, aimed.Target)) target = aimed.Target;
+            }
             Vec2 leapDirection;
             if (agent.IsPlayerControlled)
             {
@@ -78,8 +84,8 @@ namespace New_ZZZF.Skills
                 return FailActivation(failureReason ?? "无法开始后跃。");
 
             // 保留原技能刻意选用的动作组合；位移和最高点射击由任务级管理器同步。
-            agent.SetActionChannel(1, ActionIndexCache.Create("act_ready_bow"), true, (AnimFlags)999UL);
-            agent.SetActionChannel(0, ActionIndexCache.Create("act_climb_ladder"), true, (AnimFlags)999UL);
+            agent.SetActionChannel(1, ActionIndexCache.Create("act_ready_bow"), true, AnimFlags.amf_priority_attack);
+            agent.SetActionChannel(0, ActionIndexCache.Create("act_climb_ladder"), true, RushMovementMissionLogic.LeapActionFlags);
             return true;
         }
 
@@ -114,17 +120,10 @@ namespace New_ZZZF.Skills
                 return;
 
             bool shotCreated = false;
-            // 玩家始终沿自己的视野射击。GetTargetAgent 可能保留一个位于背后的
-            // 原生目标，不能用它覆盖玩家的瞄准方向。
-            if (shooter.IsPlayerControlled)
-            {
-                shotCreated = Script.AgentShootTowardsLookDirection(shooter, 0f);
-            }
-            else if (IsValidEnemy(shooter, target) &&
-                RushMovementMissionLogic.HasLineOfSight(shooter, target))
-            {
-                bool useHighArc = (target.Position - shooter.Position).AsVec2.Length >= LongRangeDistance;
-                shotCreated = Script.TryShootAtAgentLowCost(shooter, target, useHighArc);
+            if (IsValidEnemy(shooter, target) && RushMovementMissionLogic.HasLineOfSight(shooter, target)) {
+                bool highArc = (target.Position - shooter.Position).AsVec2.Length >= LongRangeDistance;
+                shotCreated = Script.TryShootAtAgentLowCost(shooter, target, highArc);
+                if (!shotCreated && highArc) shotCreated = Script.TryShootAtAgentLowCost(shooter, target, false);
             }
 
             if (shotCreated)
@@ -135,8 +134,8 @@ namespace New_ZZZF.Skills
         {
             if (mover == null || !mover.IsActive())
                 return;
-            mover.SetActionChannel(0, ActionIndexCache.Create("act_none"), true, (AnimFlags)999UL);
-            mover.SetActionChannel(1, ActionIndexCache.Create("act_none"), true, (AnimFlags)999UL);
+            mover.SetActionChannel(0, ActionIndexCache.Create("act_none"), true);
+            mover.SetActionChannel(1, ActionIndexCache.Create("act_none"), true);
         }
 
         private static bool HasUsableRangedWeapon(Agent agent)
@@ -154,7 +153,7 @@ namespace New_ZZZF.Skills
         private static bool IsValidEnemy(Agent caster, Agent target)
         {
             return caster != null && target != null && target != caster &&
-                   target.IsActive() && target.Health > 0f && caster.IsEnemyOf(target);
+                   target.IsActive() && target.Health > 0f && (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target));
         }
     }
 }

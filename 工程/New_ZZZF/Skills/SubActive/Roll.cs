@@ -144,7 +144,7 @@ namespace New_ZZZF
             foreach (Agent other in mission.Agents)
             {
                 if (other == null || other == caster || !other.IsActive() ||
-                    !other.IsHuman || other.IsMount || !caster.IsEnemyOf(other))
+                    !other.IsHuman || other.IsMount || (!caster.IsEnemyOf(other) || SkillTargetProtection.IsProtected(other)))
                     continue;
 
                 Vec2 away = caster.Position.AsVec2 - other.Position.AsVec2;

@@ -8,6 +8,7 @@ namespace New_ZZZF
     /// </summary>
     public sealed class SkillRecastWindowState : AgentBuff
     {
+        public override bool IsMarker => true;
         private const string StatePrefix = "SkillRecastWindow:";
 
         public SkillRecastWindowState(string skillId, float duration, Agent caster)

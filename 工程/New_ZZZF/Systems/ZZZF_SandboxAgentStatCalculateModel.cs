@@ -1,4 +1,5 @@
-﻿using SandBox.GameComponents;
+using SandBox.GameComponents;
+using Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,10 +30,21 @@ namespace New_ZZZF.Systems
     /// </summary>
     public class ZZZF_SandboxAgentStatCalculateModel: SandboxAgentStatCalculateModel
     {
+        public override float GetSneakAttackMultiplier(Agent agent, WeaponComponentData weapon)
+        {
+            float original = base.GetSneakAttackMultiplier(agent, weapon);
+            if (agent?.Character == null || weapon == null) return original;
+            var value = new ExplainedNumber(1f);
+            int skill = Math.Max(50, GetEffectiveSkill(agent, DefaultSkills.Roguery));
+            SkillHelper.AddSkillBonusForSkillLevel(DefaultSkillEffects.SneakDamage, ref value, skill);
+            if (weapon.WeaponClass == WeaponClass.Dagger || weapon.WeaponClass == WeaponClass.ThrowingKnife)
+                value.AddFactor(2f);
+            return Math.Max(original, value.ResultNumber);
+        }
         public override float GetWeaponDamageMultiplier(Agent agent, WeaponComponentData weapon)
         {
             float native = base.GetWeaponDamageMultiplier(agent, weapon);
-            native = StrikeMagnitudeScript.WOW_Script_AgentStatCalculateModel(agent, native);
+            native = StrikeMagnitudeScript.WOW_Script_AgentStatCalculateModel(agent, native, weapon);
             return native;
             //接下来的代码会乘等这个函数的输出值，所以这个函数的数值1==100%
             //float weaponDamageMultiplier = MissionGameModels.Current.AgentStatCalculateModel.GetWeaponDamageMultiplier(attackInformation.AttackerAgent, currentUsageItem2);
@@ -42,9 +54,21 @@ namespace New_ZZZF.Systems
         public override void UpdateAgentStats(Agent agent, AgentDrivenProperties agentDrivenProperties)
         {
             base.UpdateAgentStats(agent, agentDrivenProperties);
+            if (agent.IsMount)
+            {
+                WeiYa.ApplyMountDrivenProperties(agent, agentDrivenProperties);
+                if (agent.RiderAgent?.GetComponent<AgentSkillComponent>()?.StateContainer.HasState("YingXiongZhuFuBuff") == true)
+                {
+                    agentDrivenProperties.MountSpeed *= 1.3f;
+                    agentDrivenProperties.MountManeuver *= 1.3f;
+                    agentDrivenProperties.MountDashAccelerationMultiplier *= 1.3f;
+                    agentDrivenProperties.TopSpeedReachDuration *= 1.3f;
+                }
+            }
             if (agent.IsHuman)
             {
                 this.UpdateHumanStats(agent, agentDrivenProperties, _dt);
+                WeaponCombatRules.Stats(agent, agentDrivenProperties);
                 AggressiveAi.AiDefenseThreatAdjustment.Apply(agent, agentDrivenProperties);
 
                 // 沿用模组中“按住空格加速跑”的已验证实现：base 每次重算后直接
@@ -128,35 +152,20 @@ namespace New_ZZZF.Systems
                 }
                 if (result.StateContainer.HasState("KongNueCiFuBuff"))
                 {
-                    KongNueCiFuBuff buff = result.StateContainer.GetState("KongNueCiFuBuff") as KongNueCiFuBuff;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        agent.AgentDrivenProperties.SwingSpeedMultiplier *= 2f;
-                        agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier *= 2f;
-                        agent.AgentDrivenProperties.HandlingMultiplier *= 2f;
-                        agent.AgentDrivenProperties.MissileSpeedMultiplier /= 2f;
-                        agent.AgentDrivenProperties.WeaponInaccuracy *= 2f;
-                        agent.AgentDrivenProperties.WeaponMaxMovementAccuracyPenalty /= 2f;
-                        agent.AgentDrivenProperties.WeaponMaxUnsteadyAccuracyPenalty /= 2f;
-                        agent.AgentDrivenProperties.WeaponBestAccuracyWaitTime /= 2f;
-                        agent.AgentDrivenProperties.ArmorEncumbrance /= 2f;
-                        agent.AgentDrivenProperties.WeaponsEncumbrance /= 2f;
-                        agent.AgentDrivenProperties.ArmorHead *= 2f;
-                        agent.AgentDrivenProperties.ArmorTorso *= 2f;
-                        agent.AgentDrivenProperties.ArmorLegs *= 2f;
-                        agent.AgentDrivenProperties.ArmorArms *= 2f;
-                        agent.AgentDrivenProperties.AttributeRiding *= 2f;
-                        agent.AgentDrivenProperties.AttributeShield *= 2f;
-                        agent.AgentDrivenProperties.AttributeShieldMissileCollisionBodySizeAdder *= 2f;
-                        agent.AgentDrivenProperties.ShieldBashStunDurationMultiplier *= 2f;
-                        agent.AgentDrivenProperties.KickStunDurationMultiplier *= 2f;
-                        agent.AgentDrivenProperties.TopSpeedReachDuration /= 2f;
-                        agent.AgentDrivenProperties.MaxSpeedMultiplier *= 2f;
-                        agent.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 2f;
-                        agent.AgentDrivenProperties.AttributeHorseArchery *= 2f;
-                        agent.AgentDrivenProperties.AttributeCourage *= 2f;
-                    }
+                    agentDrivenProperties.SwingSpeedMultiplier *= KongNueCiFu.StrengthMultiplier;
+                    if (KongNueCiFu.HasMeleeWeapon(agent))
+                        agentDrivenProperties.ThrustOrRangedReadySpeedMultiplier *= KongNueCiFu.StrengthMultiplier;
+                    else
+                        agentDrivenProperties.ThrustOrRangedReadySpeedMultiplier *= 0.5f;
+                    agentDrivenProperties.MaxSpeedMultiplier *= KongNueCiFu.StrengthMultiplier;
+                    agentDrivenProperties.CombatMaxSpeedMultiplier *= KongNueCiFu.StrengthMultiplier;
+                    agentDrivenProperties.ArmorHead *= 1.5f;
+                    agentDrivenProperties.ArmorTorso *= 1.5f;
+                    agentDrivenProperties.ArmorLegs *= 1.5f;
+                    agentDrivenProperties.ArmorArms *= 1.5f;
+                    agentDrivenProperties.MissileSpeedMultiplier *= 0.5f;
+                    agentDrivenProperties.WeaponInaccuracy *= 3f;
+                    agentDrivenProperties.ReloadSpeed *= 0.5f;
                 }
                 if (result.StateContainer.HasState("BKBBuff"))
                 {
@@ -164,111 +173,19 @@ namespace New_ZZZF.Systems
                     if (buff != null)
                     {
                         SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        agent.AgentDrivenProperties.TopSpeedReachDuration *= 2f;
-                        agent.AgentDrivenProperties.MaxSpeedMultiplier /= 2f;
-                        agent.AgentDrivenProperties.CombatMaxSpeedMultiplier /= 2f;
+                        agentDrivenProperties.TopSpeedReachDuration *= 2f;
+                        agentDrivenProperties.MaxSpeedMultiplier /= 2f;
+                        agentDrivenProperties.CombatMaxSpeedMultiplier /= 2f;
                     }
                 }
                 if (result.StateContainer.HasState("NaGouCiFuBuff"))
                 {
-                    NaGouCiFuBuff buff = result.StateContainer.GetState("NaGouCiFuBuff") as NaGouCiFuBuff;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        agent.AgentDrivenProperties.TopSpeedReachDuration *= 2f;
-                        agent.AgentDrivenProperties.MaxSpeedMultiplier /= 2f;
-                        agent.AgentDrivenProperties.CombatMaxSpeedMultiplier /= 2f;
-                    }
+                    agentDrivenProperties.MaxSpeedMultiplier *= 0.7f;
+                    agentDrivenProperties.CombatMaxSpeedMultiplier *= 0.7f;
                 }
-                if (result.StateContainer.HasState("ZhanHaoBuff"))
-                {
-                    ZhanHaoBuff buff = result.StateContainer.GetState("ZhanHaoBuff") as ZhanHaoBuff;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        agent.AgentDrivenProperties.SwingSpeedMultiplier *= 1.2f;
-                        agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier *= 1.2f;
-                        agent.AgentDrivenProperties.HandlingMultiplier *= 1.5f;
-                        agent.AgentDrivenProperties.ReloadSpeed *= 1.2f;
-                        agent.AgentDrivenProperties.MissileSpeedMultiplier *= 1.2f;
-                        agent.AgentDrivenProperties.WeaponInaccuracy /= 1.2f;
-                        agent.AgentDrivenProperties.WeaponMaxMovementAccuracyPenalty /= 1.2f;
-                        agent.AgentDrivenProperties.WeaponMaxUnsteadyAccuracyPenalty /= 1.2f;
-                        agent.AgentDrivenProperties.WeaponBestAccuracyWaitTime *= 1.2f;
-                        agent.AgentDrivenProperties.ArmorEncumbrance /= 1.2f;
-                        agent.AgentDrivenProperties.WeaponsEncumbrance /= 1.2f;
-                        agent.AgentDrivenProperties.ArmorHead *= 1.2f;
-                        agent.AgentDrivenProperties.ArmorTorso *= 1.2f;
-                        agent.AgentDrivenProperties.ArmorLegs *= 1.2f;
-                        agent.AgentDrivenProperties.ArmorArms *= 1.2f;
-                        agent.AgentDrivenProperties.AttributeRiding *= 1.2f;
-                        agent.AgentDrivenProperties.AttributeShield *= 1.2f;
-                        agent.AgentDrivenProperties.AttributeShieldMissileCollisionBodySizeAdder *= 1.2f;
-                        agent.AgentDrivenProperties.ShieldBashStunDurationMultiplier *= 1.2f;
-                        agent.AgentDrivenProperties.KickStunDurationMultiplier *= 1.2f;
-                        agent.AgentDrivenProperties.ReloadMovementPenaltyFactor *= 1.2f;
-                        agent.AgentDrivenProperties.TopSpeedReachDuration /= 1.2f;
-                        agent.AgentDrivenProperties.MaxSpeedMultiplier *= 1.2f;
-                        agent.AgentDrivenProperties.CombatMaxSpeedMultiplier *= 1.2f;
-                        agent.AgentDrivenProperties.AttributeHorseArchery *= 1.2f;
-                        agent.AgentDrivenProperties.AttributeCourage *= 1.2f;
-                    }
-                }
-                if (result.StateContainer.HasState("WeiYaBuffToEnemy"))
-                {
-                    WeiYaBuffToEnemy buff = result.StateContainer.GetState("WeiYaBuffToEnemy") as WeiYaBuffToEnemy;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        agent.AgentDrivenProperties.HandlingMultiplier *= 0.5f;
-                        agent.AgentDrivenProperties.WeaponInaccuracy *= 1.5f;
-                        agent.AgentDrivenProperties.TopSpeedReachDuration *= 1.5f;
-                        agent.AgentDrivenProperties.MaxSpeedMultiplier *= 0.5f;
-                        agent.AgentDrivenProperties.MountSpeed *= 0.5f;
-                        agent.AgentDrivenProperties.MountManeuver *= 0.5f;
-
-
-                    }
-                }
-                if (result.StateContainer.HasState("XieEZuZhouBuffToEnemy"))
-                {
-                    XieEZuZhouBuffToEnemy buff = result.StateContainer.GetState("XieEZuZhouBuffToEnemy") as XieEZuZhouBuffToEnemy;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        if (agent.Equipment!=null&&  agent.GetPrimaryWieldedItemIndex() != EquipmentIndex.None &&
-                            agent.Equipment[agent.GetPrimaryWieldedItemIndex()].CurrentUsageItem.IsRangedWeapon)
-                        {
-                            agent.AgentDrivenProperties.AIDecideOnAttackChance = 0f;
-                            agent.AgentDrivenProperties.AiShootFreq = 0f;
-                        }
-                    }
-                }
-                if (result.StateContainer.HasState("XuRuoZuZhouBuffToEnemy"))
-                {
-                    XuRuoZuZhouBuffToEnemy buff = result.StateContainer.GetState("XuRuoZuZhouBuffToEnemy") as XuRuoZuZhouBuffToEnemy;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-
-                    }
-                }
-                if (result.StateContainer.HasState("FengBaoZhiLiBuff"))
-                {
-                    FengBaoZhiLiBuff buff = result.StateContainer.GetState("FengBaoZhiLiBuff") as FengBaoZhiLiBuff;
-                    if (buff != null)
-                    {
-                        SkillSystemBehavior.ActiveComponents.TryGetValue(agent.Index, out var agentSkillComponent);
-                        //agent.SetPreciseRangedAimingEnabled(true);
-                        agent.AgentDrivenProperties.WeaponMaxMovementAccuracyPenalty /= 5;
-                        agent.AgentDrivenProperties.WeaponMaxUnsteadyAccuracyPenalty /= 5;
-                        agent.AgentDrivenProperties.WeaponRotationalAccuracyPenaltyInRadians /= 5;
-                        agent.AgentDrivenProperties.WeaponInaccuracy /= 5;
-                        agent.AgentDrivenProperties.ReloadSpeed *= 2;
-                        agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier *= 2;
-
-                    }
-                }
+                ZhanHao.ApplyDrivenProperties(agent, agentDrivenProperties);
+                WeiYa.ApplyDrivenProperties(agent, agentDrivenProperties);
+                FengBaoZhiLi.ApplyRangedDrivenProperties(agent, agentDrivenProperties);
                 if (result.StateContainer.HasState("YingXiongZhuFuBuff"))
                 {
                     YingXiongZhuFuBuff buff = result.StateContainer.GetState("YingXiongZhuFuBuff") as YingXiongZhuFuBuff;
@@ -283,9 +200,7 @@ namespace New_ZZZF.Systems
                         agent.AgentDrivenProperties.ThrustOrRangedReadySpeedMultiplier *=1.4f;
                         agent.AgentDrivenProperties.HandlingMultiplier *= 1.3f;
                         agent.AgentDrivenProperties.WeaponInaccuracy /= 1.5f;
-                        agent.AgentDrivenProperties.TopSpeedReachDuration *= 1.3f;
-                        agent.AgentDrivenProperties.MountSpeed *= 1.3f;
-                        agent.AgentDrivenProperties.MountManeuver *= 1.3f;
+                        agent.AgentDrivenProperties.TopSpeedReachDuration /= 1.3f;
 
                     }
                 }

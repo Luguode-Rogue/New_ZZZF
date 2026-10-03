@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -57,7 +57,7 @@ namespace New_ZZZF
             return target != null && target != caster && target.IsHuman && !target.IsMount &&
                    target.MountAgent == null &&
                    target.IsActive() && target.Health > 0f &&
-                   caster.IsEnemyOf(target);
+                   (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target));
         }
 
         private static bool TryGetLandingPosition(
@@ -74,6 +74,11 @@ namespace New_ZZZF
 
         private static Agent SelectTarget(Agent caster)
         {
+            if (SpellTargetingSystem.IsManualIndicatorHeld(caster)) {
+                SpellTargetingSystem.TryResolveEnemyNearIndicator(caster, 5f, out Agent manual,
+                    candidate => IsValidTarget(caster, candidate));
+                return manual;
+            }
             Agent current = caster.GetTargetAgent();
             if (caster.IsAIControlled && IsValidTarget(caster, current))
                 return current;

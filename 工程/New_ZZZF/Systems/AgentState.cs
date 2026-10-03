@@ -16,6 +16,13 @@ namespace New_ZZZF
   /// </summary>
     public abstract class AgentBuff
     {
+        /// <summary>纯标记/内部控制状态不进入战斗 Buff 列表；新状态可以显式覆盖。</summary>
+        public virtual bool IsMarker => false;
+        public virtual bool CanBeDispelled => !IsMarker;
+        /// <summary>是否实际影响状态持有者；仅维持对外光环的控制状态为 false。</summary>
+        public virtual bool AffectsOwner => true;
+        public virtual bool BypassesSkillProtection => false;
+        public virtual string BattleHudName => null;
         public string StateId { get; protected set; }
         /// <summary>
         /// 剩余时间（秒）
@@ -57,6 +64,8 @@ namespace New_ZZZF
         private List<AgentBuff> _activeStates = new List<AgentBuff>();
         public event Action TimersChanged;
 
+        public IEnumerable<AgentBuff> States => _activeStates;
+
         public bool TryGetSkillDuration(SkillBase skill, out float remaining, out float maximum)
         {
             remaining = 0f;
@@ -77,7 +86,7 @@ namespace New_ZZZF
         {
             foreach (var state in _activeStates)
             {
-                if (state.StateId !=null&& state.StateId.ToString().Equals(stateId))
+                if (state.Duration > 0f && state.StateId !=null&& state.StateId.ToString().Equals(stateId))
                 { return true; }
             }
             return false;
@@ -109,6 +118,10 @@ namespace New_ZZZF
             // 兜底：调用方忘记设置 TargetAgent 时使用 owner
             if (state.TargetAgent == null) state.TargetAgent = owner;
 
+            if (!state.BypassesSkillProtection && state.SourceAgent != state.TargetAgent && (state.SourceAgent != null || !state.IsMarker) &&
+                SkillTargetProtection.IsProtected(state.TargetAgent))
+                return;
+
             _activeStates.Add(state);
             TimersChanged?.Invoke();
 
@@ -126,6 +139,8 @@ namespace New_ZZZF
         {
             if (state == null) return;
             Agent target = owner ?? state.TargetAgent;
+            if (!state.BypassesSkillProtection && state.SourceAgent != target && (state.SourceAgent != null || !state.IsMarker) &&
+                SkillTargetProtection.IsProtected(target)) return;
             for (int i = _activeStates.Count - 1; i >= 0; i--)
             {
                 AgentBuff existing = _activeStates[i];
@@ -140,6 +155,21 @@ namespace New_ZZZF
                 }
             }
             AddState(state, owner);
+        }
+
+        /// <summary>立即使敌方可净化状态失效，下次状态更新安全执行清理；不在回调中修改正在遍历的列表。</summary>
+        public int ExpireEnemyStates(Agent owner)
+        {
+            if (owner == null) return 0;
+            int expired = 0;
+            foreach (AgentBuff state in _activeStates) {
+                if (state.Duration <= 0f || !state.CanBeDispelled || state.SourceAgent == null ||
+                    state.SourceAgent == owner || !owner.IsEnemyOf(state.SourceAgent)) continue;
+                state.Duration = 0f;
+                expired++;
+            }
+            if (expired > 0) TimersChanged?.Invoke();
+            return expired;
         }
 
         public void UpdateStates(Agent agent, float dt)
@@ -161,6 +191,13 @@ namespace New_ZZZF
                     continue;
                 }
 
+                // 净化或自然到期的状态不再执行一次伤害/控制回调。
+                if (state.Duration <= 0f) {
+                    _activeStates.RemoveAt(i);
+                    TimersChanged?.Invoke();
+                    try { state.OnRemove(target); } catch (Exception) { }
+                    continue;
+                }
                 try { state.OnUpdate(target, dt); }
                 catch (Exception e) { /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */; }
 
@@ -175,7 +212,7 @@ namespace New_ZZZF
         }
         public AgentBuff GetState(string stateId)
         {
-            AgentBuff state = _activeStates.Find(s => s.StateId == stateId);
+            AgentBuff state = _activeStates.Find(s => s.StateId == stateId && s.Duration > 0f);
             if (state != null)
             {
                 return state;

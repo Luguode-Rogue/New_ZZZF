@@ -1,144 +1,50 @@
-﻿using New_ZZZF.Systems;
-using SandBox.Objects.Usables;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
-using TaleWorlds.CampaignSystem.Extensions;
-using TaleWorlds.Core;
-using TaleWorlds.Engine;
-using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
+using TaleWorlds.Localization;
 using TaleWorlds.MountAndBlade;
-using TaleWorlds.MountAndBlade.View;
-using TaleWorlds.MountAndBlade.View.Screens;
-using TaleWorlds.ScreenSystem;
-using static TaleWorlds.Engine.GameEntity;
 
 namespace New_ZZZF
 {
-    internal class TianFaZhiJian : SkillBase
+    internal sealed class TianFaZhiJian : SkillBase
     {
+        internal const float Range = 60f, Radius = 5f, BaseDamage = 50f;
+        private readonly MBList<Agent> _nearby = new MBList<Agent>();
         public TianFaZhiJian()
         {
-            SkillID = "TianFaZhiJian";      // 必须唯一
-            Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 3;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 消耗
-            Text = new TaleWorlds.Localization.TextObject("{=ZZZF0074}TianFaZhiJian");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0075}向后跃起，然后坠向目标区域，造成范围伤害。消耗耐力值：30。持续时间：3秒。冷却时间：10秒。");
+            SkillID = "TianFaZhiJian"; Type = SPSkillType.MainActive;
+            Cooldown = 10f; ResourceCost = 30f; Difficulty = null;
+            Text = new TextObject("{=ZZZF0074}TianFaZhiJian");
+            Description = new TextObject("{=ZZZF0075}玩家施法距离不限，NPC范围60米；优先选择敌人密集区域，后跃腾空期间免疫伤害，随后瞬移引爆5米范围，造成50点基础无属性法术伤害。骑乘时直接瞬移引爆。受魔法免疫影响。耐力30，冷却10秒。");
+            CastSoundEvent = "event:/mission/combat/missile/foley/sling_release";
         }
-        public override bool Activate(Agent agent)
+        internal static bool IsTarget(Agent caster, Agent target) =>
+            target != null && target.IsActive() && target.IsHuman && target.Health > 0f &&
+            caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target);
+        public override bool TryGetDamageArea(Agent caster, int index, out SkillDamageArea area)
         {
-            agent.SetActionChannel(0, ActionIndexCache.Create("act_ready_overswing_spear"), true, (AnimFlags)512UL); //Name = "act_ready_overswing_spear"
-            agent.SetActionChannel(1, ActionIndexCache.Create("act_jump_forward"), true); //Name = "act_climb_ladder"
-            Vec3 tarPos = agent.Position;
-            tarPos.z += 15;
-            tarPos -= Script.MultiplyVectorByScalar(agent.LookDirection, 15);
-            RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
-            if (movement == null)
-                return FailActivation("当前任务未加载强制移动管理器。");
-            RushMovementOptions movementOptions = new RushMovementOptions
-            {
-                Duration = 1.5f,
-                StopDistance = 0.35f,
-                SpeedLimit = 7f,
-                SpeedLimitIsMultiplier = false,
-                AllowMounted = false
-            };
-            if (!movement.TryRushToPosition(agent, tarPos, movementOptions, out string failureReason))
-                return FailActivation(failureReason ?? "跃进目标地点不可到达。");
-            // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new TianFaZhiJianBuff(1.5f, agent) };
-            foreach (var state in newStates)
-            {
-                state.TargetAgent = agent;
-                agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-            }
-            return true;
-
+            area = index == 0 ? new SkillDamageArea { Shape = SkillDamageAreaShape.Sphere, Radius = Radius } : default;
+            return index == 0;
         }
-
         public override bool CheckCondition(Agent caster)
         {
-            if (caster.GetTargetAgent() == null) return false;
-            if (!Script.CanSeeAgent(caster, caster.GetTargetAgent()))
-            { return false; }
-
-            List<Agent> agents = new List<Agent>();
-            if ((caster.Position - caster.GetTargetAgent().Position).Length < 30 && Script.FindTarAgents(caster, 5, out agents))
-            {
-                if (agents.Count > 0)
-                {
-                    AgentSkillComponent agentSkillComponent = Script.GetActiveComponents(caster);
-                    if (agentSkillComponent != null && agentSkillComponent.StateContainer.HasState("TianFaZhiJianBuff"))
-                    {
-                        TianFaZhiJianBuff tianFaZhiJianBuff = agentSkillComponent.StateContainer.GetState("TianFaZhiJianBuff") as TianFaZhiJianBuff;
-                        tianFaZhiJianBuff.tarAgents = agents;
-                    }
-                    return true;
-                }
-            }
-            else
-                return false;
-            return base.CheckCondition(caster);
+            if (!base.CheckCondition(caster) || TianFaZhiJianMissionLogic.Current == null ||
+                RushMovementMissionLogic.Current == null || RushMovementMissionLogic.Current.IsRushing(caster) ||
+                TianFaZhiJianMissionLogic.IsLeaping(caster)) return false;
+            // AI 预判只查附近是否有目标；最密集落点仅在真正发动时计算一次。
+            _nearby.Clear();
+            if (caster.Team != null) caster.Mission.GetNearbyEnemyAgents(caster.Position.AsVec2, Range, caster.Team, _nearby);
+            else caster.Mission.GetNearbyAgents(caster.Position.AsVec2, Range, _nearby);
+            foreach (Agent enemy in _nearby)
+                if (IsTarget(caster, enemy) && (enemy.Position - caster.Position).LengthSquared <= Range * Range) return true;
+            return false;
         }
-
-        public class TianFaZhiJianBuff : AgentBuff
+        public override bool Activate(Agent caster)
         {
-            public List<Agent> tarAgents = new List<Agent>();
-            public TianFaZhiJianBuff(float duration, Agent source)
-            {
-                StateId = "TianFaZhiJianBuff";
-                Duration = duration;
-                SourceAgent = source;
-            }
-
-            public override void OnApply(Agent agent)
-            {//附加实体，并且设定后跃的目标地点。游戏实体添加进移动实体的字典中，让missionTick里去调整实体的位置
-
-
-
-
-
-            }
-
-            public override void OnUpdate(Agent agent, float dt)
-            {//不是很重要的区域，在更新中，可以让玩家选择最后砸向的区域，可以把施法指示器拿过来
-             //在这里更新一个玩家的旋转，时刻朝向摄像机
-
-                MatrixFrame frame = Mission.Current.GetCameraFrame();
-                agent.SetInitialFrame(agent.Position, frame.rotation.f.AsVec2);
-                List<Agent> agents = new List<Agent>();
-                if (Script.FindTarAgents(agent, 5, out agents))
-                {
-                    if (agents.Count > 0)
-                        tarAgents = agents;
-                }
-
-
-            }
-
-            public override void OnRemove(Agent agent)
-            {//差一点的表达效果：直接结束时瞬移，造成伤害
-             //好一点的表达效果：增加一段前移，然后再造成伤害。
-             // agent.SetActionChannel(0, ActionIndexCache.Create("act_none"), true, 999UL); 
-                agent.SetActionChannel(0, ActionIndexCache.Create("act_none"), true, (AnimFlags)512UL);
-                agent.SetActionChannel(1, ActionIndexCache.Create("act_quick_release_overswing_spear_left_stance"), true);//Name = "act_quick_release_overswing_spear_left_stance"
-                foreach (var item in tarAgents)
-                {
-                    Script.CalculateFinalMagicDamage(agent, item, 50, DamageType.None);
-                    Vec3 vec3 = item.Position;
-                    vec3 -= Script.MultiplyVectorByScalar(agent.LookDirection, 1);
-                    agent.TeleportToPosition(vec3);
-                    item.PlayParticleEffect("fire_burning");
-                }
-
-            }
+            if (caster == null || !caster.IsActive() || !caster.IsHuman) return FailActivation("施法者不可用。");
+            var logic = TianFaZhiJianMissionLogic.Current;
+            if (logic == null) return FailActivation("天罚之剑管理器未加载。");
+            if (!SpellTargetingSystem.TryResolveDenseAreaTarget(caster, caster.IsPlayerControlled ? float.PositiveInfinity : Range, Radius, out var result))
+                return FailActivation("指示点周围或视野内没有有效目标区域。");
+            return logic.Begin(caster, result.Position, out string reason) || FailActivation(reason);
         }
     }
-
 }

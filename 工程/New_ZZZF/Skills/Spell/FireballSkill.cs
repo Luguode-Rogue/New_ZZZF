@@ -168,7 +168,7 @@ namespace New_ZZZF.Skills
             foreach (Agent target in ExplosionTargets)
             {
                 if (target == null || !target.IsActive() || !target.IsHuman ||
-                    target == impact.Caster || !impact.Caster.IsEnemyOf(target))
+                    target == impact.Caster || (!impact.Caster.IsEnemyOf(target) || SkillTargetProtection.IsProtected(target)))
                     continue;
                 float distanceSquared =
                     (target.Position + Vec3.Up - impact.Position).LengthSquared;
@@ -185,7 +185,7 @@ namespace New_ZZZF.Skills
                     explosionBaseDamage,
                     spellPowerCoefficient,
                     DamageType.FIRE_DAMAGE,
-                    MagicDamageFlags.Area | MagicDamageFlags.Burning,
+                    MagicDamageFlags.Area | MagicDamageFlags.Burning | MagicDamageFlags.Explosion,
                     target.Position + Vec3.Up);
 
                 AgentSkillComponent component = target.GetComponent<AgentSkillComponent>();
@@ -231,7 +231,7 @@ namespace New_ZZZF.Skills
         private static bool IsValidEnemy(Agent caster, Agent target)
         {
             return caster != null && target != null && target != caster &&
-                   target.IsActive() && target.Health > 0f && caster.IsEnemyOf(target);
+                   target.IsActive() && target.Health > 0f && (caster.IsEnemyOf(target) && !SkillTargetProtection.IsProtected(target));
         }
     }
 }

@@ -156,7 +156,7 @@ namespace New_ZZZF
         private static bool IsTargetable(Agent caster, Agent target)
         {
             if (target == null || target == caster || !target.IsHuman ||
-                !target.IsActive() || target.Health <= 0f || !caster.IsEnemyOf(target))
+                !target.IsActive() || target.Health <= 0f || (!caster.IsEnemyOf(target) || SkillTargetProtection.IsProtected(target)))
                 return false;
             AgentSkillComponent component = Script.GetActiveComponents(target);
             return component == null || !component.StateContainer.HasState("BKBBuff");

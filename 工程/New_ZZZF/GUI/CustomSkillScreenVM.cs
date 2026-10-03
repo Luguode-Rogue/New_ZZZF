@@ -408,6 +408,9 @@ namespace New_ZZZF
         // =====================================================================
 
         private bool _debugMode;
+        // Roster 是当前显示列表；队伍数据必须独立保存，不能随标签切换被覆盖。
+        private readonly MBBindingList<HeroVM> _partyMembers = new MBBindingList<HeroVM>();
+        private readonly Dictionary<TargetType, string> _lastTargetIds = new Dictionary<TargetType, string>();
         private TargetType _currentTargetType = TargetType.PartyMember;
         private MBBindingList<SkillProficiencyVM> _proficiencies;
         private MBBindingList<SkillItemVM> _catalogItems;
@@ -429,6 +432,7 @@ namespace New_ZZZF
             {
                 if (value != _debugMode)
                 {
+                    if (!value && _currentTargetType != TargetType.PartyMember && !CanLeaveTarget()) return;
                     _debugMode = value;
                     OnPropertyChangedWithValue(value, nameof(DebugMode));
                     // 切换调试模式时刷新左侧列表
@@ -445,11 +449,9 @@ namespace New_ZZZF
             set
             {
                 var newType = (TargetType)value;
-                if (newType != _currentTargetType && (newType == TargetType.PartyMember || _debugMode))
+                if (Enum.IsDefined(typeof(TargetType), newType) && newType != _currentTargetType && (newType == TargetType.PartyMember || _debugMode))
                 {
-                    _currentTargetType = newType;
-                    OnPropertyChangedWithValue(value, nameof(CurrentTargetTypeInt));
-                    SwitchTargetType(_currentTargetType);
+                    SwitchTargetType(newType);
                 }
             }
         }
@@ -709,7 +711,7 @@ namespace New_ZZZF
         /// <summary>从玩家部队填充 Roster 列表</summary>
         private void PopulateRoster()
         {
-            Roster.Clear();
+            _partyMembers.Clear();
             var playerClan = Clan.PlayerClan;
             if (playerClan == null) return;
 
@@ -720,16 +722,17 @@ namespace New_ZZZF
                 if (!hero.IsAlive) continue;
                 if (hero.Age < comeOfAge) continue;
                 if (hero.HeroState != Hero.CharacterStates.Active && hero != Hero.MainHero) continue;
-                Roster.Add(new HeroVM(hero, OnTargetSelected));
+                _partyMembers.Add(new HeroVM(hero, OnTargetSelected));
             }
 
-            if (Roster.Count > 0)
+            if (_currentTargetType == TargetType.PartyMember) Roster = _partyMembers;
+            if (_currentTargetType == TargetType.PartyMember && Roster.Count > 0)
             {
                 SelectTarget(Roster[0]);
             }
         }
 
-        /// <summary>v2: 填充兵种模板列表（调试模式，获取全部已加载兵种）</summary>
+        /// <summary>只列出可用于战斗技能配置的实际兵种。</summary>
         private void PopulateTroopTemplates()
         {
             TroopTemplates.Clear();
@@ -737,15 +740,29 @@ namespace New_ZZZF
             {
                 var allTroops = MBObjectManager.Instance
                     .GetObjectTypeList<CharacterObject>()
-                    .Where(x => x != null && !x.IsHero && !x.IsPlayerCharacter)
-                    .OrderBy(x => x.Tier)
-                    .ThenBy(x => x.Culture?.StringId ?? "")
+                    .Where(IsUsefulTroopTemplate)
+                    .GroupBy(x => x.StringId, StringComparer.Ordinal)
+                    .Select(x => x.First())
+                    .OrderBy(x => x.Culture?.StringId ?? "")
+                    .ThenBy(x => x.Tier)
+                    .ThenBy(x => x.StringId, StringComparer.Ordinal)
                     .ToList();
 
                 foreach (var troop in allTroops)
                     TroopTemplates.Add(new HeroVM(troop, OnTargetSelected));
             }
             catch { /* 静默失败，调试模式数据源可能不完整 */ }
+        }
+
+        private static bool IsUsefulTroopTemplate(CharacterObject troop)
+        {
+            if (troop == null || troop.IsHero || troop.IsPlayerCharacter || troop.IsTemplate
+                || string.IsNullOrWhiteSpace(troop.StringId)) return false;
+            // 排除平民、商贩、守门/监狱场景角色、竞技场和生成用模板。
+            return troop.Occupation == Occupation.Soldier
+                || troop.Occupation == Occupation.Mercenary
+                || troop.Occupation == Occupation.Bandit
+                || troop.Occupation == Occupation.CaravanGuard;
         }
 
         /// <summary>v2: 填充领主NPC列表（调试模式，获取全部存活领主）</summary>
@@ -755,7 +772,9 @@ namespace New_ZZZF
             try
             {
                 var lords = Hero.AllAliveHeroes
-                    .Where(h => h != null && h.IsLord && h.Clan != null)
+                    .Where(h => h != null && h.IsLord && h.Clan != null && h.Clan != Clan.PlayerClan
+                        && h.HeroState == Hero.CharacterStates.Active
+                        && h.Age >= (Campaign.Current.Models?.AgeModel?.HeroComesOfAge ?? 18))
                     .OrderBy(h => h.Clan?.StringId ?? "")
                     .ThenBy(h => h.Level)
                     .ToList();
@@ -805,6 +824,7 @@ namespace New_ZZZF
         /// <summary>F12 切换调试模式</summary>
         public void ExecuteToggleDebug()
         {
+            if (DebugMode && _currentTargetType != TargetType.PartyMember && !CanLeaveTarget()) return;
             DebugMode = !DebugMode;
         }
 
@@ -839,6 +859,8 @@ namespace New_ZZZF
         /// <summary>切换到指定目标类型</summary>
         private void SwitchTargetType(TargetType targetType)
         {
+            if (!CanLeaveTarget()) return;
+            if (CurrentHero != null) _lastTargetIds[_currentTargetType] = CurrentHero.HeroId;
             // 更新类型字段并通知绑定（必须在此处更新，确保 TargetTypeText 正确）
             _currentTargetType = targetType;
             OnPropertyChangedWithValue((int)targetType, nameof(CurrentTargetTypeInt));
@@ -853,9 +875,20 @@ namespace New_ZZZF
 
             // 选择对应列表的第一个
             MBBindingList<HeroVM> targetList = GetTargetList(targetType);
+            Roster = targetList;
             if (targetList != null && targetList.Count > 0)
             {
-                SelectTarget(targetList[0]);
+                _lastTargetIds.TryGetValue(targetType, out var previousId);
+                SelectTarget(targetList.FirstOrDefault(x => x.HeroId == previousId) ?? targetList[0]);
+            }
+            else
+            {
+                CurrentHero = null;
+                CurrentHeroId = string.Empty;
+                _currentHeroSkillData = null;
+                IsDirty = false;
+                Proficiencies.Clear();
+                foreach (var slot in Skills) slot.SetSkill(null);
             }
         }
 
@@ -864,10 +897,10 @@ namespace New_ZZZF
         {
             return targetType switch
             {
-                TargetType.PartyMember => Roster,
+                TargetType.PartyMember => _partyMembers,
                 TargetType.TroopTemplate => TroopTemplates,
                 TargetType.LordNPC => LordNPCs,
-                _ => Roster
+                _ => _partyMembers
             };
         }
 
@@ -884,7 +917,7 @@ namespace New_ZZZF
         /// <summary>选中指定目标（由 HeroVM.ExecuteSelect 回调触发）</summary>
         private void OnTargetSelected(HeroVM selectedTarget)
         {
-            if (selectedTarget == null) return;
+            if (selectedTarget == null || selectedTarget == CurrentHero || !CanLeaveTarget()) return;
             if (CurrentHero != null)
                 CurrentHero.IsSelected = false;
 
@@ -895,8 +928,24 @@ namespace New_ZZZF
             SelectTarget(selectedTarget);
         }
 
+        private bool CanLeaveTarget()
+        {
+            if (!IsDirty) { ExportStatusText = string.Empty; return true; }
+            ExportStatusText = "当前目标有未应用修改，请先应用或撤销后再切换目标。";
+            return false;
+        }
+
+        public void SelectTargetById(string id, int targetType)
+        {
+            if (targetType != CurrentTargetTypeInt) return;
+            var target = GetCurrentTargetList()?.FirstOrDefault(x => x.HeroId == id);
+            OnTargetSelected(target);
+        }
+
         private void SelectTarget(HeroVM target)
         {
+            if (target == null) return;
+            if (CurrentHero != null) CurrentHero.IsSelected = false;
             IsDirty = false;
             CurrentHero = target;
             CurrentHeroId = target.HeroId;
@@ -922,6 +971,7 @@ namespace New_ZZZF
 
         public void SelectNextHero()
         {
+            if (!CanLeaveTarget()) return;
             var list = GetCurrentTargetList();
             if (list == null || list.Count <= 1) return;
             int currentIndex = GetCurrentHeroIndex();
@@ -933,6 +983,7 @@ namespace New_ZZZF
 
         public void SelectPrevHero()
         {
+            if (!CanLeaveTarget()) return;
             var list = GetCurrentTargetList();
             if (list == null || list.Count <= 1) return;
             int currentIndex = GetCurrentHeroIndex();
@@ -1036,7 +1087,7 @@ namespace New_ZZZF
         /// </summary>
         private void OnSlotClicked(SkillSlotVM slotVM)
         {
-            if (slotVM == null || Catalog == null) return;
+            if (slotVM == null || Catalog == null || CurrentHero == null) return;
 
             // 设置当前编辑槽位
             ActiveSlot = slotVM;
@@ -1219,6 +1270,7 @@ namespace New_ZZZF
             if (!_isDirty) return;
             SaveCurrentHeroSkills();
             IsDirty = false;
+            ExportStatusText = string.Empty;
         }
 
         // —— 法术锻造接入：从“新技能界面”按钮打开组合法术界面 ——
@@ -1365,6 +1417,7 @@ namespace New_ZZZF
             if (CurrentHero != null)
                 LoadSkillsForTarget(CurrentHero.HeroId);
             IsDirty = false;
+            ExportStatusText = string.Empty;
         }
 
         // =====================================================================
@@ -1374,8 +1427,15 @@ namespace New_ZZZF
         /// <summary>刷新队伍列表</summary>
         public void RefreshRoster()
         {
+            if (!CanLeaveTarget()) return;
             string previouslySelectedId = CurrentHeroId;
             PopulateRoster();
+            if (_currentTargetType != TargetType.PartyMember) return;
+            if (Roster.Count == 0)
+            {
+                SwitchTargetType(TargetType.PartyMember);
+                return;
+            }
             if (!string.IsNullOrEmpty(previouslySelectedId))
             {
                 foreach (var target in Roster)

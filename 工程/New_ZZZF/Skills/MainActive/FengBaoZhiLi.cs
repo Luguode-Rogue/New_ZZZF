@@ -1,91 +1,233 @@
-﻿using New_ZZZF.Systems;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using TaleWorlds.Core;
-using TaleWorlds.InputSystem;
+using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
-using static New_ZZZF.GuWu;
 
 namespace New_ZZZF
 {
     internal class FengBaoZhiLi : SkillBase
     {
+        private const float BuffDuration = 60f;
+        private const float Range = 50f;
+        private const float RangeSquared = Range * Range;
+        private const float AiRefreshThreshold = 10f;
+        private readonly MBList<Agent> _nearby = new MBList<Agent>();
+        private static readonly string[] MaleYells =
+        {
+            "event:/voice/combat/male/01/yell",
+            "event:/voice/combat/male/02/yell",
+            "event:/voice/combat/male/03/yell"
+        };
+        private static readonly string[] FemaleYells =
+        {
+            "event:/voice/combat/female/01/yell",
+            "event:/voice/combat/female/02/yell",
+            "event:/voice/combat/female/03/yell"
+        };
+        private static readonly EquipmentIndex[] WeaponSlots =
+        {
+            EquipmentIndex.WeaponItemBeginSlot, EquipmentIndex.Weapon1,
+            EquipmentIndex.Weapon2, EquipmentIndex.Weapon3
+        };
+
         public FengBaoZhiLi()
         {
-            SkillID = "FengBaoZhiLi";      // 必须唯一
-            Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 60;             // 冷却时间（秒）
-            ResourceCost = 60f;        // 消耗
+            SkillID = "FengBaoZhiLi";
+            Type = SPSkillType.MainActive;
+            Cooldown = 60f;
+            ResourceCost = 60f;
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0027}FengBaoZhiLi");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0028}群体状态，使用后附近士兵获得风暴之力状态，提升200%射击精度与远程伤害，并有概率额外附加50伤害。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject(
+                "{=ZZZF0028}使50米内装备远程武器的友军获得风暴之力：远程伤害提高150%，射击精度提高100%，远程准备和装填速度提高50%；远程命中有20%几率额外增加100基础伤害。消耗耐力：60。持续时间：60秒。冷却时间：60秒。");
         }
-        public override bool Activate(Agent agent)
-        {
-            List<Agent> values = Script.GetTargetedInRange(agent, agent.GetEyeGlobalPosition(), 50, true);
-            if (values != null && values.Count > 0)
-            {
-                foreach (var item in values)
-                {
-                    item.PlayParticleEffect("fire_burning");
-                    // 每次创建新的状态实例
-                    List<AgentBuff> newStates = new List<AgentBuff> { new FengBaoZhiLiBuff(60f, agent), }; // 新实例
-                    foreach (var state in newStates)
-                    {
-                        state.TargetAgent = item;
-                        item.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
-                    }
-                }
 
+        public override bool CheckCondition(Agent caster)
+        {
+            if (!base.CheckCondition(caster) || caster.Mission == null ||
+                !IsStartingCombat(caster))
+                return false;
+
+            if (NeedsBuff(caster, caster))
                 return true;
-            }
-
+            FillNearby(caster);
+            foreach (Agent ally in _nearby)
+                if (NeedsBuff(caster, ally))
+                    return true;
             return false;
-
         }
 
-        public class FengBaoZhiLiBuff : AgentBuff
+        public override bool Activate(Agent caster)
         {
-            private float _timeSinceLastTick;
+            if (caster == null || !caster.IsActive() || caster.Mission == null)
+                return FailActivation("施法者不可用。");
+
+            int affected = 0;
+            if (ApplyToAlly(caster, caster))
+                affected++;
+            FillNearby(caster);
+            foreach (Agent ally in _nearby)
+                if (ally != caster && ApplyToAlly(caster, ally))
+                    affected++;
+            if (affected == 0)
+                return FailActivation("50米内没有装备远程武器的友军。");
+            string[] yells = caster.IsFemale ? FemaleYells : MaleYells;
+            try
+            {
+                SoundManager.StartOneShotEvent(
+                    yells[MBRandom.RandomInt(yells.Length)], caster.Position);
+            }
+            catch (Exception) { /* 声音资源故障不影响已施加的 Buff。 */ }
+            return true;
+        }
+
+        private void FillNearby(Agent caster)
+        {
+            _nearby.Clear();
+            caster.Mission.GetNearbyAgents(caster.Position.AsVec2, Range, _nearby);
+        }
+
+        private static bool CanBuff(Agent caster, Agent ally)
+        {
+            if (ally == null || !ally.IsActive() || !ally.IsHuman ||
+                ally.GetComponent<AgentSkillComponent>() == null ||
+                SkillTargetProtection.IsProtected(ally) ||
+                (ally.Position - caster.Position).LengthSquared > RangeSquared ||
+                (ally != caster && (!ally.IsFriendOf(caster) || ally.IsEnemyOf(caster))))
+                return false;
+            foreach (EquipmentIndex slot in WeaponSlots)
+            {
+                MissionWeapon equipped = ally.Equipment[slot];
+                WeaponComponentData weapon = equipped.CurrentUsageItem;
+                ItemObject.ItemTypeEnum? itemType = equipped.Item?.Type;
+                if (weapon?.IsRangedWeapon == true ||
+                    itemType == ItemObject.ItemTypeEnum.Bow ||
+                    itemType == ItemObject.ItemTypeEnum.Crossbow ||
+                    itemType == ItemObject.ItemTypeEnum.Thrown)
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool NeedsBuff(Agent caster, Agent ally)
+        {
+            if (!CanBuff(caster, ally))
+                return false;
+            FengBaoZhiLiBuff current = ally.GetComponent<AgentSkillComponent>()
+                .StateContainer.GetState("FengBaoZhiLiBuff") as FengBaoZhiLiBuff;
+            return current == null || current.Duration <= AiRefreshThreshold;
+        }
+
+        private static bool ApplyToAlly(Agent caster, Agent ally)
+        {
+            if (!CanBuff(caster, ally))
+                return false;
+            AgentBuffContainer states = ally.GetComponent<AgentSkillComponent>().StateContainer;
+            FengBaoZhiLiBuff current = states.GetState("FengBaoZhiLiBuff") as FengBaoZhiLiBuff;
+            if (current != null)
+            {
+                current.Refresh(ally, caster, BuffDuration);
+                ally.GetComponent<AgentSkillComponent>().NotifySkillAvailabilityChanged();
+            }
+            else
+                states.AddState(new FengBaoZhiLiBuff(BuffDuration, caster), ally);
+            return true;
+        }
+
+        internal static bool IsCurrentlyRanged(Agent agent)
+        {
+            return agent != null &&
+                agent.WieldedWeapon.CurrentUsageItem?.IsRangedWeapon == true;
+        }
+
+        internal static void ApplyRangedDrivenProperties(
+            Agent agent, AgentDrivenProperties properties)
+        {
+            if (properties == null || !IsCurrentlyRanged(agent) ||
+                agent.GetComponent<AgentSkillComponent>()?.StateContainer
+                    .HasState("FengBaoZhiLiBuff") != true)
+                return;
+            properties.WeaponMaxMovementAccuracyPenalty /= 2f;
+            properties.WeaponMaxUnsteadyAccuracyPenalty /= 2f;
+            properties.WeaponRotationalAccuracyPenaltyInRadians /= 2f;
+            properties.WeaponInaccuracy /= 2f;
+            properties.ReloadSpeed *= 1.5f;
+            properties.ThrustOrRangedReadySpeedMultiplier *= 1.5f;
+        }
+
+        private static bool IsStartingCombat(Agent agent)
+        {
+            Agent.ActionCodeType action = agent.GetCurrentActionType(1);
+            return action == Agent.ActionCodeType.ReadyRanged ||
+                action == Agent.ActionCodeType.ReleaseRanged ||
+                action == Agent.ActionCodeType.ReleaseThrowing ||
+                action == Agent.ActionCodeType.ReadyMelee ||
+                action == Agent.ActionCodeType.ReleaseMelee;
+        }
+
+        public sealed class FengBaoZhiLiBuff : AgentBuff
+        {
+            private FengBaoZhiLiWhirlVisual _burst;
+            private FengBaoZhiLiWhirlVisual _lingering;
+            private float _weaponCheckTimer;
+            private bool _wasRanged;
+
             public FengBaoZhiLiBuff(float duration, Agent source)
             {
                 StateId = "FengBaoZhiLiBuff";
                 Duration = duration;
                 SourceAgent = source;
-                _timeSinceLastTick = 0; // 新增初始化
+            }
+
+            public void Refresh(Agent owner, Agent source, float duration)
+            {
+                Duration = MathF.Max(Duration, duration);
+                SourceAgent = source;
+                _burst?.Remove();
+                _lingering?.Remove();
+                _lingering = null;
+                _burst = FengBaoZhiLiWhirlVisual.Create(owner, false);
             }
 
             public override void OnApply(Agent agent)
             {
+                _wasRanged = IsCurrentlyRanged(agent);
+                agent?.UpdateAgentProperties();
+                _burst = FengBaoZhiLiWhirlVisual.Create(agent, false);
             }
 
             public override void OnUpdate(Agent agent, float dt)
             {
-                // 累积时间
-                _timeSinceLastTick += dt;
-
-                //每秒刷一次状态
-                if (_timeSinceLastTick >= 1f)
+                if (agent == null || !agent.IsActive() || dt <= 0f)
+                    return;
+                if (_burst != null && !_burst.Update(agent, dt))
                 {
-
-                    ZZZF_SandboxAgentStatCalculateModel zZZF_SandboxAgentStatCalculate = MissionGameModels.Current.AgentStatCalculateModel as ZZZF_SandboxAgentStatCalculateModel;
-                    if (zZZF_SandboxAgentStatCalculate != null)
+                    _burst = null;
+                    if (_lingering == null)
+                        _lingering = FengBaoZhiLiWhirlVisual.Create(agent, true);
+                }
+                _lingering?.Update(agent, dt);
+                _weaponCheckTimer += dt;
+                if (_weaponCheckTimer >= 0.2f)
+                {
+                    _weaponCheckTimer = 0f;
+                    bool ranged = IsCurrentlyRanged(agent);
+                    if (ranged != _wasRanged)
                     {
-                        zZZF_SandboxAgentStatCalculate._dt = dt;
-                        //MissionGameModels.Current.AgentStatCalculateModel.UpdateAgentStats(agent, agent.AgentDrivenProperties);
+                        _wasRanged = ranged;
                         agent.UpdateAgentProperties();
                     }
-                    _timeSinceLastTick -= 1f; // 重置计时器
                 }
             }
 
             public override void OnRemove(Agent agent)
             {
-                agent.UpdateAgentProperties();
+                _burst?.Remove();
+                _burst = null;
+                _lingering?.Remove();
+                _lingering = null;
+                if (agent != null && agent.IsActive())
+                    agent.UpdateAgentProperties();
             }
         }
     }

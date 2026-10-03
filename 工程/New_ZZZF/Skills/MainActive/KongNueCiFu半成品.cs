@@ -1,11 +1,6 @@
-﻿using New_ZZZF.Systems;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using TaleWorlds.Core;
-using TaleWorlds.InputSystem;
+using TaleWorlds.Engine;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 
@@ -13,80 +8,96 @@ namespace New_ZZZF
 {
     internal class KongNueCiFu : SkillBase
     {
+        internal const float StrengthMultiplier = 1f + 2f / 3f;
+        private readonly MBList<Agent> _nearby = new MBList<Agent>();
         public KongNueCiFu()
         {
-            SkillID = "KongNueCiFu";      // 必须唯一
-            Type = SPSkillType.MainActive;    // 类型必须明确
-            Cooldown = 2;             // 冷却时间（秒）
-            ResourceCost = 0f;        // 消耗
+            SkillID = "KongNueCiFu";
+            Type = SPSkillType.MainActive;
+            Cooldown = 60f;
+            ResourceCost = 50f;
             Text = new TaleWorlds.Localization.TextObject("{=ZZZF0037}KongNueCiFu");
-            Difficulty = null;// new List<SkillDifficulty> { new SkillDifficulty(50, "跑动"), new SkillDifficulty(5, "耐力") };//技能装备的需求
-            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0038}开启后，攻击必定突破格挡，" +
-                "并且可以贯穿多人，移除贯穿减伤。耐力回复+10，魔力回复-10，提升200%伤害与近战攻速/移速。" +
-                "造成击杀时，回复已损失血量的50%，且额外获得5耐力，并延长持续时间1秒。" +
-                "累计击杀888等级的敌人后，获得1次复活。消耗耐力：50。持续时间：30秒。冷却时间：60秒。");
+            Description = new TaleWorlds.Localization.TextObject("{=ZZZF0038}近战攻击突破普通格挡，贯穿与破格挡不损失动量。近战伤害、攻速及移速+66.7%，护甲+50%，远程能力大幅降低；伤害未携带此技能的友军时仅造成50%伤害且不损失动量。每秒耐力+10、魔力-10；击杀回复损失生命的50%、额外恢复5耐力并延长1秒。累计击杀等级达到888获得1次通用复活。耐力50，持续30秒，冷却60秒。");
         }
+
+        internal static bool IsBlessed(Agent agent) => agent != null && agent.IsActive() &&
+            agent.GetComponent<AgentSkillComponent>()?.StateContainer.GetLongestStateDuration("KongNueCiFuBuff") > 0f;
+
+        internal static bool HasMeleeWeapon(Agent agent)
+        {
+            if (agent == null) return false;
+            EquipmentIndex slot = agent.GetPrimaryWieldedItemIndex();
+            if (slot == EquipmentIndex.None) return false;
+            WeaponComponentData usage = agent.Equipment[slot].CurrentUsageItem;
+            return usage != null && usage.IsMeleeWeapon && !usage.IsRangedWeapon;
+        }
+
+        public override bool CheckCondition(Agent caster)
+        {
+            if (!base.CheckCondition(caster) || caster.Mission == null || !HasMeleeWeapon(caster)) return false;
+            if (caster.GetComponent<AgentSkillComponent>()?.StateContainer.GetLongestStateDuration("KongNueCiFuBuff") > 5f) return false;
+            _nearby.Clear();
+            caster.Mission.GetNearbyAgents(caster.Position.AsVec2, 12f, _nearby);
+            int enemies = 0;
+            bool close = false;
+            bool stronger = false;
+            foreach (Agent enemy in _nearby)
+            {
+                if (enemy == null || !enemy.IsActive() || !enemy.IsHuman || !caster.IsEnemyOf(enemy)) continue;
+                float distance = (enemy.Position - caster.Position).LengthSquared;
+                if (distance > 144f) continue;
+                enemies++;
+                close |= distance <= 36f;
+                stronger |= enemy.Character != null && caster.Character != null && enemy.Character.Level >= caster.Character.Level;
+            }
+            return enemies >= 2 || close || enemies > 0 &&
+                (stronger || caster.Health <= caster.HealthLimit * 0.7f || caster.IsPerformingAction());
+        }
+
         public override bool Activate(Agent agent)
         {
-
-            // 每次创建新的状态实例
-            List<AgentBuff> newStates = new List<AgentBuff> { new KongNueCiFuBuff(30f, agent), }; // 新实例
-            foreach (var state in newStates)
+            AgentSkillComponent component = agent?.GetComponent<AgentSkillComponent>();
+            if (agent == null || !agent.IsActive() || component == null) return FailActivation("施法者不可用。");
+            float duration = Math.Max(30f, component.StateContainer.GetLongestStateDuration("KongNueCiFuBuff"));
+            component.StateContainer.AddOrReplaceState(new KongNueCiFuBuff(duration, agent), agent);
+            try
             {
-                state.TargetAgent = agent;
-                agent.GetComponent<AgentSkillComponent>().StateContainer.AddState(state);
+                string sex = agent.IsFemale ? "female" : "male";
+                SoundManager.StartOneShotEvent("event:/voice/combat/" + sex + "/0" + (MBRandom.RandomInt(4) + 1) + "/yell", agent.Position);
             }
+            catch (Exception) { }
             return true;
-
         }
 
         public class KongNueCiFuBuff : AgentBuff
         {
-            public int carnageRankCounter = 0;
-            private float _timeSinceLastTick;
+            private float _timer;
+            private KongNueCiFuWhirlVisual _visual;
+            public override string BattleHudName => "恐虐赐福";
             public KongNueCiFuBuff(float duration, Agent source)
             {
-                StateId = "KongNueCiFuBuff";
-                Duration = duration;
-                SourceAgent = source;
-                _timeSinceLastTick = 0; // 新增初始化
+                StateId = "KongNueCiFuBuff"; Duration = duration; SourceAgent = source;
             }
-
+            public void ExtendAfterKill() { Duration += 1f; }
             public override void OnApply(Agent agent)
             {
+                agent.UpdateAgentProperties();
+                _visual = KongNueCiFuWhirlVisual.Create(agent, true);
             }
-
             public override void OnUpdate(Agent agent, float dt)
             {
-                if (dt == 0f)
-                {
-                    if (this.Duration <= 30)
-                    { this.Duration += 2; }
-                    else
-                    { this.Duration += 1; }
-                }
-                // 累积时间
-                _timeSinceLastTick += dt;
-
-                //每秒刷一次状态
-                if (_timeSinceLastTick >= 1f)
-                {
-                    SkillSystemBehavior.ActiveComponents.TryGetValue(this.SourceAgent.Index, out var agentSkillComponent);
-                    ZZZF_SandboxAgentStatCalculateModel zZZF_SandboxAgentStatCalculate = MissionGameModels.Current.AgentStatCalculateModel as ZZZF_SandboxAgentStatCalculateModel;
-                    if (zZZF_SandboxAgentStatCalculate != null)
-                    {
-                        agentSkillComponent.ChangeStamina(10);
-                        agentSkillComponent.ChangeMana(-10);
-                        zZZF_SandboxAgentStatCalculate._dt = dt;
-                        agent.UpdateAgentProperties();
-                    }
-                    _timeSinceLastTick -= 1f; // 重置计时器
-                }
+                _visual?.Update(agent, dt);
+                _timer += dt;
+                if (_timer < 1f) return;
+                int seconds = (int)_timer; _timer -= seconds;
+                AgentSkillComponent component = agent.GetComponent<AgentSkillComponent>();
+                component?.ChangeStamina(10f * seconds);
+                component?.ChangeMana(-10f * seconds);
             }
-
             public override void OnRemove(Agent agent)
             {
-                agent.UpdateAgentProperties();
+                _visual?.Remove(); _visual = null;
+                if (agent != null && agent.IsActive()) agent.UpdateAgentProperties();
             }
         }
     }

@@ -6,4 +6,8 @@
 	<string
 		id="str_weapon_usage.OneHandedBladedPolearm"
 		text="{=ZZZF0014}单手剑枪" />
+  <string id="str_how_to_learn_skill.OneHanded" text="{=ZZZF_SwordMastery_Learn}用单手剑、双手剑或飞刀攻击敌人，提升剑精通。" />
+  <string id="str_how_to_learn_skill.TwoHanded" text="{=ZZZF_AxeMastery_Learn}用单手斧、双手斧或投掷斧攻击敌人，提升斧精通。" />
+  <string id="str_how_to_learn_skill.Polearm" text="{=ZZZF_HammerMastery_Learn}用单手锤、双手锤或投掷锤攻击敌人，提升锤精通。" />
+  <string id="str_how_to_learn_skill.Throwing" text="{=ZZZF_SpearMastery_Learn}用单手、双手、低握长杆的戳刺或挥砍，或用标枪攻击敌人，提升矛精通。" />
 </strings>

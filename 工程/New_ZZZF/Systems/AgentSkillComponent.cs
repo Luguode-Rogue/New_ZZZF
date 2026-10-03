@@ -32,6 +32,37 @@ namespace New_ZZZF
         public float SpecialIceResistance { get; private set; }
         public float SpecialElectricityResistance { get; private set; }
         public float SpecialToxinResistance { get; private set; }
+        // 所有物理减伤来源按数值相加，仅在最终读取时限制到90%。
+        private readonly Dictionary<string, float> _physicalDamageReductionSources =
+            new Dictionary<string, float>(StringComparer.Ordinal);
+        public float PhysicalDamageReduction { get; private set; }
+
+        public void SetPhysicalDamageReduction(string sourceId, float ratio)
+        {
+            if (string.IsNullOrEmpty(sourceId) || float.IsNaN(ratio) || float.IsInfinity(ratio))
+                return;
+            if (ratio <= 0f)
+                _physicalDamageReductionSources.Remove(sourceId);
+            else
+                _physicalDamageReductionSources[sourceId] = MathF.Clamp(ratio, 0f, 1f);
+            RecalculatePhysicalDamageReduction();
+        }
+
+        public void RemovePhysicalDamageReduction(string sourceId)
+        {
+            if (!string.IsNullOrEmpty(sourceId) &&
+                _physicalDamageReductionSources.Remove(sourceId))
+                RecalculatePhysicalDamageReduction();
+        }
+
+        private void RecalculatePhysicalDamageReduction()
+        {
+            float sum = 0f;
+            foreach (float ratio in _physicalDamageReductionSources.Values)
+                sum += ratio;
+            PhysicalDamageReduction = MathF.Clamp(sum, 0f, 0.9f);
+        }
+
         private sealed class SpecialMagicResistanceSource
         {
             public float Universal;
@@ -59,6 +90,10 @@ namespace New_ZZZF
         private float _globalCooldownTimerValue;
         private float _shieldStrengthValue;
         private GameEntity _shieldStrengthVisual;
+        private GameEntity _shieldStrengthLuminousVisual;
+        // 本场战斗内累计，独立于赐福Buff的刷新、结束和复活资源。
+        internal int KongNueCarnageLevel;
+        internal float NaGouPendingHealing;
         private int _lifeResurgenceCountValue;
 
         /// <summary>技能结构等低频完整状态变化。</summary>
@@ -146,6 +181,12 @@ namespace New_ZZZF
                     new Color(1f, 0.79f, 0.2f, 0.34f));
             else
                 Script.UpdateEggShellVisual(_shieldStrengthVisual, Agent);
+            if (_shieldStrengthLuminousVisual == null)
+                _shieldStrengthLuminousVisual = Script.CreateBellShieldVisual(Agent,
+                    new Color(1f, 0.79f, 0.2f, 0.24f),
+                    selfLuminous: true, visualScale: 1.02f);
+            else
+                Script.UpdateEggShellVisual(_shieldStrengthLuminousVisual, Agent, 1.02f);
         }
 
         internal void ReleaseShieldStrengthVisual()
@@ -156,12 +197,19 @@ namespace New_ZZZF
                 _shieldStrengthVisual.Remove(0);
             }
             _shieldStrengthVisual = null;
+            if (_shieldStrengthLuminousVisual != null)
+            {
+                AgentAttachedVisualVisibility.Unregister(_shieldStrengthLuminousVisual);
+                _shieldStrengthLuminousVisual.Remove(0);
+            }
+            _shieldStrengthLuminousVisual = null;
         }
         public int _lifeResurgenceCount
         {
             get => _lifeResurgenceCountValue;
             set
             {
+                value = Math.Max(0, Math.Min(ResurrectionSystem.BaseMaximumCharges, value));
                 if (_lifeResurgenceCountValue == value)
                     return;
                 _lifeResurgenceCountValue = value;
@@ -235,12 +283,40 @@ namespace New_ZZZF
             NotifyHudTimersChanged();
         }
 
+        /// <summary>仅减少指定技能的冷却，供命中击杀奖励复用。</summary>
+        public void ReduceSkillCooldown(SkillBase skill, float seconds)
+        {
+            if (skill == null || seconds <= 0f || float.IsNaN(seconds) || float.IsInfinity(seconds) ||
+                !_cooldownTimers.TryGetValue(skill, out float remaining)) return;
+            remaining = Math.Max(0f, remaining - seconds);
+            if (remaining > 0f) _cooldownTimers[skill] = remaining;
+            else _cooldownTimers.Remove(skill);
+            NotifyHudTimersChanged();
+        }
         public float GetSkillCooldownForDisplay(SkillBase skill)
         {
             if (skill == null || skill.GetActivationPolicy(Agent).IgnoreSkillCooldown)
                 return 0f;
             return _cooldownTimers.TryGetValue(skill, out float remaining) && remaining > 0f
                 ? remaining : 0f;
+        }
+
+        /// <summary>清除全部法术类技能的个人冷却；法术公共冷却独立保留。</summary>
+        public void ClearSpellCooldowns()
+        {
+            if (_cooldownTimers.Count == 0)
+                return;
+            _cooldownKeysScratch.Clear();
+            foreach (SkillBase skill in _cooldownTimers.Keys)
+            {
+                if (skill != null && (skill.Type == SPSkillType.Spell ||
+                    skill.Type == SPSkillType.Spell_CombatArt))
+                    _cooldownKeysScratch.Add(skill);
+            }
+            for (int i = 0; i < _cooldownKeysScratch.Count; i++)
+                _cooldownTimers.Remove(_cooldownKeysScratch[i]);
+            if (_cooldownKeysScratch.Count > 0)
+                NotifyHudTimersChanged();
         }
 
         public float GetSkillResourceCostForDisplay(SkillBase skill)
@@ -396,7 +472,12 @@ namespace New_ZZZF
         /// </summary>
         public void Tick(float dt)
         {
-            if (!Agent.IsActive()) return;
+            if (!Agent.IsActive()) { NaGouPendingHealing = 0f; return; }
+            if (NaGouPendingHealing > 0f)
+            {
+                float healing = NaGouPendingHealing; NaGouPendingHealing = 0f;
+                Agent.Health = Math.Min(Agent.HealthLimit > 0f ? Agent.HealthLimit : MaxHP, Agent.Health + healing);
+            }
             if (_shieldStrengthValue > 0f)
                 UpdateShieldStrengthVisual();
 
@@ -429,8 +510,11 @@ namespace New_ZZZF
         /// </summary>
         public void CoolDownTick(float dt)
         {
-            if (_currentStamina < 100f)
-                _currentStamina = TaleWorlds.Library.MathF.Clamp(_currentStamina + dt, 0f, 100f);
+            float staminaRecovery = 1f;
+            if (StateContainer.GetLongestStateDuration("XuRuoZuZhouBuffToEnemy") > 0f && !SkillTargetProtection.IsProtected(Agent))
+                staminaRecovery -= 5f;
+            if (_currentStamina < 100f || staminaRecovery < 0f)
+                _currentStamina = TaleWorlds.Library.MathF.Clamp(_currentStamina + staminaRecovery * dt, 0f, 100f);
             if (_currentMana < 100f)
                 _currentMana = TaleWorlds.Library.MathF.Clamp(_currentMana + dt, 0f, 100f);
             _beHitTime -= dt;
@@ -450,6 +534,12 @@ namespace New_ZZZF
         /// </summary>
         private void HandlePlayerInput(float dt)
         {
+            // 直接检查按下及松开帧，避免 UI Tick 与 MissionTick 顺序造成误施法。
+            if (SpellWheelMissionView.BlocksSkillInput(Agent))
+            {
+                CombatArtFlag = false;
+                return;
+            }
             // 主主动技能（E键）
             if (Input.IsKeyPressed(InputKey.E))
             {
@@ -498,11 +588,7 @@ namespace New_ZZZF
             {
                 CombatArtFlag = false;
                 TryActivateSkill(CombatArtSkill);
-                AgentSkillComponent agentSkill = Script.GetActiveComponents(Agent);
-                if (agentSkill != null && agentSkill.StateContainer.HasState("ZhenYinZhanBuff"))
-                {
-                    (agentSkill.MainActiveSkill as ZhenYinZhan).CanUse(Agent);
-                }
+
             }
         }
 
@@ -512,6 +598,14 @@ namespace New_ZZZF
         /// <summary>当前选中的法术栏位（0-3），供 HUD 等只读展示使用。</summary>
         public int SelectedSpellSlot => _selectedSpellSlot;
 
+        /// <summary>轮盘只确认有效法术槽，复用 HUD 选择通知，不触发技能。</summary>
+        public void SelectSpellFromWheel(int slot)
+        {
+            if (slot < 0 || slot >= SpellSlots.Length ||
+                SpellSlots[slot] == null || SpellSlots[slot].SkillID == "NullSkill")
+                return;
+            SetSelectedSpellSlot(slot);
+        }
         private void SetSelectedSpellSlot(int slot)
         {
             slot = Math.Max(0, Math.Min(SpellSlots.Length - 1, slot));
@@ -597,6 +691,16 @@ namespace New_ZZZF
                     Script.SysOut("[" + skill.SkillID + "] 发动失败：" + reason, Agent);
             }
 
+        }
+
+        // 复用完整施法入口，反应性防护不能直接挂状态绕过耐力或冷却。
+        internal bool TryActivateBkbForMagicHit()
+        {
+            if (!(MainActiveSkill is BKB) || Agent == null || !Agent.IsAIControlled ||
+                StateContainer.HasState("BKBBuff")) return false;
+            if (!CanActivateSkill(MainActiveSkill, MainActiveSkill.GetActivationPolicy(Agent), out _)) return false;
+            TryActivateSkill(MainActiveSkill);
+            return StateContainer.HasState("BKBBuff");
         }
 
         public void ChangeStamina(float value)
@@ -743,6 +847,7 @@ namespace New_ZZZF
         //依次调用所有装备的技能的ai施法检查
         private void HandleAIBehaviorOfTick()
         {
+            if (JingXia.IsFrightened(Agent)) return;
             AggressiveAi.AiDefenseThreatAdjustment.RefreshForCurrentTarget(Agent);
             // 强制移动期间不再运行普通 AI 技能轮询。否则冲刺斩临时接管移动时，
             // 同一 Agent 仍可能通过其他技能槽连续发动技能并打断冲锋。
@@ -754,7 +859,8 @@ namespace New_ZZZF
                 (MainActiveSkill is Skills.JianQi || MainActiveSkill is Skills.ConeOfArrows ||
                  MainActiveSkill is ZhanYi || MainActiveSkill is JueXing ||
                  MainActiveSkill is TianQi || MainActiveSkill is GuWu ||
-                 MainActiveSkill is ChaoFeng ||
+                 MainActiveSkill is ChaoFeng || MainActiveSkill is DunWu ||
+                 MainActiveSkill is FengBaoZhiLi || MainActiveSkill is YingXiongZhuFu || MainActiveSkill is KongNueCiFu || MainActiveSkill is NaGouCiFu || MainActiveSkill is New_ZZZF.Skills.HuHuanFengBao || MainActiveSkill is HuoYanTuXi || MainActiveSkill is XieEZuZhou || MainActiveSkill is XuRuoZuZhou || MainActiveSkill is DaDiJianTa || MainActiveSkill is HuoLiZaiSheng || MainActiveSkill is JianRenBuQu || MainActiveSkill is KuangNuLongXi || MainActiveSkill is Skills.LingHunDanMu || MainActiveSkill is JianRenLuanWu || MainActiveSkill is ZhenYinZhan || MainActiveSkill is TianFaZhiJian || MainActiveSkill is BKB ||
                  MBRandom.RandomFloat > 0.5f) &&
                 MainActiveSkill.CheckCondition(Agent))
             {
@@ -830,6 +936,12 @@ namespace New_ZZZF
             RushMovementMissionLogic.Current?.ApplyPendingAiAttack(Agent, ref movementFlag);
             JiFengLianZhanMissionLogic.Current?.ApplyPendingAiAttack(Agent, ref movementFlag);
             AggressiveAi.AiDefenseThreatAdjustment.SuppressDefenseInput(Agent, ref movementFlag);
+            ChaoFeng.AdjustTauntedAiInput(Agent, ref eventFlag,
+                ref movementFlag, ref inputVector);
+            if (StateContainer.GetState("JingXiaBuffToEnemy") is JingXiaBuffToEnemy fear && fear.Duration > 0f)
+            {
+                fear.ApplyEscapeInput(Agent, ref eventFlag, ref movementFlag, ref inputVector);
+            }
         }
     }
 }
