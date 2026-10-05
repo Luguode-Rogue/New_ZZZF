@@ -18,6 +18,8 @@ namespace New_ZZZF
     {
         /// <summary>纯标记/内部控制状态不进入战斗 Buff 列表；新状态可以显式覆盖。</summary>
         public virtual bool IsMarker => false;
+        public virtual bool IsDamageOverTime => false;
+        public virtual bool IsFireDamageOverTime => false;
         public virtual bool CanBeDispelled => !IsMarker;
         /// <summary>是否实际影响状态持有者；仅维持对外光环的控制状态为 false。</summary>
         public virtual bool AffectsOwner => true;
@@ -172,6 +174,19 @@ namespace New_ZZZF
             return expired;
         }
 
+        /// <summary>只改变已有持续伤害的剩余时间；灼烧置零后由安全更新立即跳过伤害并清理特效。</summary>
+        public void ReduceDamageOverTimeForRoll()
+        {
+            bool changed = false;
+            foreach (AgentBuff state in _activeStates)
+            {
+                if (state.Duration <= 0f || !state.IsDamageOverTime) continue;
+                state.Duration = state.IsFireDamageOverTime ? 0f : state.Duration * 0.5f;
+                changed = true;
+            }
+            if (changed) TimersChanged?.Invoke();
+        }
+
         public void UpdateStates(Agent agent, float dt)
         {
             for (int i = _activeStates.Count - 1; i >= 0; i--)
@@ -237,6 +252,8 @@ namespace New_ZZZF
     }
     public class PeriodicMagicDamageState : AgentBuff
     {
+        public override bool IsDamageOverTime => true;
+        public override bool IsFireDamageOverTime => _damageType == DamageType.FIRE_DAMAGE;
         private readonly float _baseDamagePerTick;
         private readonly float _spellPowerCoefficient;
         private readonly float _tickInterval;
@@ -336,6 +353,7 @@ namespace New_ZZZF
     }
     public class du : AgentBuff
     {
+        public override bool IsDamageOverTime => true;
         private readonly float _baseDamagePerSecond;
         private float _resolvedDamagePerSecond;
         private float _timeSinceLastTick;
@@ -428,6 +446,7 @@ namespace New_ZZZF
     /// <summary>中毒状态：持续造成火焰/毒素伤害（DOT）。</summary>
     public class WeakenState : AgentBuff
     {
+        public override bool IsDamageOverTime => true;
         private readonly float _baseDamagePerSecond;
         private float _resolvedDamagePerSecond;
         private float _timeSinceLastTick;

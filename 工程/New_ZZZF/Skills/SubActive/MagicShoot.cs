@@ -40,12 +40,8 @@ namespace New_ZZZF.Skills
             }
             if (!Script.TryGetActualAmmoWeapon(caster, weapon, out MissionWeapon ammo))
                 return FailActivation("没有可用弹药。");
-            float speed = weapon.GetModifiedMissileSpeedForCurrentUsage();
-            if (SkillSystemBehavior.WoW_AgentMissileSpeedData.TryGetValue(caster.Index, out var recorded) && recorded != null)
-                foreach (var entry in recorded)
-                    if (!entry.Weapon.IsEmpty && entry.Weapon.Item.Id == weapon.Item.Id && entry.MissileSpeed > 0f)
-                        speed = entry.MissileSpeed;
-            if (speed <= 0f || float.IsNaN(speed) || float.IsInfinity(speed)) return FailActivation("弹速无效。");
+            if (!Script.TryGetRecordedSkillMissileSpeed(caster, weapon, out float speed))
+                return FailActivation("无当前武器的实际弹道速度记录，需要先正常射击一次。");
             Vec3 start = caster.GetEyeGlobalPosition();
             Vec3 destination;
             bool targetPosition = !caster.IsPlayerControlled;
@@ -83,7 +79,9 @@ namespace New_ZZZF.Skills
             if (slot == EquipmentIndex.None) return false;
             MissionWeapon weapon = caster.Equipment[slot];
             return !weapon.IsEmpty && weapon.CurrentUsageItem != null && weapon.CurrentUsageItem.IsRangedWeapon &&
-                Script.TryGetActualAmmoWeapon(caster, weapon, out _) && RushMovementMissionLogic.HasLineOfSight(caster, target);
+                Script.TryGetActualAmmoWeapon(caster, weapon, out _) &&
+                Script.TryGetRecordedSkillMissileSpeed(caster, weapon, out _) &&
+                RushMovementMissionLogic.HasLineOfSight(caster, target);
         }
 
         /// <summary>

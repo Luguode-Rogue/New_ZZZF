@@ -540,6 +540,11 @@ namespace New_ZZZF
                 CombatArtFlag = false;
                 return;
             }
+            // 被动位移只在空格按下帧触发；无资源要求，使用自身2秒冷却。
+            if (PassiveSkill is PassiveRoll && Agent.MountAgent == null &&
+                Input.IsKeyPressed(InputKey.Space) && IsSkillReadyForAi(PassiveSkill) &&
+                RushMovementMissionLogic.Current?.IsRushing(Agent) != true)
+                TryActivateSkill(PassiveSkill);
             // 主主动技能（E键）
             if (Input.IsKeyPressed(InputKey.E))
             {
@@ -855,6 +860,11 @@ namespace New_ZZZF
             if (movement != null && movement.IsRushing(Agent))
                 return;
 
+            if (PassiveSkill is PassiveRoll && IsSkillReadyForAi(PassiveSkill) && PassiveSkill.CheckCondition(Agent))
+            {
+                TryActivateSkill(PassiveSkill);
+                return;
+            }
             if (IsSkillReadyForAi(MainActiveSkill) &&
                 (MainActiveSkill is Skills.JianQi || MainActiveSkill is Skills.ConeOfArrows ||
                  MainActiveSkill is ZhanYi || MainActiveSkill is JueXing ||
@@ -867,7 +877,7 @@ namespace New_ZZZF
                 TryActivateSkill(MainActiveSkill);
             }
             else if (IsSkillReadyForAi(SubActiveSkill) &&
-                     (SubActiveSkill is JiFengLianZhan && StateContainer.HasState("JueXingBuff") ||
+                     (SubActiveSkill is Roll || SubActiveSkill is JiFengLianZhan && StateContainer.HasState("JueXingBuff") ||
                       MBRandom.RandomFloat > 0.5f) &&
                      SubActiveSkill.CheckCondition(Agent))
             {

@@ -1,222 +1,246 @@
 using System;
+using System.Collections.Generic;
 using TaleWorlds.Core;
 using TaleWorlds.Engine;
-using TaleWorlds.InputSystem;
 using TaleWorlds.Library;
 using TaleWorlds.Localization;
 using TaleWorlds.MountAndBlade;
+using TaleWorlds.MountAndBlade.View.Screens;
+using TaleWorlds.ScreenSystem;
 
 namespace New_ZZZF
 {
-    /// <summary>
-    /// 翻滚：玩家按移动输入选择八方向；AI 朝主要近战威胁的反方向脱离。
-    /// 实际位移交给 RushMovementMissionLogic，技能只负责方向、障碍和动作。
-    /// </summary>
-    internal sealed class Roll : SkillBase
+    internal class Roll : SkillBase
     {
         private const float RollDistance = 7f;
         private const float RollDuration = 1.25f;
-        private const float RollSpeed = 15f;
-        private const float ObstacleClearance = 0.35f;
-        private const float MinimumRollDistance = 0.65f;
-        private const float AiThreatRange = 5f;
+        private const float Clearance = 0.35f;
+        private const float MinimumDistance = 0.65f;
+        private const float ThreatRange = 5f;
+        internal static readonly ActionIndexCache RollAction = ActionIndexCache.Create("act_horse_fall_roll");
+        private readonly MBList<Agent> _nearby = new MBList<Agent>();
+        private readonly Dictionary<int, EvadePlan> _plans = new Dictionary<int, EvadePlan>();
+        private Mission _mission;
+        private static readonly float[] CandidateAngles = { 0f, 45f, -45f, 90f, -90f, 180f };
+        private sealed class EvadePlan
+        {
+            public Agent Agent;
+            public Vec3 Start;
+            public Vec3 Destination;
+            public float Expires;
+        }
 
         public Roll()
         {
             SkillID = "Roll";
             Type = SPSkillType.SubActive;
             Cooldown = 2f;
-            ResourceCost = 3f;
+            ResourceCost = 10f;
             Text = new TextObject("{=ZZZF_ROLL_NAME}翻滚");
-            Description = new TextObject(
-                "{=ZZZF_ROLL_DESC}朝移动方向快速翻滚；没有移动输入时默认向前。"
-                + "翻滚会在障碍物前停下，骑乘时无法使用。消耗耐力：3。冷却时间：2秒。");
+            Description = new TextObject("{=ZZZF_ROLL_DESC}朝移动方向翻滚，期间免除直接攻击伤害；清除火焰持续伤害，其他持续伤害剩余时间减半。无输入时向前，骑乘不可使用。消耗耐力10，冷却2秒。");
             Difficulty = null;
         }
-
+        internal void ClearAiCache()
+        {
+            _plans.Clear();
+            _nearby.Clear();
+            _mission = null;
+        }
+        protected virtual bool HasActiveEffects => true;
         public override bool CanActivateWhilePerformingAction => true;
 
         public override bool CheckCondition(Agent caster)
         {
-            if (!base.CheckCondition(caster) || caster.IsPlayerControlled ||
-                caster.MountAgent != null || RushMovementMissionLogic.Current?.IsRushing(caster) == true)
-                return false;
-
-            return TryGetAiEvadeDirection(caster, out _, out _);
+            if (!base.CheckCondition(caster) || caster.IsPlayerControlled || caster.MountAgent != null ||
+                RushMovementMissionLogic.Current?.IsRushing(caster) == true) return false;
+            return TryGetAiPlan(caster, out _);
         }
 
         public override bool Activate(Agent agent)
         {
-            if (agent == null || !agent.IsActive())
-                return FailActivation("施法者当前不可用。");
-            if (agent.MountAgent != null)
-                return FailActivation("骑乘状态下无法翻滚。");
-
-            RushMovementMissionLogic movement = RushMovementMissionLogic.Current;
-            if (movement == null)
-                return FailActivation("当前任务未加载强制移动管理器。");
-            if (movement.IsRushing(agent))
-                return FailActivation("当前正在执行其他强制位移。");
-
-            Vec2 direction;
+            if (agent == null || !agent.IsActive()) return FailActivation("施法者不可用。");
+            if (agent.MountAgent != null) return FailActivation("骑乘时无法翻滚。");
+            var movement = RushMovementMissionLogic.Current;
+            if (movement == null || movement.IsRushing(agent)) return FailActivation("当前无法开始翻滚。");
+            Vec3 destination;
             if (agent.IsPlayerControlled || agent.IsMainAgent)
             {
-                direction = GetPlayerRollDirection(agent);
+                if (!TryResolveDestination(agent, GetPlayerDirection(agent), out destination))
+                    return FailActivation("翻滚方向空间不足或无法落脚。");
             }
-            else if (!TryGetAiEvadeDirection(agent, out direction, out _))
+            else
             {
-                return FailActivation("附近没有需要规避的有效威胁。");
+                if (!TryGetAiPlan(agent, out EvadePlan plan)) return FailActivation("没有需要规避的近战威胁。");
+                destination = plan.Destination;
+                _plans.Remove(agent.Index);
             }
 
-            if (direction.LengthSquared < 0.001f)
-                return FailActivation("无法确定翻滚方向。");
-            direction.Normalize();
-
-            if (!TryResolveDestination(agent, direction, out Vec3 destination, out string destinationFailure))
-                return FailActivation(destinationFailure);
-
-            var options = new RushMovementOptions
-            {
-                Duration = RollDuration,
-                StopDistance = ObstacleClearance,
-                SpeedLimit = RollSpeed,
-                SpeedLimitIsMultiplier = false,
-                AllowMounted = false,
-                UseSafeKinematicMovement = true,
-                KinematicSpeed = RollDistance / RollDuration
+            // 按该动作在当前 ActionSet 中的实际时长缩放，保持剩余动作与位移同步。
+            float animationDuration = MBActionSet.GetActionAnimationDuration(agent.ActionSet, in RollAction);
+            if (float.IsNaN(animationDuration) || float.IsInfinity(animationDuration) || animationDuration <= 0f)
+                return FailActivation("当前模型没有可用翻滚动作。");
+            const float startProgress = 0.3f;
+            float actionSpeed = animationDuration * (1f - startProgress) / RollDuration;
+            float travelDistance = (destination - agent.Position).AsVec2.Length;
+            var options = new RushMovementOptions {
+                Duration = RollDuration, StopDistance = Clearance,
+                SpeedLimit = 15f, AllowMounted = false, UseSafeKinematicMovement = true,
+                KinematicSpeed = (travelDistance + Clearance) / RollDuration,
+                MaximumKinematicSlopeDegrees = 45f, IsRoll = HasActiveEffects, IsRollMovement = true, PreserveFacing = true
             };
-            if (!movement.TryRushToPosition(agent, destination, options, out string movementFailure))
-                return FailActivation(movementFailure ?? "翻滚目标地点不可到达。");
+            if (!movement.TryRushToPosition(agent, destination, options, out string reason))
+                return FailActivation(reason ?? "落点不可到达。");
 
-            bool actionAccepted = agent.SetActionChannel(
-                0, ActionIndexCache.Create("act_horse_fall_roll"), false,
-                (AnimFlags)0UL, 0f, 1f, -0.2f, 0.4f, 0.25f, false, 0f, 0, false);
-            if (!actionAccepted)
-            {
+            bool accepted = agent.SetActionChannel(0, RollAction, true,
+                AnimFlags.amf_priority_jump_loop | AnimFlags.anf_restart,
+                0f, actionSpeed, 0.05f, 0.05f, startProgress, false, 0f, 0, false);
+            if (!accepted) {
                 movement.CancelRush(agent, RushEndReason.Cancelled);
-                return FailActivation("当前姿态无法执行翻滚动作。");
+                return FailActivation("当前姿态无法翻滚。");
             }
-
-            agent.SetCurrentActionProgress(0, 0.3f);
-            agent.SetCurrentActionSpeed(0, 2f);
-            /* 此代码看不到log：Debug.Print 不会写入可查看的日志文件，已禁用。 */;
+            agent.EventControlFlags &= ~Agent.EventControlFlag.Jump;
+            // 两个版本都播放翻滚动作；被动版本不启用免伤，并在动作成功后跳过净化和音效。
+            if (!HasActiveEffects) return true;
+            agent.GetComponent<AgentSkillComponent>()?.StateContainer.ReduceDamageOverTimeForRoll();
+            WeaponCombatMissionLogic.Current?.HalveRemainingBleedDuration(agent);
+            // 不创建循环音源或粒子实体。
+            try { SoundManager.StartOneShotEvent("event:/mission/combat/blunt/footstep", agent.Position); } catch (Exception) { }
             return true;
         }
 
-        private static Vec2 GetPlayerRollDirection(Agent agent)
+        private static Vec2 GetPlayerDirection(Agent agent)
         {
-            Vec3 direction = agent.LookDirection;
-            direction.z = 0f;
-            if (direction.AsVec2.LengthSquared < 0.001f)
-                direction = Vec3.Forward;
-
-            bool forward = Input.IsKeyDown(InputKey.W);
-            bool backward = Input.IsKeyDown(InputKey.S);
-            bool left = Input.IsKeyDown(InputKey.A);
-            bool right = Input.IsKeyDown(InputKey.D);
-
-            float angle = 0f;
-            if (forward && left) angle = 45f;
-            else if (backward && left) angle = 135f;
-            else if (forward && right) angle = -45f;
-            else if (backward && right) angle = -135f;
-            else if (backward) angle = 180f;
-            else if (left) angle = 90f;
-            else if (right) angle = -90f;
-
-            direction.RotateAboutZ(angle * (MathF.PI / 180f));
-            return direction.AsVec2.Normalized();
+            var screen = ScreenManager.TopScreen as MissionScreen;
+            var input = screen?.SceneLayer?.Input;
+            float forward = (input?.IsGameKeyDown(0) == true ? 1f : 0f) -
+                (input?.IsGameKeyDown(1) == true ? 1f : 0f);
+            float side = (input?.IsGameKeyDown(3) == true ? 1f : 0f) -
+                (input?.IsGameKeyDown(2) == true ? 1f : 0f);
+            Vec2 facing = agent.LookDirection.AsVec2;
+            if (facing.LengthSquared < 0.001f) facing = Vec3.Forward.AsVec2;
+            facing.Normalize();
+            if (forward == 0f && side == 0f) return facing;
+            // 原版正角旋转对应左侧；右侧向量为 (y,-x)。
+            Vec2 direction = facing * forward + new Vec2(facing.y, -facing.x) * side;
+            direction.Normalize();
+            return direction;
         }
 
-        private static bool TryGetAiEvadeDirection(
-            Agent caster,
-            out Vec2 evadeDirection,
-            out int threatCount)
+        private bool TryGetAiPlan(Agent caster, out EvadePlan plan)
         {
-            evadeDirection = Vec2.Zero;
-            threatCount = 0;
-            Mission mission = Mission.Current;
-            if (caster == null || mission == null)
-                return false;
-
-            float rangeSquared = AiThreatRange * AiThreatRange;
-            bool immediateThreat = false;
-            foreach (Agent other in mission.Agents)
+            plan = null;
+            Mission mission = caster.Mission;
+            if (mission == null) return false;
+            if (_mission != mission) { _plans.Clear(); _nearby.Clear(); _mission = mission; }
+            if (_plans.TryGetValue(caster.Index, out plan) && plan.Agent == caster &&
+                plan.Expires >= mission.CurrentTime && (caster.Position - plan.Start).LengthSquared < 0.0625f)
+                return true;
+            _plans.Remove(caster.Index);
+            plan = null;
+            _nearby.Clear();
+            // 同一查询覆盖近身威胁与7米落点附近敌人；CheckCondition/Activate复用计划。
+            if (caster.Team != null) mission.GetNearbyEnemyAgents(caster.Position.AsVec2, 12f, caster.Team, _nearby);
+            else mission.GetNearbyAgents(caster.Position.AsVec2, 12f, _nearby);
+            Vec2 away = Vec2.Zero;
+            int threats = 0, targeting = 0;
+            bool incomingAttack = false;
+            foreach (Agent enemy in _nearby)
             {
-                if (other == null || other == caster || !other.IsActive() ||
-                    !other.IsHuman || other.IsMount || (!caster.IsEnemyOf(other) || SkillTargetProtection.IsProtected(other)))
-                    continue;
-
-                Vec2 away = caster.Position.AsVec2 - other.Position.AsVec2;
-                float distanceSquared = away.LengthSquared;
-                if (distanceSquared > rangeSquared || distanceSquared < 0.0001f)
-                    continue;
-
-                bool targetsCaster = other.GetTargetAgent() == caster;
-                bool veryClose = distanceSquared <= 7.5625f;
-                if (!targetsCaster && !veryClose)
-                    continue;
-
-                Agent.ActionCodeType actionType = other.GetCurrentActionType(1);
-                bool isAttacking = actionType == Agent.ActionCodeType.AttackMeleeAllBegin ||
-                    actionType == Agent.ActionCodeType.ReadyMelee ||
-                    actionType == Agent.ActionCodeType.ReleaseMelee;
-
-                threatCount++;
-                immediateThreat |= veryClose || (targetsCaster && isAttacking);
-                evadeDirection += away / MathF.Max(0.5f, distanceSquared);
+                if (!ValidEnemy(caster, enemy)) continue;
+                Vec2 offset = caster.Position.AsVec2 - enemy.Position.AsVec2;
+                float distance2 = offset.LengthSquared;
+                if (distance2 > ThreatRange * ThreatRange || Math.Abs(enemy.Position.z - caster.Position.z) > 3f) continue;
+                EquipmentIndex slot = enemy.GetPrimaryWieldedItemIndex();
+                if (slot == EquipmentIndex.None || enemy.Equipment == null ||
+                    enemy.Equipment[slot].CurrentUsageItem?.IsMeleeWeapon != true) continue;
+                bool targetsCaster = enemy.GetTargetAgent() == caster;
+                if (targetsCaster) targeting++;
+                threats++;
+                var action = enemy.GetCurrentActionType(1);
+                bool attacking = action == Agent.ActionCodeType.AttackMeleeAllBegin ||
+                    action == Agent.ActionCodeType.ReadyMelee || action == Agent.ActionCodeType.ReleaseMelee;
+                Vec2 towardCaster = offset;
+                if (towardCaster.LengthSquared > 0.001f) towardCaster.Normalize();
+                bool facesCaster = Vec2.DotProduct(enemy.LookDirection.AsVec2, towardCaster) > 0.5f;
+                incomingAttack |= attacking && (targetsCaster || distance2 <= 7.5625f && facesCaster);
+                away += offset / MathF.Max(0.5f, distance2);
             }
-
-            bool lowHealth = caster.HealthLimit > 0f && caster.Health < caster.HealthLimit * 0.5f;
-            if (threatCount == 0 || (!immediateThreat && threatCount < 2 && !lowHealth))
-                return false;
-
-            if (evadeDirection.LengthSquared < 0.001f)
-                evadeDirection = -caster.LookDirection.AsVec2;
-            if (evadeDirection.LengthSquared < 0.001f)
-                return false;
-
-            evadeDirection.Normalize();
+            bool lowHealth = caster.HealthLimit > 0f && caster.Health <= caster.HealthLimit * 0.5f;
+            if (!incomingAttack && !(targeting > 0 && (lowHealth || threats >= 3))) return false;
+            if (away.LengthSquared < 0.001f) away = -caster.LookDirection.AsVec2;
+            if (away.LengthSquared < 0.001f) return false;
+            away.Normalize();
+            float bestScore = float.NegativeInfinity;
+            Vec3 best = Vec3.Invalid;
+            foreach (float angle in CandidateAngles)
+            {
+                Vec3 rotated = away.ToVec3();
+                rotated.RotateAboutZ(angle * MathF.PI / 180f);
+                if (!TryResolveDestination(caster, rotated.AsVec2, out Vec3 candidate)) continue;
+                float score = (candidate - caster.Position).AsVec2.Length + Vec2.DotProduct(rotated.AsVec2, away) * 2f;
+                foreach (Agent enemy in _nearby) {
+                    if (!ValidEnemy(caster, enemy) || Math.Abs(enemy.Position.z - candidate.z) > 3f) continue;
+                    float d2 = (enemy.Position - candidate).AsVec2.LengthSquared;
+                    if (d2 < 9f) score -= (9f - d2) * 2f;
+                }
+                if (score > bestScore) { bestScore = score; best = candidate; }
+            }
+            if (!best.IsValid) return false;
+            plan = new EvadePlan { Agent = caster, Start = caster.Position, Destination = best,
+                Expires = mission.CurrentTime + 0.15f };
+            _plans[caster.Index] = plan;
             return true;
         }
 
-        private static bool TryResolveDestination(
-            Agent agent,
-            Vec2 direction,
-            out Vec3 destination,
-            out string failureReason)
+        private static bool ValidEnemy(Agent caster, Agent enemy) => enemy != null && enemy != caster &&
+            enemy.IsHuman && enemy.IsActive() && enemy.Health > 0f && caster.IsEnemyOf(enemy);
+
+        private static bool TryResolveDestination(Agent agent, Vec2 direction, out Vec3 destination)
         {
             destination = Vec3.Invalid;
-            failureReason = null;
-            Scene scene = Mission.Current?.Scene;
-            if (scene == null)
-            {
-                failureReason = "当前任务没有可用场景。";
-                return false;
-            }
-
-            Vec3 planarDirection = direction.ToVec3();
-            Vec3 requested = agent.Position + planarDirection * RollDistance;
+            Scene scene = agent.Mission?.Scene;
+            if (scene == null || direction.LengthSquared < 0.001f) return false;
+            direction.Normalize();
+            float distance = RollDistance;
             Vec3 rayStart = agent.Position + Vec3.Up * 0.8f;
-            Vec3 rayEnd = requested + Vec3.Up * 0.8f;
-            float availableDistance = RollDistance;
-            if (scene.RayCastForClosestEntityOrTerrain(
-                    rayStart, rayEnd, out float collisionDistance, 0.01f,
-                    BodyFlags.CommonCollisionExcludeFlags))
+            Vec3 rayEnd = rayStart + direction.ToVec3() * distance;
+            float hitDistance;
+            var visuals = agent.AgentVisuals;
+            bool hit = visuals != null
+                ? scene.RayCastForClosestEntityOrTerrainIgnoreEntity(rayStart, rayEnd,
+                    visuals.GetWeakEntity(), out hitDistance, out _, 0.01f, BodyFlags.CommonCollisionExcludeFlags)
+                : scene.RayCastForClosestEntityOrTerrain(rayStart, rayEnd, out hitDistance, 0.01f, BodyFlags.CommonCollisionExcludeFlags);
+            if (hit) distance = MathF.Max(0f, hitDistance - Clearance);
+            // 缩短落点而不是把不可达的7米落点直接判为失败。
+            for (; distance >= MinimumDistance; distance -= 0.5f)
             {
-                availableDistance = MathF.Max(0f, collisionDistance - ObstacleClearance);
+                Vec3 candidate = agent.Position + direction.ToVec3() * distance;
+                Vec3 top = candidate + Vec3.Up * 1.5f, bottom = candidate - Vec3.Up * 1.5f;
+                Vec3 surface;
+                bool supported;
+                if (visuals != null)
+                {
+                    // IgnoreEntity 的第五个 out 是 GameEntity；垂直射线由命中距离还原落脚点。
+                    supported = scene.RayCastForClosestEntityOrTerrainIgnoreEntity(top, bottom,
+                        visuals.GetWeakEntity(), out float supportDistance, out _,
+                        0.01f, BodyFlags.CommonCollisionExcludeFlags);
+                    surface = top;
+                    surface.z -= supportDistance;
+                    supported &= surface.IsValid;
+                }
+                else
+                {
+                    supported = scene.RayCastForClosestEntityOrTerrain(top, bottom, out _, out surface,
+                        0.01f, BodyFlags.CommonCollisionExcludeFlags);
+                }
+                if (!supported) continue;
+                candidate.z = surface.z;
+                if (Math.Abs(candidate.z - agent.Position.z) > distance + 0.1f ||
+                    scene.GetNavigationMeshForPosition(candidate, out _, 0.35f, false) == UIntPtr.Zero) continue;
+                destination = candidate;
+                return destination.IsValid;
             }
-
-            if (availableDistance < MinimumRollDistance)
-            {
-                failureReason = "翻滚方向空间不足。";
-                return false;
-            }
-
-            destination = agent.Position + planarDirection * availableDistance;
-            destination.z = scene.GetGroundHeightAtPosition(
-                destination, BodyFlags.CommonCollisionExcludeFlags);
-            return destination.IsValid;
+            return false;
         }
     }
 }

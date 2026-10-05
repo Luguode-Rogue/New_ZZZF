@@ -71,6 +71,7 @@ namespace New_ZZZF
         private float _elapsed;
         private Agent _mount;
         public override string BattleHudName => "邪恶诅咒";
+        public override bool IsDamageOverTime => true;
         public XieEZuZhouBuffToEnemy(float duration, Agent source) {
             StateId = "XieEZuZhouBuffToEnemy"; Duration = duration; SourceAgent = source;
         }

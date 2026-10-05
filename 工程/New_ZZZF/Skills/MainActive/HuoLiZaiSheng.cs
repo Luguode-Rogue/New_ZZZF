@@ -60,7 +60,10 @@ namespace New_ZZZF
             float additional = GetAdditionalRefreshDuration(caster, ally, remaining);
             if (float.IsNaN(additional) || float.IsInfinity(additional)) additional = 0f;
             float duration = Math.Max(BuffDuration, remaining) + Math.Max(0f, additional);
-            if (existing != null) existing.Duration = duration; // 保留原回血计时，不重置。
+            if (existing != null) {
+                existing.Duration = duration; // 保留原回血计时，不重置。
+                existing.RestartVisual(ally);
+            }
             else states.AddState(new HuoLiZaiShengBuff(duration, caster), ally);
         }
 
@@ -80,6 +83,7 @@ namespace New_ZZZF
         public class HuoLiZaiShengBuff : AgentBuff
         {
             private float _timeSinceLastTick;
+            private HuoLiZaiShengPlusVisual _visual;
             public override bool BypassesSkillProtection => true;
             public override string BattleHudName => "活力再生";
             public HuoLiZaiShengBuff(float duration, Agent source)
@@ -88,10 +92,16 @@ namespace New_ZZZF
                 Duration = duration;
                 SourceAgent = source;
             }
-            public override void OnApply(Agent agent) { }
+            internal void RestartVisual(Agent agent)
+            {
+                _visual?.Remove();
+                _visual = HuoLiZaiShengPlusVisual.Create(agent);
+            }
+            public override void OnApply(Agent agent) { RestartVisual(agent); }
             public override void OnUpdate(Agent agent, float dt)
             {
                 if (agent == null || !agent.IsActive() || agent.Health <= 0f) return;
+                _visual?.Update(agent, dt);
                 _timeSinceLastTick += dt;
                 if (_timeSinceLastTick < 1f) return;
                 _timeSinceLastTick %= 1f;
@@ -99,7 +109,11 @@ namespace New_ZZZF
                 if (agent.HealthLimit > 0f && agent.Health < agent.HealthLimit)
                     agent.Health = agent.HealthLimit;
             }
-            public override void OnRemove(Agent agent) { }
+            public override void OnRemove(Agent agent)
+            {
+                _visual?.Remove();
+                _visual = null;
+            }
         }
     }
 }

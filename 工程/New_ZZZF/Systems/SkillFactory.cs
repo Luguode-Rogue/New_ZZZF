@@ -70,6 +70,7 @@ namespace New_ZZZF
                 {"Roll",new Roll() },
                 //// 被动技能
 
+                {"PassiveRoll",new PassiveRoll() },
                 {"ShengZhuangWuBu",new ShengZhuangWuBu() },
                 {"QiangLiZhaoHuan",new QiangLiZhaoHuan() },
                 //// 法术

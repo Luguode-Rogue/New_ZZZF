@@ -143,7 +143,7 @@ namespace New_ZZZF
             if (finalDamage > 0f && TianQi.IsProtected(attackInformation.AttackerAgent))
                 finalDamage *= 2f;
             Agent victim = attackInformation.VictimAgent;
-            if (TianFaZhiJianMissionLogic.IsLeaping(victim) || TianQi.IsProtected(victim) ||
+            if ((TianFaZhiJianMissionLogic.IsLeaping(victim) || RollDamageProtection.IsActive(victim)) || TianQi.IsProtected(victim) ||
                 TianQi.TryTriggerEmergency(victim, MathF.Round(finalDamage)))
                 return 0f;
             return finalDamage;

@@ -41,6 +41,9 @@ namespace New_ZZZF
         public bool IsChongCiZhan;
         public bool TriggerRightAttackOnEnd;
         public bool UseSafeKinematicMovement;
+        public bool IsRoll;
+        public bool IsRollMovement;
+        public bool PreserveFacing;
         public float KinematicSpeed;
         /// <summary>短步位移允许的最大坡角；不设置时沿用旧的固定 0.8 米高差限制。</summary>
         public float MaximumKinematicSlopeDegrees;
@@ -95,6 +98,7 @@ namespace New_ZZZF
             public float OffNavigationDistance;
             public Vec3 LastProgressPosition;
             public Vec3 StartPosition;
+            public Vec3 StartLookDirection;
             public float DiagnosticsTimer;
             public bool InputInjectionLogged;
             public bool NativeSprintTriggered;
@@ -170,6 +174,11 @@ namespace New_ZZZF
             return agent != null && _records.ContainsKey(agent.Index);
         }
 
+        public bool IsRolling(Agent agent)
+        {
+            return agent != null && agent.IsActive() && _records.TryGetValue(agent.Index, out RushRecord record) &&
+                record.Mover == agent && record.Options.IsRoll && record.Remaining > 0f;
+        }
         public bool TryRushToAgent(Agent mover, Agent target, RushMovementOptions options, out string failureReason)
         {
             failureReason = null;
@@ -222,6 +231,7 @@ namespace New_ZZZF
 
             RushRecord record = CreateRecord(mover, options, RushMovementMode.FixedPosition);
             record.FixedPosition = navigable;
+            record.StartLookDirection = mover.LookDirection;
             _records.Add(mover.Index, record);
 #if false
             TakeTemporaryAiControl(record);
@@ -387,6 +397,12 @@ namespace New_ZZZF
             if (mover == null || !mover.IsActive())
             {
                 EndRecord(record, RushEndReason.InvalidMover);
+                return;
+            }
+
+            if (record.Options.IsRollMovement && mover.GetCurrentAction(0) != Roll.RollAction)
+            {
+                EndRecord(record, RushEndReason.Cancelled);
                 return;
             }
 
@@ -691,10 +707,23 @@ namespace New_ZZZF
                 sampleStart.z = mover.Position.z + maximumRise + 0.5f;
                 Vec3 sampleEnd = candidate;
                 sampleEnd.z = mover.Position.z - maximumRise - 0.5f;
-                hasSupportSurface = Mission.Scene.RayCastForClosestEntityOrTerrain(
-                        sampleStart, sampleEnd, out _,
-                        out Vec3 surfacePoint, 0.01f,
-                        BodyFlags.CommonCollisionExcludeFlags);
+                Vec3 surfacePoint;
+                var surfaceVisuals = mover.AgentVisuals;
+                if (record.Options.IsRollMovement && surfaceVisuals != null)
+                {
+                    // 忽略自身的重载返回实体而非碰撞点；此处射线竖直向下。
+                    hasSupportSurface = Mission.Scene.RayCastForClosestEntityOrTerrainIgnoreEntity(
+                        sampleStart, sampleEnd, surfaceVisuals.GetWeakEntity(),
+                        out float supportDistance, out _, 0.01f, BodyFlags.CommonCollisionExcludeFlags);
+                    surfacePoint = sampleStart;
+                    surfacePoint.z -= supportDistance;
+                    hasSupportSurface &= surfacePoint.IsValid;
+                }
+                else
+                {
+                    hasSupportSurface = Mission.Scene.RayCastForClosestEntityOrTerrain(sampleStart, sampleEnd,
+                        out _, out surfacePoint, 0.01f, BodyFlags.CommonCollisionExcludeFlags);
+                }
                 if (hasSupportSurface)
                     candidate.z = surfacePoint.z;
                 else
@@ -740,14 +769,17 @@ namespace New_ZZZF
             Vec3 rayStart = mover.Position + Vec3.Up * 0.8f;
             Vec3 rayEnd = candidate + Vec3.Up * 0.8f;
             float collisionDistance;
-            bool blocked = Mission.Scene.RayCastForClosestEntityOrTerrain(
-                rayStart, rayEnd, out collisionDistance, 0.01f,
-                BodyFlags.CommonCollisionExcludeFlags);
+            var visuals = mover.AgentVisuals;
+            bool blocked = record.Options.IsRollMovement && visuals != null
+                ? Mission.Scene.RayCastForClosestEntityOrTerrainIgnoreEntity(rayStart, rayEnd,
+                    visuals.GetWeakEntity(), out collisionDistance, out _, 0.01f, BodyFlags.CommonCollisionExcludeFlags)
+                : Mission.Scene.RayCastForClosestEntityOrTerrain(rayStart, rayEnd, out collisionDistance,
+                    0.01f, BodyFlags.CommonCollisionExcludeFlags);
             if (blocked && collisionDistance + 0.05f < (rayEnd - rayStart).Length)
                 return false;
 
             record.DesiredMovementDirection = direction;
-            mover.LookDirection = direction.ToVec3();
+            mover.LookDirection = record.Options.PreserveFacing ? record.StartLookDirection : direction.ToVec3();
             mover.SetMovementDirection(direction);
             mover.TeleportToPosition(candidate);
             record.OffNavigationDistance = onNavigationMesh
@@ -927,6 +959,8 @@ namespace New_ZZZF
 
             if (mover.IsActive())
             {
+                if (record.Options.IsRollMovement && mover.GetCurrentAction(0) == Roll.RollAction)
+                    mover.SetActionChannel(0, ActionIndexCache.act_none);
                 // 后跃没有开启 scripted movement，不能误关 AI 原有的战术移动。
                 if (record.Mode != RushMovementMode.ParabolicLeap)
                     mover.DisableScriptedMovement();
@@ -1036,9 +1070,12 @@ namespace New_ZZZF
         public void ApplyPlayerRushMovementAfterControlTick(Agent mainAgent)
         {
             if (mainAgent == null || mainAgent.Controller != AgentControllerType.Player ||
-                !_records.TryGetValue(mainAgent.Index, out RushRecord record) ||
-                record.DesiredMovementDirection.LengthSquared <= 0.001f)
+                !_records.TryGetValue(mainAgent.Index, out RushRecord record))
                 return;
+            // 空格触发被动位移时不能同时提交原生跳跃；仅清除翻滚移动期间的跳跃旗标。
+            if (record.Options.IsRollMovement)
+                mainAgent.EventControlFlags &= ~Agent.EventControlFlag.Jump;
+            if (record.DesiredMovementDirection.LengthSquared <= 0.001f) return;
 
             Vec2 direction = record.DesiredMovementDirection.Normalized();
             float inputMagnitude = 1f;

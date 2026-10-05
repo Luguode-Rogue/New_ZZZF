@@ -1451,22 +1451,7 @@ namespace New_ZZZF
                 !shotWeapon.CurrentUsageItem.IsRangedWeapon)
                 return false;
 
-            missileSpeed = shotWeapon.GetModifiedMissileSpeedForCurrentUsage();
-            if (SkillSystemBehavior.WoW_AgentMissileSpeedData.TryGetValue(shooter.Index, out var speeds) &&
-                speeds != null)
-            {
-                for (int i = 0; i < speeds.Count; i++)
-                {
-                    AgentMissileSpeedData speedData = speeds[i];
-                    if (speedData.Weapon.Item.Id == shotWeapon.Item.Id)
-                    {
-                        missileSpeed = speedData.MissileSpeed;
-                        break;
-                    }
-                }
-            }
-            if (missileSpeed <= 0.01f)
-                return false;
+            if (!TryGetRecordedSkillMissileSpeed(shooter, shotWeapon, out missileSpeed)) return false;
 
             if (!TryGetActualAmmoWeapon(shooter, shotWeapon, out ammoWeapon))
                 return false;
@@ -1495,6 +1480,24 @@ namespace New_ZZZF
                 predicted = targetEye + targetVelocity * flightTime;
             }
             return true;
+        }
+
+        /// <summary>后跃射击与魔法射击沿用原流程：必须先记录游戏实际射击速度，禁止面板回退。</summary>
+        internal static bool TryGetRecordedSkillMissileSpeed(Agent shooter, MissionWeapon weapon, out float speed)
+        {
+            speed = 0f;
+            if (shooter == null || weapon.IsEmpty || weapon.CurrentUsageItem == null ||
+                !SkillSystemBehavior.WoW_AgentMissileSpeedData.TryGetValue(shooter.Index, out var records) || records == null)
+                return false;
+            foreach (AgentMissileSpeedData record in records) {
+                if (record == null || record.Weapon.IsEmpty || record.Weapon.Item.Id != weapon.Item.Id ||
+                    record.Weapon.CurrentUsageItem == null ||
+                    record.Weapon.CurrentUsageItem.WeaponClass != weapon.CurrentUsageItem.WeaponClass ||
+                    record.MissileSpeed <= 0f || float.IsNaN(record.MissileSpeed) || float.IsInfinity(record.MissileSpeed)) continue;
+                speed = record.MissileSpeed;
+                return true;
+            }
+            return false;
         }
 
         internal static bool TryGetActualAmmoWeapon(

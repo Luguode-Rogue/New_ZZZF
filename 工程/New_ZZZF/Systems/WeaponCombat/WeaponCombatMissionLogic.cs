@@ -57,7 +57,7 @@ namespace New_ZZZF
         {
             internal Hit Hit;
             internal int Total, Delivered;
-            internal float Start;
+            internal float Start, End;
         }
         private readonly object _gate = new object();
         private readonly Queue<Hit> _hits = new Queue<Hit>();
@@ -189,7 +189,7 @@ namespace New_ZZZF
                 if (hit.Victim == null) continue;
                 if (hit.ActualDamage) Victim(hit.Victim).LastDamage = hit.Time;
                 if (hit.SpearSplit && Alive(hit.Victim))
-                    _bleeds.Add(new Bleed { Hit = hit, Total = hit.DelayedDamage, Start = hit.Time });
+                    _bleeds.Add(new Bleed { Hit = hit, Total = hit.DelayedDamage, Start = hit.Time, End = hit.Time + WeaponCombatRules.BleedDuration });
                 if (!hit.ActualDamage || !Alive(hit.Attacker) || !Alive(hit.Victim) || !Body(hit.Collision)) continue;
                 ProcessHit(hit);
             }
@@ -238,13 +238,21 @@ namespace New_ZZZF
              bone == agent.Monster.LeftFootIkEndEffectorBoneIndex || bone == agent.Monster.RightFootIkEndEffectorBoneIndex ||
              bone == agent.Monster.LeftFootIkTipBoneIndex || bone == agent.Monster.RightFootIkTipBoneIndex);
 
+        internal void HalveRemainingBleedDuration(Agent victim)
+        {
+            float now = Mission.CurrentTime;
+            foreach (Bleed record in _bleeds)
+                if (record.Hit.Victim == victim && record.End > now)
+                    record.End = now + (record.End - now) * 0.5f;
+        }
+
         private void TickBleeds()
         {
             for (int i = _bleeds.Count - 1; i >= 0; i--)
             {
                 var record = _bleeds[i];
                 if (!Alive(record.Hit.Victim)) { _bleeds.RemoveAt(i); continue; }
-                float elapsed = Mission.CurrentTime - record.Start;
+                float elapsed = Math.Max(0f, Math.Min(Mission.CurrentTime, record.End) - record.Start);
                 int due = (int)Math.Floor(record.Total * Math.Min(1f, elapsed / WeaponCombatRules.BleedDuration));
                 int damage = due - record.Delivered;
                 if (damage > 0)
@@ -265,7 +273,7 @@ namespace New_ZZZF
                     record.Delivered = due;
                     if (record.Hit.Victim.Health < healthBefore) Victim(record.Hit.Victim).LastDamage = Mission.CurrentTime;
                 }
-                if (elapsed >= WeaponCombatRules.BleedDuration) _bleeds.RemoveAt(i);
+                if (Mission.CurrentTime >= record.End) _bleeds.RemoveAt(i);
             }
         }
         private void TickVictims()

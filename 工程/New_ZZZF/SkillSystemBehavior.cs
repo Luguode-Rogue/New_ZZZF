@@ -611,6 +611,7 @@ namespace New_ZZZF
                     comp.StateContainer.RemoveState("JingXiaBuffToEnemy", affectedAgent);
                     // 鼓舞的落尘是独立场景实体；Agent 离场时立即释放。
                     comp.StateContainer.RemoveState("GuWuBuff", affectedAgent);
+                    comp.StateContainer.RemoveState(HuoLiZaiSheng.BuffId, affectedAgent);
                     comp.ReleaseShieldStrengthVisual();
                     _activeComponents.Remove(comp);
                 }
@@ -646,11 +647,18 @@ namespace New_ZZZF
         }
         protected override void OnEndMission()
         {
+            if (SkillFactory._skillRegistry.TryGetValue("Roll", out SkillBase rollSkill) && rollSkill is Roll roll)
+                roll.ClearAiCache();
+            if (SkillFactory._skillRegistry.TryGetValue("PassiveRoll", out SkillBase passiveRollSkill) && passiveRollSkill is Roll passiveRoll)
+                passiveRoll.ClearAiCache();
             JingXia.ActiveAuras.Clear();
             JingXia.NextEvaluation.Clear();
             Mission.OnMissileRemovedEvent -= HandleMissileRemoved;
             foreach (AgentSkillComponent component in _activeComponents)
+            {
+                component.StateContainer.RemoveState(HuoLiZaiSheng.BuffId, component.AgentInstance);
                 component.ReleaseShieldStrengthVisual();
+            }
             base.OnEndMission();
             //WoW_Agents.Clear();
             WoW_MissileIndex.Clear();
@@ -753,6 +761,9 @@ namespace New_ZZZF
         public override void OnMissileHit(Agent attacker, Agent victim, bool isCanceled, AttackCollisionData collisionData)
         {
             base.OnMissileHit(attacker, victim, isCanceled, collisionData);
+            // 原版在伤害结算和碰撞反应之后调用这里。恢复旧版的命中后清理，
+            // 不能只等待移除事件，否则后来的普通箭复用编号时会再次补加弓伤害。
+            HandleMissileRemoved(collisionData.AffectorWeaponSlotOrMissileIndex);
         }
 
         public override void OnMissileRemoved(int missileIndex)
@@ -826,6 +837,18 @@ namespace New_ZZZF
         public override void OnAgentShootMissile(Agent shooterAgent, EquipmentIndex weaponIndex, Vec3 position, Vec3 velocity, Mat3 orientation, bool hasRigidBody, int forcedMissileIndex)
         {
             base.OnAgentShootMissile(shooterAgent, weaponIndex, position, velocity, orientation, hasRigidBody, forcedMissileIndex);
+            // 原版 OnAgentShootMissile 先把新箭追加到 MissilesList，再通知 Behavior。
+            // AddCustomMissile 不走此回调；因此这里可以清理普通射击所复用编号的残留。
+            // forcedMissileIndex 通常为 -1，必须使用刚创建的真实投射物编号。
+            var missiles = shooterAgent?.Mission?.MissilesList;
+            if (missiles != null && missiles.Count > 0)
+            {
+                var nativeMissile = missiles[missiles.Count - 1];
+                if (nativeMissile.ShooterAgent == shooterAgent)
+                {
+                    HandleMissileRemoved(nativeMissile.Index);
+                }
+            }
             MissionWeapon missionWeapon = shooterAgent.Equipment[weaponIndex];
             float speed = velocity.Length;
             if (!WoW_AgentMissileSpeedData.TryGetValue(shooterAgent.Index, out var list))

@@ -144,7 +144,7 @@ namespace New_ZZZF.Systems
             Vec3? impactPosition = null)
         {
             // 腾空期间免疫本次法术；在反射、应急技能等副作用之前结束。
-            if (TianFaZhiJianMissionLogic.IsLeaping(victim))
+            if ((TianFaZhiJianMissionLogic.IsLeaping(victim) || RollDamageProtection.IsActive(victim)))
                 return new MagicDamageResult { BaseDamage = baseDamage,
                     SpellPowerCoefficient = spellPowerCoefficient, WasImmune = true };
 
